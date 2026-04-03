@@ -30,15 +30,18 @@ class ScorecardView: UIView {
     private var leftTopConstraint: NSLayoutConstraint?
     private var rightTopConstraint: NSLayoutConstraint?
     private var headerHeightConstraint: NSLayoutConstraint?
+    private var nameWidthConstraint: NSLayoutConstraint?
+    private var headerNameWidthConstraint: NSLayoutConstraint?
     
     // Data
     private var scorecardData: ScorecardData?
     private var isHomeTeam = false
     private var areHeadersVisible = true
     private var isLive = false
+    private var columnLayout = ColumnLayout(innings: (1...9).map { InningColumnLayout(inningNum: $0, subColumnCount: 1, startColumn: $0 - 1) }, totalColumns: 9)
     
     // Constants
-    private let nameWidth: CGFloat = 90
+    private var nameWidth: CGFloat = 90
     private let inningWidth: CGFloat = 60
     private let headerHeight: CGFloat = 32
     private let rowHeight: CGFloat = 70
@@ -77,7 +80,7 @@ class ScorecardView: UIView {
         addSubview(rightScrollView)
         
         rightHeaderStack.axis = .horizontal
-        rightHeaderStack.distribution = .fillEqually
+        rightHeaderStack.distribution = .fill
         rightHeaderStack.spacing = 0
         rightHeaderStack.translatesAutoresizingMaskIntoConstraints = false
         rightScrollView.addSubview(rightHeaderStack)
@@ -97,15 +100,18 @@ class ScorecardView: UIView {
         leftTopConstraint = leftCollectionView.topAnchor.constraint(equalTo: topLeftLabel.bottomAnchor)
         rightTopConstraint = rightCollectionView.topAnchor.constraint(equalTo: rightHeaderStack.bottomAnchor)
         
+        headerNameWidthConstraint = topLeftLabel.widthAnchor.constraint(equalToConstant: nameWidth)
+        nameWidthConstraint = leftCollectionView.widthAnchor.constraint(equalToConstant: nameWidth)
+        
         NSLayoutConstraint.activate([
             topLeftLabel.topAnchor.constraint(equalTo: topAnchor),
             topLeftLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
-            topLeftLabel.widthAnchor.constraint(equalToConstant: nameWidth),
+            headerNameWidthConstraint!,
             headerHeightConstraint!,
             
             leftTopConstraint!,
             leftCollectionView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            leftCollectionView.widthAnchor.constraint(equalToConstant: nameWidth),
+            nameWidthConstraint!,
             leftCollectionView.bottomAnchor.constraint(equalTo: bottomAnchor),
             
             rightScrollView.topAnchor.constraint(equalTo: topAnchor),
@@ -124,13 +130,13 @@ class ScorecardView: UIView {
             rightCollectionView.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
         
-        updateContentWidth(inningCount: 9)
+        updateContentWidth()
     }
 
     private var rightContentWidthConstraint: NSLayoutConstraint?
-    private func updateContentWidth(inningCount: Int) {
+    private func updateContentWidth() {
         rightContentWidthConstraint?.isActive = false
-        rightContentWidthConstraint = rightCollectionView.widthAnchor.constraint(equalToConstant: inningWidth * CGFloat(inningCount))
+        rightContentWidthConstraint = rightCollectionView.widthAnchor.constraint(equalToConstant: inningWidth * CGFloat(columnLayout.totalColumns))
         rightContentWidthConstraint?.isActive = true
         rightHeaderStack.widthAnchor.constraint(equalTo: rightCollectionView.widthAnchor).isActive = true
     }
@@ -141,30 +147,32 @@ class ScorecardView: UIView {
         rightCollectionView.dataSource = self
         rightCollectionView.delegate = self
         rightScrollView.delegate = self // CRITICAL: Fixes scroll sync
-        updateHeaderLabels(inningCount: 9)
+        updateHeaderLabels()
     }
 
-    private func updateHeaderLabels(inningCount: Int) {
+    private func updateHeaderLabels() {
         rightHeaderStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
-        for i in 1...inningCount {
+        for inningLayout in columnLayout.innings {
             let label = UILabel()
-            label.text = "\(i)"
+            label.text = "\(inningLayout.inningNum)"
             label.textAlignment = .center
             label.font = UIFont(name: "PermanentMarker-Regular", size: 14) ?? .systemFont(ofSize: 14, weight: .bold)
             label.textColor = pencilColor
             label.backgroundColor = UIColor(red: 0.95, green: 0.94, blue: 0.92, alpha: 1.0)
             label.layer.borderWidth = 0.5
             label.layer.borderColor = UIColor(white: 0.6, alpha: 0.5).cgColor
+            label.widthAnchor.constraint(equalToConstant: inningWidth * CGFloat(inningLayout.subColumnCount)).isActive = true
             rightHeaderStack.addArrangedSubview(label)
         }
     }
     
     func configure(with data: ScorecardData) {
         self.scorecardData = data
-        let inningCount = max(data.innings.count, 9)
-        updateHeaderLabels(inningCount: inningCount)
-        updateContentWidth(inningCount: inningCount)
+        self.columnLayout = computeColumnLayout()
+        updateNameColumnWidth()
+        updateHeaderLabels()
+        updateContentWidth()
         leftCollectionView.reloadData()
         rightCollectionView.reloadData()
         invalidateIntrinsicContentSize()
@@ -172,9 +180,25 @@ class ScorecardView: UIView {
     
     func setTeam(isHome: Bool) {
         self.isHomeTeam = isHome
+        self.columnLayout = computeColumnLayout()
+        updateNameColumnWidth()
+        updateHeaderLabels()
+        updateContentWidth()
         leftCollectionView.reloadData()
         rightCollectionView.reloadData()
         invalidateIntrinsicContentSize()
+    }
+
+    private func updateNameColumnWidth() {
+        let newWidth = computeNameWidth()
+        guard newWidth != nameWidth else { return }
+        nameWidth = newWidth
+        nameWidthConstraint?.constant = newWidth
+        headerNameWidthConstraint?.constant = newWidth
+        if let layout = leftCollectionView.collectionViewLayout as? UICollectionViewFlowLayout {
+            layout.itemSize = CGSize(width: newWidth, height: rowHeight)
+            layout.invalidateLayout()
+        }
     }
 
     func setHeadersVisible(_ visible: Bool) {
@@ -204,24 +228,20 @@ class ScorecardView: UIView {
         guard let data = scorecardData,
               let inningNum = data.currentInning,
               let batterId = data.currentBatterId,
-              let isTop = data.isTopInning else { return }
-        
-        // Determine if we are looking at the team currently at bat
-        let viewingTeamAtBat = (isTop && !isHomeTeam) || (!isTop && isHomeTeam)
-        if !viewingTeamAtBat { return }
-        
+              data.isTopInning != nil else { return }
+
+        guard isViewingCurrentBattingTeam(data) else { return }
+
         let lineup = isHomeTeam ? data.lineups.home : data.lineups.away
         guard lineup.firstIndex(where: { $0.id == batterId }) != nil else { return }
-        
-        let colIndex = inningNum - 1
-        
+
+        guard let inningLayout = columnLayout.layout(forInning: inningNum) else { return }
+        let colIndex = inningLayout.startColumn + inningLayout.subColumnCount - 1
+
         // Horizontal Scroll
         let hOffset = max(0, CGFloat(colIndex) * inningWidth - (rightScrollView.bounds.width / 2) + (inningWidth / 2))
         let maxHOffset = max(0, rightScrollView.contentSize.width - rightScrollView.bounds.width)
         syncHorizontalOffset(min(hOffset, maxHOffset))
-        
-        // Vertical Scroll (This is a bit tricky since ScorecardView is inside a mainStackView/mainScrollView)
-        // We need to notify the controller to scroll the mainScrollView
     }
 
     var currentHorizontalOffset: CGFloat {
@@ -232,6 +252,67 @@ class ScorecardView: UIView {
 
     func syncHorizontalOffset(_ offset: CGFloat) {
         rightScrollView.contentOffset.x = offset
+    }
+
+    var currentColumnLayout: ColumnLayout { columnLayout }
+    var currentNameWidth: CGFloat { nameWidth }
+
+    private func isViewingCurrentBattingTeam(_ data: ScorecardData) -> Bool {
+        (data.isTopInning == true && !isHomeTeam) || (data.isTopInning == false && isHomeTeam)
+    }
+
+    private func activeSubcolumnIndex(for batterEvents: [AtBatEvent]) -> Int {
+        max(0, batterEvents.count - 1)
+    }
+
+    private func computeNameWidth() -> CGFloat {
+        guard let data = scorecardData else { return 90 }
+        let lineup = isHomeTeam ? data.lineups.home : data.lineups.away
+        
+        let nameFont = UIFont(name: "PatrickHand-Regular", size: 18) ?? .systemFont(ofSize: 18)
+        let posFont = UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14)
+        
+        var maxWidth: CGFloat = 40 // minimum
+        for batter in lineup {
+            let nameSize = (batter.abbreviation as NSString).size(withAttributes: [.font: nameFont])
+            var posText = batter.position
+            if let num = batter.jerseyNumber { posText += " #\(num)" }
+            if let entry = batter.inningEntered { posText += " (\(entry))" }
+            let posSize = (posText as NSString).size(withAttributes: [.font: posFont])
+            maxWidth = max(maxWidth, max(nameSize.width, posSize.width))
+        }
+        
+        // Add padding (6pt each side in cell + 4pt extra breathing room)
+        return ceil(maxWidth + 20)
+    }
+
+    private func computeColumnLayout() -> ColumnLayout {
+        guard let data = scorecardData else {
+            let innings = (1...9).map { InningColumnLayout(inningNum: $0, subColumnCount: 1, startColumn: $0 - 1) }
+            return ColumnLayout(innings: innings, totalColumns: 9)
+        }
+        
+        let lineup = isHomeTeam ? data.lineups.home : data.lineups.away
+        let inningCount = max(data.innings.count, 9)
+        var layouts: [InningColumnLayout] = []
+        var runningColumn = 0
+        
+        for i in 1...inningCount {
+            let inningObj = data.innings.first { $0.num == i }
+            let events = isHomeTeam ? (inningObj?.home ?? []) : (inningObj?.away ?? [])
+            
+            // Count max at-bats for any single batter in this inning half
+            var maxABs = 1
+            for batter in lineup {
+                let count = events.filter { $0.batterId == batter.id }.count
+                maxABs = max(maxABs, count)
+            }
+            
+            layouts.append(InningColumnLayout(inningNum: i, subColumnCount: maxABs, startColumn: runningColumn))
+            runningColumn += maxABs
+        }
+        
+        return ColumnLayout(innings: layouts, totalColumns: runningColumn)
     }
 
     override var intrinsicContentSize: CGSize {
@@ -253,15 +334,14 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
         guard let data = scorecardData else { return 0 }
         let lineupCount = isHomeTeam ? data.lineups.home.count : data.lineups.away.count
-        let inningCount = max(data.innings.count, 9)
-        return collectionView == leftCollectionView ? lineupCount : lineupCount * inningCount
+        return collectionView == leftCollectionView ? lineupCount : lineupCount * columnLayout.totalColumns
     }
     
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         guard let data = scorecardData else { return UICollectionViewCell() }
         let lineup = isHomeTeam ? data.lineups.home : data.lineups.away
-        let inningCount = max(data.innings.count, 9)
-        let rowIndex = (collectionView == leftCollectionView) ? indexPath.item : indexPath.item / inningCount
+        let totalCols = columnLayout.totalColumns
+        let rowIndex = (collectionView == leftCollectionView) ? indexPath.item : indexPath.item / totalCols
         
         if rowIndex >= lineup.count { return UICollectionViewCell() }
         let batter = lineup[rowIndex]
@@ -274,20 +354,27 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate {
             
             let text = NSMutableAttributedString(string: "\(batter.abbreviation)\n", attributes: nameAttrs)
             var posText = batter.position
+            if let num = batter.jerseyNumber { posText += " #\(num)" }
             if let entryInning = batter.inningEntered { posText += " (\(entryInning))" }
             text.append(NSAttributedString(string: posText, attributes: posAttrs))
             
             cell.label.attributedText = text
-            cell.label.textAlignment = .center
+            cell.label.textAlignment = .left
             cell.backgroundColor = rowBackgroundColor
             return cell
         } else {
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: ScorecardCell.reuseIdentifier, for: indexPath) as! ScorecardCell
-            let col = indexPath.item % inningCount
-            let inningNum = col + 1
+            let col = indexPath.item % totalCols
+            
+            guard let (inningNum, subIndex) = columnLayout.inningInfo(forColumn: col) else {
+                cell.configure(with: nil)
+                return cell
+            }
+            
             let inningObj = data.innings.first { $0.num == inningNum }
             let events = isHomeTeam ? inningObj?.home : inningObj?.away
-            let event = events?.first { $0.batterId == batter.id }
+            let batterEvents = events?.filter { $0.batterId == batter.id } ?? []
+            let event: AtBatEvent? = subIndex < batterEvents.count ? batterEvents[subIndex] : nil
             
             let isBeforeEntry = inningNum < (batter.inningEntered ?? 1)
             let isAfterExit = batter.inningExited != nil && inningNum > (batter.inningExited ?? 99)
@@ -302,8 +389,9 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate {
             let isCurrentInning = data.currentInning == inningNum
             let isCurrentHalf = data.isTopInning == !isHomeTeam
             let isCurrentBatter = data.currentBatterId == batter.id
+            let isActiveSubColumn = subIndex == activeSubcolumnIndex(for: batterEvents)
             
-            if isLive && isCurrentInning && isCurrentHalf && isCurrentBatter {
+            if isLive && isCurrentInning && isCurrentHalf && isCurrentBatter && isActiveSubColumn {
                 cell.contentView.layer.borderWidth = 3.0
                 cell.contentView.layer.borderColor = UIColor.systemBlue.cgColor
                 cell.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.08)
@@ -320,18 +408,17 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         guard let data = scorecardData else { return }
         let lineup = isHomeTeam ? data.lineups.home : data.lineups.away
-        let inningCount = max(data.innings.count, 9)
-        let rowIndex = (collectionView == leftCollectionView) ? indexPath.item : indexPath.item / inningCount
+        let totalCols = columnLayout.totalColumns
+        let rowIndex = (collectionView == leftCollectionView) ? indexPath.item : indexPath.item / totalCols
         if rowIndex >= lineup.count { return }
         let batter = lineup[rowIndex]
         
         if collectionView == leftCollectionView {
             delegate?.didSelectPlayer(batter)
         } else {
-            let col = indexPath.item % inningCount
-            let inningNum = col + 1
+            let col = indexPath.item % totalCols
+            guard let (inningNum, subIndex) = columnLayout.inningInfo(forColumn: col) else { return }
             
-            // Highlight current active cell
             let isCurrentInning = data.currentInning == inningNum
             let isCurrentHalf = data.isTopInning == !isHomeTeam
             let isCurrentBatter = data.currentBatterId == batter.id
@@ -343,8 +430,9 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate {
             
             let inningObj = data.innings.first { $0.num == inningNum }
             let events = isHomeTeam ? inningObj?.home : inningObj?.away
-            if let event = events?.first(where: { $0.batterId == batter.id }) {
-                delegate?.didSelectAtBat(event, batter: batter, pitcherName: "Pitcher")
+            let batterEvents = events?.filter { $0.batterId == batter.id } ?? []
+            if subIndex < batterEvents.count {
+                delegate?.didSelectAtBat(batterEvents[subIndex], batter: batter, pitcherName: "Pitcher")
             }
         }
     }

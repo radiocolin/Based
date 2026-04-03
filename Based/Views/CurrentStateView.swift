@@ -19,6 +19,7 @@ class CurrentStateView: UIView {
     private let pitcherLabel = UILabel()
     private let pitchCountLabel = UILabel()
     private let teamStatusLabel = UILabel()
+    private let weatherLabel = UILabel()
     
     // Graphics
     private let linesLayer = CAShapeLayer()
@@ -106,8 +107,15 @@ class CurrentStateView: UIView {
         teamStatusLabel.textColor = pencilColor.withAlphaComponent(0.6)
         teamStatusLabel.textAlignment = .left
 
+        weatherLabel.font = UIFont(name: bodyFont, size: 13) ?? .systemFont(ofSize: 13)
+        weatherLabel.textColor = pencilColor.withAlphaComponent(0.6)
+        weatherLabel.textAlignment = .left
+        weatherLabel.numberOfLines = 1
+        weatherLabel.adjustsFontSizeToFitWidth = true
+        weatherLabel.minimumScaleFactor = 0.7
+
         // Add Subviews
-        [diamondView, pitchTrackView, inningContainer, countLabel, batterLabel, pitcherLabel, pitchCountLabel, teamStatusLabel].forEach {
+        [diamondView, pitchTrackView, inningContainer, countLabel, batterLabel, pitcherLabel, pitchCountLabel, teamStatusLabel, weatherLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             contentContainer.addSubview($0)
         }
@@ -164,7 +172,11 @@ class CurrentStateView: UIView {
 
             teamStatusLabel.topAnchor.constraint(equalTo: pitchCountLabel.bottomAnchor, constant: 2),
             teamStatusLabel.leadingAnchor.constraint(equalTo: batterLabel.leadingAnchor),
-            teamStatusLabel.trailingAnchor.constraint(equalTo: batterLabel.trailingAnchor)
+            teamStatusLabel.trailingAnchor.constraint(equalTo: batterLabel.trailingAnchor),
+
+            weatherLabel.topAnchor.constraint(equalTo: teamStatusLabel.bottomAnchor, constant: 2),
+            weatherLabel.leadingAnchor.constraint(equalTo: batterLabel.leadingAnchor),
+            weatherLabel.trailingAnchor.constraint(equalTo: batterLabel.trailingAnchor)
         ])
     }
     
@@ -219,6 +231,7 @@ class CurrentStateView: UIView {
             countLabel.text = ""
             pitchCountLabel.text = ""
             teamStatusLabel.text = ""
+            weatherLabel.text = ""
         } else {
             batterLabel.text = linescore.offense?.batter?.fullName?.uppercased() ?? "---"
             pitcherLabel.text = "vs \(linescore.defense?.pitcher?.fullName ?? "---")"
@@ -230,17 +243,31 @@ class CurrentStateView: UIView {
                 pitchCountLabel.text = ""
             }
             
-            // Extract MVR and Challenges from gameData (live feed) - Fail-safe
+            // Extract MVR and Challenges from gameData (live feed)
             let isTop = linescore.isTopInning ?? true
+            var statusParts: [String] = []
             
             if let gameData = gameData {
                 let mvr = isTop ? (gameData.moundVisits?.home?.remaining ?? 0) : (gameData.moundVisits?.away?.remaining ?? 0)
                 let homeChl = gameData.absChallenges?.home?.remaining ?? 0
                 let awayChl = gameData.absChallenges?.away?.remaining ?? 0
-                teamStatusLabel.text = "MVR: \(mvr) • CHL: H\(homeChl) A\(awayChl)"
-            } else {
-                teamStatusLabel.text = ""
+                statusParts.append("MVR: \(mvr)")
+                statusParts.append("CHL: H\(homeChl) A\(awayChl)")
             }
+            
+            teamStatusLabel.text = statusParts.joined(separator: " • ")
+            
+            // Weather and wind on dedicated row
+            var weatherParts: [String] = []
+            if let weather = gameData?.weather {
+                if let temp = weather.temp, let cond = weather.condition {
+                    weatherParts.append("\(temp)° \(cond)")
+                }
+                if let wind = weather.wind {
+                    weatherParts.append(wind)
+                }
+            }
+            weatherLabel.text = weatherParts.isEmpty ? "" : weatherParts.joined(separator: " • ")
         }
         
         let bases = BasesReached(

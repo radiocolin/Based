@@ -8,9 +8,15 @@ struct ScorecardData: Codable, Sendable {
     let innings: [ScorecardInning]
     let advisories: [String]
     let umpires: [ScorecardUmpire]
+    let gameInfo: [GameInfoItem]
     let currentInning: Int?
     let isTopInning: Bool?
     let currentBatterId: Int?
+}
+
+struct GameInfoItem: Codable, Sendable {
+    let label: String
+    let value: String?
 }
 
 struct ScorecardUmpire: Codable, Sendable {
@@ -44,6 +50,7 @@ struct ScorecardBatter: Codable, Identifiable, Sendable {
     let fullName: String
     let abbreviation: String
     let position: String
+    let jerseyNumber: String?
     let inningEntered: Int?
     let inningExited: Int?
 }
@@ -72,6 +79,9 @@ struct PitchEvent: Codable, Sendable {
     let description: String
     let outcome: String // "Ball", "Strike", "Foul", "In Play"
     let speed: Double?
+    let pitchType: String?
+    let balls: Int?
+    let strikes: Int?
     
     // Strike Zone Data (ft)
     // x: Horizontal (0 is center), z: Vertical Height
@@ -104,4 +114,30 @@ struct BasesReached: Codable, Sendable {
     let outAtSecond: Bool?
     let outAtThird: Bool?
     let outAtHome: Bool?
+}
+
+// MARK: - Column Layout (batting-around support)
+
+struct InningColumnLayout {
+    let inningNum: Int
+    let subColumnCount: Int
+    let startColumn: Int
+}
+
+struct ColumnLayout {
+    let innings: [InningColumnLayout]
+    let totalColumns: Int
+    
+    func inningInfo(forColumn col: Int) -> (inningNum: Int, subIndex: Int)? {
+        for inning in innings {
+            if col >= inning.startColumn && col < inning.startColumn + inning.subColumnCount {
+                return (inning.inningNum, col - inning.startColumn)
+            }
+        }
+        return nil
+    }
+    
+    func layout(forInning num: Int) -> InningColumnLayout? {
+        return innings.first { $0.inningNum == num }
+    }
 }

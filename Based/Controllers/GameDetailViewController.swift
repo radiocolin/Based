@@ -26,6 +26,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private let scorecardView = ScorecardView()
     private let pitcherLabel = UILabel()
     private let umpireLabel = UILabel()
+    private let gameInfoLabel = UILabel()
     
     private let placeholderLabel: UILabel = {
         let label = UILabel()
@@ -55,10 +56,12 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private let gamePk: Int
 
     private var teamSegmentedTopConstraint: NSLayoutConstraint?
+    private var scrollBottomConstraint: NSLayoutConstraint?
     private var dismissedAdvisories: Set<String> = []
 
+    private var stickyNameWidthConstraint: NSLayoutConstraint?
+
     // Constants
-    private let nameWidth: CGFloat = 90
     private let inningWidth: CGFloat = 60
     private let headerHeight: CGFloat = 32
 
@@ -91,7 +94,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         
         let font = UIFont(name: "PermanentMarker-Regular", size: 18) ?? .systemFont(ofSize: 18)
         let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
-        
+
         let backItem = UIBarButtonItem(title: "< BACK", style: .plain, target: self, action: #selector(backTapped))
         backItem.setTitleTextAttributes([.font: font, .foregroundColor: pencilColor], for: .normal)
         backItem.setTitleTextAttributes([.font: font, .foregroundColor: pencilColor.withAlphaComponent(0.5)], for: .highlighted)
@@ -101,12 +104,41 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = UIColor(red: 0.99, green: 0.98, blue: 0.96, alpha: 1.0)
         appearance.shadowColor = .clear
+        configurePlainBarButtonAppearance(appearance.buttonAppearance, font: font, color: pencilColor)
+        configurePlainBarButtonAppearance(appearance.backButtonAppearance, font: font, color: pencilColor)
         navigationController?.navigationBar.standardAppearance = appearance
         navigationController?.navigationBar.scrollEdgeAppearance = appearance
+        navigationController?.navigationBar.compactAppearance = appearance
+        navigationController?.navigationBar.tintColor = pencilColor
     }
     
     @objc private func backTapped() {
         navigationController?.popViewController(animated: true)
+    }
+
+    private func configurePlainBarButtonAppearance(_ appearance: UIBarButtonItemAppearance, font: UIFont, color: UIColor) {
+        let normalAttributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
+        let highlightedAttributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color.withAlphaComponent(0.5)]
+        let normalState = appearance.normal
+        normalState.backgroundImage = UIImage()
+        normalState.titlePositionAdjustment = .zero
+
+        let highlightedState = appearance.highlighted
+        highlightedState.backgroundImage = UIImage()
+        highlightedState.titlePositionAdjustment = .zero
+
+        let focusedState = appearance.focused
+        focusedState.backgroundImage = UIImage()
+        focusedState.titlePositionAdjustment = .zero
+
+        let disabledState = appearance.disabled
+        disabledState.backgroundImage = UIImage()
+        disabledState.titlePositionAdjustment = .zero
+
+        appearance.normal.titleTextAttributes = normalAttributes
+        appearance.highlighted.titleTextAttributes = highlightedAttributes
+        appearance.focused.titleTextAttributes = normalAttributes
+        appearance.disabled.titleTextAttributes = normalAttributes
     }
     
     // MARK: - GameUpdateDelegate
@@ -174,9 +206,9 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         mainScrollView.delegate = self
         mainStackView.translatesAutoresizingMaskIntoConstraints = false
         mainStackView.axis = .vertical
-        mainStackView.spacing = 16 
+        mainStackView.spacing = 4 
         
-        [scorecardView, pitcherLabel, umpireLabel, placeholderLabel].forEach {
+        [scorecardView, pitcherLabel, umpireLabel, gameInfoLabel, placeholderLabel].forEach {
             mainStackView.addArrangedSubview($0)
         }
         
@@ -202,6 +234,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         
         pitcherLabel.numberOfLines = 0
         umpireLabel.numberOfLines = 0
+        gameInfoLabel.numberOfLines = 0
         
         let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
         let font = UIFont(name: "PatrickHand-Regular", size: 18) ?? .systemFont(ofSize: 18)
@@ -249,7 +282,6 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             
             topLeftLabel.leadingAnchor.constraint(equalTo: stickyHeaderContainer.leadingAnchor),
             topLeftLabel.topAnchor.constraint(equalTo: stickyHeaderContainer.topAnchor),
-            topLeftLabel.widthAnchor.constraint(equalToConstant: nameWidth),
             topLeftLabel.bottomAnchor.constraint(equalTo: stickyHeaderContainer.bottomAnchor),
             
             horizontalScrollView.leadingAnchor.constraint(equalTo: topLeftLabel.trailingAnchor),
@@ -267,12 +299,11 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             mainScrollView.topAnchor.constraint(equalTo: stickyHeaderContainer.bottomAnchor),
             mainScrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             mainScrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            mainScrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             
             mainStackView.topAnchor.constraint(equalTo: mainScrollView.contentLayoutGuide.topAnchor),
             mainStackView.leadingAnchor.constraint(equalTo: mainScrollView.contentLayoutGuide.leadingAnchor, constant: 16),
             mainStackView.trailingAnchor.constraint(equalTo: mainScrollView.contentLayoutGuide.trailingAnchor, constant: -16),
-            mainStackView.bottomAnchor.constraint(equalTo: mainScrollView.contentLayoutGuide.bottomAnchor),
+            mainStackView.bottomAnchor.constraint(equalTo: mainScrollView.contentLayoutGuide.bottomAnchor, constant: -24),
             mainStackView.widthAnchor.constraint(equalTo: mainScrollView.frameLayoutGuide.widthAnchor, constant: -32),
             
             pitcherLabel.leadingAnchor.constraint(equalTo: mainStackView.leadingAnchor),
@@ -281,23 +312,34 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             currentStateView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             currentStateView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             currentStateView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            currentStateView.heightAnchor.constraint(equalToConstant: 170)
+            currentStateView.heightAnchor.constraint(equalToConstant: 190)
         ])
+        
+        // Start with live panel hidden; scroll view fills to bottom
+        currentStateView.isHidden = true
+        scrollBottomConstraint = mainScrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        scrollBottomConstraint?.isActive = true
+        stickyNameWidthConstraint = topLeftLabel.widthAnchor.constraint(equalToConstant: 90)
+        stickyNameWidthConstraint?.isActive = true
     }
 
-    private func updateStickyHeaders(inningCount: Int) {
+    private func updateStickyHeaders() {
+        // Sync name column width with scorecard
+        stickyNameWidthConstraint?.constant = scorecardView.currentNameWidth
         rightHeaderStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        rightHeaderStack.distribution = .fill
         let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
-        for i in 1...inningCount {
+        let layout = scorecardView.currentColumnLayout
+        for inningLayout in layout.innings {
             let label = UILabel()
-            label.text = "\(i)"
+            label.text = "\(inningLayout.inningNum)"
             label.textAlignment = .center
             label.font = UIFont(name: "PermanentMarker-Regular", size: 14) ?? .systemFont(ofSize: 14, weight: .bold)
             label.textColor = pencilColor
             label.backgroundColor = UIColor(red: 0.95, green: 0.94, blue: 0.92, alpha: 1.0)
             label.layer.borderWidth = 0.5
             label.layer.borderColor = UIColor(white: 0.6, alpha: 0.5).cgColor
-            label.widthAnchor.constraint(equalToConstant: inningWidth).isActive = true
+            label.widthAnchor.constraint(equalToConstant: inningWidth * CGFloat(inningLayout.subColumnCount)).isActive = true
             rightHeaderStack.addArrangedSubview(label)
         }
     }
@@ -313,31 +355,43 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         updatePlaceholderVisibility()
         
         let state = linescore.inningState?.lowercased() ?? ""
-        var isLive = state.contains("in progress") || state.contains("live")
+        let liveStates = ["top", "bottom", "mid", "end", "in progress", "live"]
+        var isLive = liveStates.contains(where: { state.contains($0) })
         
-        // Show the bar if the game is generally in progress (including mid/end breaks)
+        if state.contains("final") || state.contains("scheduled") || state.contains("pre-game") || state.contains("warmup") {
+            isLive = false
+        }
+        
         let isDuringBreak = state == "mid" || state == "end"
-        if isDuringBreak {
-            isLive = true 
+        
+        // Always ensure scroll view bottom matches live panel state
+        let needsUpdate = currentStateView.isHidden == isLive
+        let applyLayout = {
+            self.currentStateView.isHidden = !isLive
+            self.scrollBottomConstraint?.isActive = false
+            self.scrollBottomConstraint = self.mainScrollView.bottomAnchor.constraint(
+                equalTo: isLive ? self.currentStateView.topAnchor : self.view.bottomAnchor
+            )
+            self.scrollBottomConstraint?.isActive = true
+            self.view.layoutIfNeeded()
         }
         
-        if let game = currentGames.first(where: { $0.gamePk == gamePk }) {
-            let detailedState = game.status.detailedState.lowercased()
-            if detailedState.contains("final") || detailedState.contains("completed") { isLive = false }
-            else if detailedState.contains("scheduled") || detailedState.contains("pre-game") { isLive = false }
-            else if detailedState.contains("in progress") { isLive = true }
+        if needsUpdate {
+            UIView.animate(withDuration: 0.5, delay: 0, usingSpringWithDamping: 0.8, initialSpringVelocity: 0, options: .beginFromCurrentState) {
+                applyLayout()
+            }
+        } else {
+            applyLayout()
         }
-
-        currentStateView.isHidden = !isLive
         
-        // Only highlight the scorecard cell and allow live sheet if we are NOT in a break
         scorecardView.setIsLive(isLive && !isDuringBreak)
-        
-        mainScrollView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: isLive ? 180 : 40, right: 0)
     }
 
     private func updateScorecard(with scorecard: ScorecardData) {
-        let isFirstLoad = self.currentScorecard == nil
+        let previousScorecard = self.currentScorecard
+        let isFirstLoad = previousScorecard == nil
+        let previousIsTop = previousScorecard?.isTopInning ?? true
+        let wasViewingBattingTeam = !isFirstLoad && teamSegmentedControl.selectedSegmentIndex == (previousIsTop ? 0 : 1)
         self.currentScorecard = scorecard
         
         // Update Segmented Control Titles with prominent at-bat indicator
@@ -351,28 +405,29 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         let isTop = scorecard.isTopInning ?? true
         
         // Away (Index 0)
-        let awayAttrTitle = NSMutableAttributedString(string: isTop ? "● \(awayName.uppercased())" : awayName.uppercased())
+        let awayAttrTitle = NSMutableAttributedString(string: isTop ? "● \(awayName)" : awayName)
         awayAttrTitle.addAttributes([.font: isTop ? boldFont : font, .foregroundColor: isTop ? pencilColor : pencilColor.withAlphaComponent(0.6)], range: NSRange(location: 0, length: awayAttrTitle.length))
         
         // Home (Index 1)
-        let homeAttrTitle = NSMutableAttributedString(string: !isTop ? "● \(homeName.uppercased())" : homeName.uppercased())
+        let homeAttrTitle = NSMutableAttributedString(string: !isTop ? "● \(homeName)" : homeName)
         homeAttrTitle.addAttributes([.font: !isTop ? boldFont : font, .foregroundColor: !isTop ? pencilColor : pencilColor.withAlphaComponent(0.6)], range: NSRange(location: 0, length: homeAttrTitle.length))
         
         // Use standard titles since UISegmentedControl attributedTitle support can be finicky with custom fonts across iOS versions
-        teamSegmentedControl.setTitle(isTop ? "● \(awayName.uppercased())" : awayName.uppercased(), forSegmentAt: 0)
-        teamSegmentedControl.setTitle(!isTop ? "● \(homeName.uppercased())" : homeName.uppercased(), forSegmentAt: 1)
+        teamSegmentedControl.setTitle(isTop ? "● \(awayName)" : awayName, forSegmentAt: 0)
+        teamSegmentedControl.setTitle(!isTop ? "● \(homeName)" : homeName, forSegmentAt: 1)
         
         // Default to the team at bat on first load
         if isFirstLoad {
-            teamSegmentedControl.selectedSegmentIndex = isTop ? 0 : 1
-            scorecardView.setTeam(isHome: !isTop)
+            setDisplayedTeam(toBattingTeamForTopInning: isTop)
+        } else if previousScorecard?.isTopInning != scorecard.isTopInning && wasViewingBattingTeam {
+            setDisplayedTeam(toBattingTeamForTopInning: isTop)
         }
         
         scorecardView.configure(with: scorecard)
-        let inningCount = max(scorecard.innings.count, 9)
-        updateStickyHeaders(inningCount: inningCount)
+        updateStickyHeaders()
         updatePitcherList()
         updateUmpireList()
+        updateGameInfo()
         updatePlaceholderVisibility()
         
         let inning = scorecard.currentInning ?? 1
@@ -383,8 +438,12 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         if isFirstLoad {
             syncWithActiveAtBat()
         } else if newKey != lastActiveAtBatKey && batterId != 0 {
-            // Auto-scroll when the at-bat actually changes
-            syncWithActiveAtBat()
+            // Auto-scroll only if viewing the team at bat
+            let viewingBattingTeam = (currentIsTop && teamSegmentedControl.selectedSegmentIndex == 0) ||
+                                     (!currentIsTop && teamSegmentedControl.selectedSegmentIndex == 1)
+            if viewingBattingTeam {
+                scrollToActiveCell(scorecard: scorecard)
+            }
         }
         
         lastActiveAtBatKey = newKey
@@ -421,6 +480,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     @objc private func teamChanged() {
         let isHome = teamSegmentedControl.selectedSegmentIndex == 1
         scorecardView.setTeam(isHome: isHome)
+        updateStickyHeaders()
         updatePitcherList()
         updatePlaceholderVisibility()
     }
@@ -438,15 +498,21 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     private func showPlaceholder(_ show: Bool) {
-        placeholderLabel.isHidden = !show
+        if placeholderLabel.isHidden != !show {
+            UIView.animate(withDuration: 0.3) {
+                self.placeholderLabel.isHidden = !show
+                self.scorecardView.isHidden = show
+                self.stickyHeaderContainer.isHidden = show
+                self.pitcherLabel.isHidden = show
+                self.umpireLabel.isHidden = show
+                self.gameInfoLabel.isHidden = show
+                self.view.layoutIfNeeded()
+            }
+        }
+        
         if show {
             placeholderLabel.text = "LINEUP NOT YET AVAILABLE"
         }
-        
-        scorecardView.isHidden = show
-        stickyHeaderContainer.isHidden = show
-        pitcherLabel.isHidden = show
-        umpireLabel.isHidden = show
     }
 
     private func showLiveAtBatDetail() {
@@ -532,12 +598,55 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             .font: UIFont(name: "PermanentMarker-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold),
             .foregroundColor: UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
         ])
-        attributedText.append(NSAttributedString(string: pitcherStrings.joined(separator: "\n") + "\n", attributes: [
+        attributedText.append(NSAttributedString(string: pitcherStrings.joined(separator: "\n"), attributes: [
             .font: UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14),
             .foregroundColor: UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.7)
         ]))
         
         pitcherLabel.attributedText = pitcherStrings.isEmpty ? nil : attributedText
+    }
+
+    private func updateGameInfo() {
+        guard let scorecard = currentScorecard else { return }
+        
+        // Filter to game info fields we want below the scorecard
+        let displayLabels = ["First pitch", "T", "Att", "Venue"]
+        let infoItems = scorecard.gameInfo.filter { item in
+            displayLabels.contains(item.label) && item.value != nil
+        }
+        
+        // Also find a date entry (label with no value)
+        let dateItem = scorecard.gameInfo.first { $0.value == nil && !$0.label.isEmpty }
+        
+        guard !infoItems.isEmpty || dateItem != nil else {
+            gameInfoLabel.attributedText = nil
+            return
+        }
+        
+        let labelMap = ["First pitch": "First Pitch", "T": "Duration", "Att": "Attendance"]
+        
+        let attributedText = NSMutableAttributedString(string: "GAME INFO\n", attributes: [
+            .font: UIFont(name: "PermanentMarker-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold),
+            .foregroundColor: UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
+        ])
+        
+        let bodyAttrs: [NSAttributedString.Key: Any] = [
+            .font: UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14),
+            .foregroundColor: UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.7)
+        ]
+        
+        var lines: [String] = []
+        for item in infoItems {
+            let displayLabel = labelMap[item.label] ?? item.label
+            let value = (item.value ?? "").trimmingCharacters(in: CharacterSet(charactersIn: "."))
+            lines.append("\(displayLabel): \(value)")
+        }
+        if let dateItem = dateItem {
+            lines.append(dateItem.label)
+        }
+        
+        attributedText.append(NSAttributedString(string: lines.joined(separator: "\n"), attributes: bodyAttrs))
+        gameInfoLabel.attributedText = lines.isEmpty ? nil : attributedText
     }
 
     // MARK: - ScorecardViewDelegate
@@ -569,12 +678,16 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         
         // Swap to the team at bat
         let isTop = scorecard.isTopInning ?? true
-        self.teamSegmentedControl.selectedSegmentIndex = isTop ? 0 : 1
-        self.scorecardView.setTeam(isHome: !isTop)
+        setDisplayedTeam(toBattingTeamForTopInning: isTop)
         self.updatePitcherList()
         self.updatePlaceholderVisibility()
         
         self.scrollToActiveCell(scorecard: scorecard)
+    }
+
+    private func setDisplayedTeam(toBattingTeamForTopInning isTop: Bool) {
+        teamSegmentedControl.selectedSegmentIndex = isTop ? 0 : 1
+        scorecardView.setTeam(isHome: !isTop)
     }
 
     private func scrollToActiveCell(scorecard: ScorecardData) {
@@ -590,7 +703,9 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             let lineup = isHomeTeamAtBat ? scorecard.lineups.home : scorecard.lineups.away
             guard let rowIndex = lineup.firstIndex(where: { $0.id == batterId }) else { return }
             
-            let colIndex = inningNum - 1
+            let layout = scorecardView.currentColumnLayout
+            guard let inningLayout = layout.layout(forInning: inningNum) else { return }
+            let colIndex = inningLayout.startColumn + inningLayout.subColumnCount - 1
             let cellWidth: CGFloat = 60
             let rowHeight: CGFloat = 70
             
@@ -606,9 +721,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
                 let rowY = CGFloat(rowIndex) * rowHeight
                 let scorecardY = scorecardView.frame.origin.y
 
-                // Account for the live at-bat panel (170 points) and bottom inset
-                let livePanelHeight: CGFloat = currentStateView.isHidden ? 0 : 170
-                let visibleHeight = mainScrollView.bounds.height - livePanelHeight
+                // Scroll view frame already accounts for live panel via constraints
+                let visibleHeight = mainScrollView.bounds.height
 
                 // Center the row in the remaining visible height
                 let targetY = max(0, scorecardY + rowY - (visibleHeight / 2) + (rowHeight / 2))

@@ -26,5 +26,7 @@
 		<string>PermanentMarker-Regular.ttf</string>
 		<string>PatrickHand-Regular.ttf</string>
 	</array>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>

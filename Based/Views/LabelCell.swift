@@ -21,8 +21,8 @@ class LabelCell: UICollectionViewCell {
         NSLayoutConstraint.activate([
             label.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             label.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            label.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 4),
-            label.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -4)
+            label.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 6),
+            label.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -6)
         ])
         // Subtle grid line instead of border
         contentView.layer.borderWidth = 0.5

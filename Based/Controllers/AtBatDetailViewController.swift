@@ -260,6 +260,7 @@ class PitchCell: UITableViewCell {
             
             descLabel.leadingAnchor.constraint(equalTo: numLabel.trailingAnchor, constant: 8),
             descLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
+            descLabel.trailingAnchor.constraint(lessThanOrEqualTo: speedLabel.leadingAnchor, constant: -8),
             
             outcomeLabel.leadingAnchor.constraint(equalTo: descLabel.leadingAnchor),
             outcomeLabel.topAnchor.constraint(equalTo: descLabel.bottomAnchor, constant: 2),
@@ -267,21 +268,48 @@ class PitchCell: UITableViewCell {
             
             speedLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             speedLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            speedLabel.widthAnchor.constraint(equalToConstant: 60)
+            speedLabel.widthAnchor.constraint(equalToConstant: 96)
         ])
     }
     
     func configure(with pitch: PitchEvent) {
         numLabel.text = "\(pitch.pitchNumber)."
         descLabel.text = pitch.description
-        outcomeLabel.text = pitch.outcome.uppercased()
         outcomeLabel.font = UIFont(name: "PatrickHand-Regular", size: 14)
         outcomeLabel.textColor = .gray
+        outcomeLabel.text = subtitleText(for: pitch)
+        outcomeLabel.isHidden = outcomeLabel.text?.isEmpty ?? true
         
-        if let speed = pitch.speed {
-            speedLabel.text = String(format: "%.0f mph", speed)
-        } else {
-            speedLabel.text = ""
+        speedLabel.text = speedText(for: pitch)
+    }
+
+    private func subtitleText(for pitch: PitchEvent) -> String {
+        if let balls = pitch.balls, let strikes = pitch.strikes {
+            return "COUNT \(balls)-\(strikes)"
+        }
+
+        let normalizedDescription = pitch.description.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let normalizedOutcome = pitch.outcome.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalizedOutcome.isEmpty, normalizedOutcome != normalizedDescription else {
+            return ""
+        }
+
+        return pitch.outcome.uppercased()
+    }
+
+    private func speedText(for pitch: PitchEvent) -> String {
+        let type = pitch.pitchType?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let speed = pitch.speed.map { String(format: "%.0f mph", $0) }
+
+        switch (type?.isEmpty == false ? type : nil, speed) {
+        case let (type?, speed?):
+            return "\(type) \(speed)"
+        case let (type?, nil):
+            return type
+        case let (nil, speed?):
+            return speed
+        default:
+            return ""
         }
     }
 }

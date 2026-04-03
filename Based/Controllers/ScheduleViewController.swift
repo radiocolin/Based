@@ -94,6 +94,9 @@ class ScheduleViewController: UIViewController {
         collectionView.register(GameCardCell.self, forCellWithReuseIdentifier: GameCardCell.reuseIdentifier)
         collectionView.register(ScheduleFooterView.self, forSupplementaryViewOfKind: UICollectionView.elementKindSectionFooter, withReuseIdentifier: ScheduleFooterView.reuseIdentifier)
         
+        let gameLongPress = UILongPressGestureRecognizer(target: self, action: #selector(handleGameLongPress(_:)))
+        collectionView.addGestureRecognizer(gameLongPress)
+        
         [collectionView, noGamesLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview($0)
@@ -129,7 +132,7 @@ class ScheduleViewController: UIViewController {
         ])
         }
 
-        private func setupNavigationBar() {        title = "BASED"
+    private func setupNavigationBar() {        title = "BASED"
         
         let font = UIFont(name: "PermanentMarker-Regular", size: 28) ?? .systemFont(ofSize: 28, weight: .bold)
         let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
@@ -139,6 +142,8 @@ class ScheduleViewController: UIViewController {
         appearance.backgroundColor = UIColor(red: 0.99, green: 0.98, blue: 0.96, alpha: 1.0)
         appearance.titleTextAttributes = [.font: font, .foregroundColor: pencilColor]
         appearance.shadowColor = .clear
+        configurePlainBarButtonAppearance(appearance.buttonAppearance, color: pencilColor)
+        configurePlainBarButtonAppearance(appearance.backButtonAppearance, color: pencilColor)
         
         if let navigationBar = navigationController?.navigationBar {
             navigationBar.standardAppearance = appearance
@@ -146,6 +151,26 @@ class ScheduleViewController: UIViewController {
             navigationBar.compactAppearance = appearance
             navigationBar.tintColor = pencilColor
         }
+    }
+
+    private func configurePlainBarButtonAppearance(_ appearance: UIBarButtonItemAppearance, color: UIColor) {
+        let normalState = appearance.normal
+        normalState.backgroundImage = UIImage()
+
+        let highlightedState = appearance.highlighted
+        highlightedState.backgroundImage = UIImage()
+
+        let focusedState = appearance.focused
+        focusedState.backgroundImage = UIImage()
+
+        let disabledState = appearance.disabled
+        disabledState.backgroundImage = UIImage()
+
+        let attributes: [NSAttributedString.Key: Any] = [.foregroundColor: color]
+        appearance.normal.titleTextAttributes = attributes
+        appearance.highlighted.titleTextAttributes = attributes
+        appearance.focused.titleTextAttributes = attributes
+        appearance.disabled.titleTextAttributes = attributes
     }
     
     private func setupDatePickerOverlay() {
@@ -245,9 +270,22 @@ class ScheduleViewController: UIViewController {
     private func loadSchedule(for date: Date) {
         currentDate = date
         updateDateLabel()
+
         Task {
             do {
-                let games = try await GameService.shared.fetchSchedule(for: date)
+                var games = try await GameService.shared.fetchSchedule(for: date)
+
+                // Sort favorites to the top
+                games.sort { g1, g2 in
+                    let g1Fav = FavoritesService.shared.isFavorite(teamId: g1.teams.away.team.id ?? 0) || 
+                               FavoritesService.shared.isFavorite(teamId: g1.teams.home.team.id ?? 0)
+                    let g2Fav = FavoritesService.shared.isFavorite(teamId: g2.teams.away.team.id ?? 0) || 
+                               FavoritesService.shared.isFavorite(teamId: g2.teams.home.team.id ?? 0)
+
+                    if g1Fav && !g2Fav { return true }
+                    if !g1Fav && g2Fav { return false }
+                    return false // Maintain original order if both or neither are favorites
+                }
                 self.currentGames = games
                 await MainActor.run {
                     self.noGamesLabel.isHidden = !games.isEmpty
@@ -281,6 +319,45 @@ class ScheduleViewController: UIViewController {
                 loadSchedule(for: today)
             }
         }
+    }
+
+    @objc private func handleGameLongPress(_ gesture: UILongPressGestureRecognizer) {
+        guard gesture.state == .began else { return }
+        let point = gesture.location(in: collectionView)
+        
+        guard let indexPath = collectionView.indexPathForItem(at: point) else { return }
+        let game = currentGames[indexPath.item]
+        
+        let alert = UIAlertController(title: "Favorite Teams", message: "Pin games involving these teams to the top.", preferredStyle: .actionSheet)
+        
+        // Away Team
+        if let awayId = game.teams.away.team.id {
+            let awayName = game.teams.away.team.name ?? "Away Team"
+            let awayIsFav = FavoritesService.shared.isFavorite(teamId: awayId)
+            alert.addAction(UIAlertAction(title: awayIsFav ? "Unfavorite \(awayName)" : "Favorite \(awayName)", style: awayIsFav ? .destructive : .default) { [weak self] _ in
+                FavoritesService.shared.toggleFavorite(teamId: awayId)
+                self?.loadSchedule(for: self?.currentDate ?? Date())
+            })
+        }
+        
+        // Home Team
+        if let homeId = game.teams.home.team.id {
+            let homeName = game.teams.home.team.name ?? "Home Team"
+            let homeIsFav = FavoritesService.shared.isFavorite(teamId: homeId)
+            alert.addAction(UIAlertAction(title: homeIsFav ? "Unfavorite \(homeName)" : "Favorite \(homeName)", style: homeIsFav ? .destructive : .default) { [weak self] _ in
+                FavoritesService.shared.toggleFavorite(teamId: homeId)
+                self?.loadSchedule(for: self?.currentDate ?? Date())
+            })
+        }
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        
+        if let cell = collectionView.cellForItem(at: indexPath) {
+            alert.popoverPresentationController?.sourceView = cell
+            alert.popoverPresentationController?.sourceRect = cell.bounds
+        }
+        
+        present(alert, animated: true)
     }
 }
 

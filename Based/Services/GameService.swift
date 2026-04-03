@@ -107,7 +107,7 @@ class GameService {
                 
                 if let inning = scorecard.innings.first(where: { $0.num == inningNum }) {
                     let events = isTop ? inning.away : inning.home
-                    if let currentAtBat = events.first(where: { $0.batterId == batterId }) {
+                    if let currentAtBat = events.last(where: { $0.batterId == batterId }) {
                         currentPitches = currentAtBat.pitches ?? []
                     }
                 }
@@ -214,7 +214,7 @@ class GameService {
                 abbreviation = "\(components[components.count - 2]) \(abbreviation)"
             }
             
-            return ScorecardBatter(id: id, fullName: name, abbreviation: abbreviation, position: player.position?.abbreviation ?? "", inningEntered: part.entered, inningExited: part.exited)
+            return ScorecardBatter(id: id, fullName: name, abbreviation: abbreviation, position: player.position?.abbreviation ?? "", jerseyNumber: player.jerseyNumber, inningEntered: part.entered, inningExited: part.exited)
         }
 
         func createPitcher(id: Int, team: BoxscoreTeam?) -> ScorecardPitcher? {
@@ -304,6 +304,12 @@ class GameService {
             scorecardInnings.append(ScorecardInning(num: i, ordinal: "\(i)", home: homeEvents, away: awayEvents))
         }
         
+        // Extract game info from boxscore info array
+        let gameInfo: [GameInfoItem] = (boxscore.info ?? []).compactMap { note in
+            guard let label = note.label else { return nil }
+            return GameInfoItem(label: label, value: note.value)
+        }
+
         return ScorecardData(
             teams: ScorecardTeams(home: boxscore.teams?.home?.team ?? Team(id: 0, name: "Home", link: ""), away: boxscore.teams?.away?.team ?? Team(id: 0, name: "Away", link: "")),
             lineups: Lineups(home: homeLineup, away: awayLineup),
@@ -311,6 +317,7 @@ class GameService {
             innings: scorecardInnings,
             advisories: Array(advisories.prefix(3)),
             umpires: umpires,
+            gameInfo: gameInfo,
             currentInning: playByPlay.currentPlay?.about?.inning,
             isTopInning: playByPlay.currentPlay?.about?.isTopInning,
             currentBatterId: playByPlay.currentPlay?.matchup?.batter?.id
@@ -319,7 +326,19 @@ class GameService {
 
     private func transformPlayToEvent(_ play: Play, allPlays: [Play], playIndex: Int) -> AtBatEvent {
         let pitches = (play.playEvents ?? []).filter { $0.isPitch == true }.enumerated().map { (index, event) in
-            PitchEvent(pitchNumber: index + 1, description: event.details?.description ?? "", outcome: event.details?.call?.description ?? "", speed: event.pitchData?.startSpeed, x: event.pitchData?.coordinates?.pX, z: event.pitchData?.coordinates?.pZ, zoneTop: event.pitchData?.strikeZoneTop, zoneBottom: event.pitchData?.strikeZoneBottom)
+            PitchEvent(
+                pitchNumber: index + 1,
+                description: event.details?.description ?? "",
+                outcome: event.details?.call?.description ?? "",
+                speed: event.pitchData?.startSpeed,
+                pitchType: event.pitchType?.code ?? event.pitchType?.description,
+                balls: event.count?.balls,
+                strikes: event.count?.strikes,
+                x: event.pitchData?.coordinates?.pX,
+                z: event.pitchData?.coordinates?.pZ,
+                zoneTop: event.pitchData?.strikeZoneTop,
+                zoneBottom: event.pitchData?.strikeZoneBottom
+            )
         }
         
         let batterId = play.matchup?.batter?.id ?? 0

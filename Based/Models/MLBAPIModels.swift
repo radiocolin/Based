@@ -93,6 +93,7 @@ struct HotColdZone: Codable, Sendable {
 
 struct PlayEvent: Codable, Sendable {
     let details: PlayEventDetails?
+    let pitchType: CodeDescription?
     let count: PlayCount?
     let pitchData: PitchData?
     let hitData: HitData?
@@ -156,6 +157,7 @@ struct LiveFeedResponse: Codable, Sendable {
 struct GameData: Codable, Sendable {
     let moundVisits: MoundVisits?
     let absChallenges: ABSChallenges?
+    let weather: Weather?
 }
 
 struct MoundVisits: Codable, Sendable {
