@@ -63,6 +63,14 @@ struct TeamGameStats: Codable, Sendable {
     let hits: Int?
     let errors: Int?
     let leftOnBase: Int?
+    let moundVisitsRemaining: Int?
+    let challenges: Challenges?
+}
+
+struct Challenges: Codable, Sendable {
+    let used: Int?
+    let remaining: Int?
+    let successful: Int?
 }
 
 struct Team: Codable, Sendable {

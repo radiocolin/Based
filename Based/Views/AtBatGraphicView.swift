@@ -36,6 +36,9 @@ class AtBatGraphicView: UIView {
         }
         
         resultLabel.font = UIFont(name: headerFont, size: 36) ?? .systemFont(ofSize: 36, weight: .bold)
+        resultLabel.numberOfLines = 0
+        resultLabel.adjustsFontSizeToFitWidth = true
+        resultLabel.minimumScaleFactor = 0.5
         
         NSLayoutConstraint.activate([
             diamondView.topAnchor.constraint(equalTo: topAnchor),
@@ -58,11 +61,27 @@ class AtBatGraphicView: UIView {
     }
     
     func configure(with event: AtBatEvent) {
-        resultLabel.text = event.result
+        let isLive = event.result == "LIVE"
+        
+        if isLive {
+            resultLabel.attributedText = nil
+        } else {
+            // Use attributed string to reduce line spacing
+            let paragraphStyle = NSMutableParagraphStyle()
+            paragraphStyle.lineHeightMultiple = 0.75
+            paragraphStyle.alignment = .center
+            
+            let attributes: [NSAttributedString.Key: Any] = [
+                .paragraphStyle: paragraphStyle,
+                .font: resultLabel.font ?? .systemFont(ofSize: 36)
+            ]
+            resultLabel.attributedText = NSAttributedString(string: event.result, attributes: attributes)
+        }
+        
         ballsLabel.text = "\(event.balls)B"
         strikesLabel.text = "\(event.strikes)S"
         outsLabel.text = event.outs > 0 ? "\(event.outs)" : ""
 
-        diamondView.configure(with: event.bases, style: .scorecard, isRun: event.result == "HR")
+        diamondView.configure(with: event.bases, style: isLive ? .liveStatus : .scorecard, isRun: event.result == "HR")
     }
 }

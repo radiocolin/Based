@@ -3,6 +3,7 @@ import UIKit
 protocol ScorecardViewDelegate: AnyObject {
     func didSelectAtBat(_ event: AtBatEvent, batter: ScorecardBatter, pitcherName: String)
     func didSelectPlayer(_ batter: ScorecardBatter)
+    func didSelectActiveAtBat()
 }
 
 class ScorecardView: UIView {
@@ -34,6 +35,7 @@ class ScorecardView: UIView {
     private var scorecardData: ScorecardData?
     private var isHomeTeam = false
     private var areHeadersVisible = true
+    private var isLive = false
     
     // Constants
     private let nameWidth: CGFloat = 90
@@ -193,6 +195,11 @@ class ScorecardView: UIView {
         invalidateIntrinsicContentSize()
     }
     
+    func setIsLive(_ live: Bool) {
+        self.isLive = live
+        rightCollectionView.reloadData()
+    }
+    
     func scrollToActiveCell() {
         guard let data = scorecardData,
               let inningNum = data.currentInning,
@@ -296,7 +303,7 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate {
             let isCurrentHalf = data.isTopInning == !isHomeTeam
             let isCurrentBatter = data.currentBatterId == batter.id
             
-            if isCurrentInning && isCurrentHalf && isCurrentBatter {
+            if isLive && isCurrentInning && isCurrentHalf && isCurrentBatter {
                 cell.contentView.layer.borderWidth = 3.0
                 cell.contentView.layer.borderColor = UIColor.systemBlue.cgColor
                 cell.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.08)
@@ -323,6 +330,17 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate {
         } else {
             let col = indexPath.item % inningCount
             let inningNum = col + 1
+            
+            // Highlight current active cell
+            let isCurrentInning = data.currentInning == inningNum
+            let isCurrentHalf = data.isTopInning == !isHomeTeam
+            let isCurrentBatter = data.currentBatterId == batter.id
+            
+            if isLive && isCurrentInning && isCurrentHalf && isCurrentBatter {
+                delegate?.didSelectActiveAtBat()
+                return
+            }
+            
             let inningObj = data.innings.first { $0.num == inningNum }
             let events = isHomeTeam ? inningObj?.home : inningObj?.away
             if let event = events?.first(where: { $0.batterId == batter.id }) {

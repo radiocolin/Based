@@ -34,9 +34,13 @@ class ScheduleViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
-        setupNavigationBar()
         setupDatePickerOverlay()
         loadSchedule(for: currentDate)
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        setupNavigationBar()
     }
     
     private func setupUI() {
@@ -82,50 +86,50 @@ class ScheduleViewController: UIViewController {
         let screenWidth = view.window?.windowScene?.screen.bounds.width ?? view.frame.width
         let width = (screenWidth - padding) / 2
         layout.itemSize = CGSize(width: width, height: 120) 
-        
+        layout.footerReferenceSize = CGSize(width: screenWidth, height: 100)        
         collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
         collectionView.backgroundColor = .clear
         collectionView.delegate = self
         collectionView.dataSource = self
         collectionView.register(GameCardCell.self, forCellWithReuseIdentifier: GameCardCell.reuseIdentifier)
+        collectionView.register(ScheduleFooterView.self, forSupplementaryViewOfKind: UICollectionView.elementKindSectionFooter, withReuseIdentifier: ScheduleFooterView.reuseIdentifier)
         
         [collectionView, noGamesLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview($0)
         }
-        
+
         NSLayoutConstraint.activate([
             // Date Header
             dateHeaderView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             dateHeaderView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             dateHeaderView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             dateHeaderView.heightAnchor.constraint(equalToConstant: 50),
-            
+
             prevButton.leadingAnchor.constraint(equalTo: dateHeaderView.leadingAnchor, constant: 20),
             prevButton.centerYAnchor.constraint(equalTo: dateHeaderView.centerYAnchor),
             prevButton.widthAnchor.constraint(equalToConstant: 44),
-            
+
             nextButton.trailingAnchor.constraint(equalTo: dateHeaderView.trailingAnchor, constant: -20),
             nextButton.centerYAnchor.constraint(equalTo: dateHeaderView.centerYAnchor),
             nextButton.widthAnchor.constraint(equalToConstant: 44),
-            
+
             dateLabel.leadingAnchor.constraint(equalTo: prevButton.trailingAnchor),
             dateLabel.trailingAnchor.constraint(equalTo: nextButton.leadingAnchor),
             dateLabel.centerYAnchor.constraint(equalTo: dateHeaderView.centerYAnchor),
-            
+
             // Collection View
             collectionView.topAnchor.constraint(equalTo: dateHeaderView.bottomAnchor),
             collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            
+
             noGamesLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             noGamesLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
-    }
-    
-    private func setupNavigationBar() {
-        title = "BASED"
+        }
+
+        private func setupNavigationBar() {        title = "BASED"
         
         let font = UIFont(name: "PermanentMarker-Regular", size: 28) ?? .systemFont(ofSize: 28, weight: .bold)
         let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
@@ -280,6 +284,72 @@ class ScheduleViewController: UIViewController {
     }
 }
 
+// MARK: - Footer View
+
+class ScheduleFooterView: UICollectionReusableView {
+    static let reuseIdentifier = "ScheduleFooterView"
+    
+    private let stackView = UIStackView()
+    private let madeInStack = UIStackView()
+    private let madeWithLabel = UILabel()
+    private let heartImageView = UIImageView(image: UIImage(named: "PhiladelphiaLove.symbols")?.withRenderingMode(.alwaysTemplate))
+    private let inPhiladelphiaLabel = UILabel()
+    private let byLabel = UILabel()
+    
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        setupUI()
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    private func setupUI() {
+        let font = UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14)
+        let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.6)
+        
+        [madeWithLabel, inPhiladelphiaLabel, byLabel].forEach {
+            $0.font = font
+            $0.textColor = pencilColor
+            $0.textAlignment = .center
+        }
+        
+        madeWithLabel.text = "Made with "
+        inPhiladelphiaLabel.text = " in Philadelphia"
+        byLabel.text = "by Colin Weir"
+        
+        heartImageView.contentMode = .scaleAspectFit
+        heartImageView.tintColor = .systemRed
+        heartImageView.setContentHuggingPriority(.required, for: .horizontal)
+        heartImageView.setContentCompressionResistancePriority(.required, for: .horizontal)
+        
+        madeInStack.axis = .horizontal
+        madeInStack.spacing = 0
+        madeInStack.alignment = .center
+        madeInStack.addArrangedSubview(madeWithLabel)
+        madeInStack.addArrangedSubview(heartImageView)
+        madeInStack.addArrangedSubview(inPhiladelphiaLabel)
+        
+        stackView.axis = .vertical
+        stackView.spacing = -2
+        stackView.alignment = .center
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stackView)
+        
+        stackView.addArrangedSubview(madeInStack)
+        stackView.addArrangedSubview(byLabel)
+        
+        NSLayoutConstraint.activate([
+            stackView.centerXAnchor.constraint(equalTo: centerXAnchor),
+            stackView.topAnchor.constraint(equalTo: topAnchor, constant: 16),
+            stackView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -32),
+            heartImageView.heightAnchor.constraint(equalToConstant: 14),
+            heartImageView.widthAnchor.constraint(equalToConstant: 16)
+        ])
+    }
+}
+
 extension ScheduleViewController: UICollectionViewDataSource, UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
         return currentGames.count
@@ -289,6 +359,14 @@ extension ScheduleViewController: UICollectionViewDataSource, UICollectionViewDe
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: GameCardCell.reuseIdentifier, for: indexPath) as! GameCardCell
         cell.configure(with: currentGames[indexPath.item], isSelected: false)
         return cell
+    }
+    
+    func collectionView(_ collectionView: UICollectionView, viewForSupplementaryElementOfKind kind: String, at indexPath: IndexPath) -> UICollectionReusableView {
+        if kind == UICollectionView.elementKindSectionFooter {
+            let footer = collectionView.dequeueReusableSupplementaryView(ofKind: kind, withReuseIdentifier: ScheduleFooterView.reuseIdentifier, for: indexPath) as! ScheduleFooterView
+            return footer
+        }
+        return UICollectionReusableView()
     }
     
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {

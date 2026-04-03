@@ -3,7 +3,7 @@ import UIKit
 class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
     
     // Data
-    private let event: AtBatEvent
+    private var event: AtBatEvent
     private let batterName: String
     private let pitcherName: String
     
@@ -39,9 +39,31 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         fatalError("init(coder:) has not been implemented")
     }
     
+    func update(event: AtBatEvent) {
+        self.event = event
+        
+        // Update UI components
+        let isLive = event.result == "LIVE"
+        resultLabel.text = isLive ? "LIVE" : event.result
+        descriptionLabel.text = isLive ? "Current at bat" : event.description
+        
+        if let pitches = event.pitches {
+            pitchTrackView.configure(with: pitches)
+        }
+        atBatGraphicView.configure(with: event)
+        pitchesTableView.reloadData()
+        
+        view.setNeedsLayout()
+    }
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
+        
+        // Initial setup for LIVE state if needed
+        let isLive = event.result == "LIVE"
+        resultLabel.text = isLive ? "LIVE" : event.result
+        descriptionLabel.text = isLive ? "Current at bat" : event.description
     }
     
     override func viewDidLayoutSubviews() {

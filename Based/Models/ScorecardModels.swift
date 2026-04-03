@@ -7,9 +7,15 @@ struct ScorecardData: Codable, Sendable {
     let pitchers: ScorecardPitchers
     let innings: [ScorecardInning]
     let advisories: [String]
+    let umpires: [ScorecardUmpire]
     let currentInning: Int?
     let isTopInning: Bool?
     let currentBatterId: Int?
+}
+
+struct ScorecardUmpire: Codable, Sendable {
+    let fullName: String
+    let type: String // HP, 1B, 2B, 3B
 }
 
 struct ScorecardPitchers: Codable, Sendable {
@@ -73,6 +79,18 @@ struct PitchEvent: Codable, Sendable {
     let z: Double?
     let zoneTop: Double?
     let zoneBottom: Double?
+    
+    var isBall: Bool {
+        let o = outcome.lowercased()
+        let d = description.lowercased()
+        return o.contains("ball") || d.contains("ball") || d.contains("blocked")
+    }
+    
+    var isStrike: Bool {
+        let o = outcome.lowercased()
+        let d = description.lowercased()
+        return o.contains("strike") || d.contains("strike") || o.contains("foul") || d.contains("foul")
+    }
 }
 
 struct BasesReached: Codable, Sendable {

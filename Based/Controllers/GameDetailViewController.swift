@@ -25,6 +25,18 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private let mainStackView = UIStackView()
     private let scorecardView = ScorecardView()
     private let pitcherLabel = UILabel()
+    private let umpireLabel = UILabel()
+    
+    private let placeholderLabel: UILabel = {
+        let label = UILabel()
+        label.text = "LINEUP NOT YET AVAILABLE"
+        label.font = UIFont(name: "PermanentMarker-Regular", size: 20) ?? .systemFont(ofSize: 20, weight: .bold)
+        label.textColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.4)
+        label.textAlignment = .center
+        label.numberOfLines = 0
+        label.isHidden = true
+        return label
+    }()
     
     private let currentStateView = CurrentStateView()
     
@@ -37,6 +49,9 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private var currentGames: [ScheduleGame] = []
     private var currentLinescore: Linescore?
     private var currentScorecard: ScorecardData?
+    private var currentLivePitches: [PitchEvent] = []
+    private weak var liveDetailVC: AtBatDetailViewController?
+    private var lastActiveAtBatKey: String?
     private let gamePk: Int
 
     private var teamSegmentedTopConstraint: NSLayoutConstraint?
@@ -96,8 +111,12 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     
     // MARK: - GameUpdateDelegate
     
-    func didUpdateLinescore(_ linescore: Linescore, pitches: [PitchEvent]) {
-        updateUI(with: linescore, pitches: pitches)
+    func didUpdateLinescore(_ linescore: Linescore, pitches: [PitchEvent], gameData: GameData?) {
+        self.currentLivePitches = pitches
+        if let liveVC = liveDetailVC {
+            updateLiveDetailSheet(with: linescore, pitches: pitches)
+        }
+        updateUI(with: linescore, pitches: pitches, gameData: gameData)
     }
     
     func didUpdateScorecard(_ scorecard: ScorecardData) {
@@ -157,12 +176,22 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         mainStackView.axis = .vertical
         mainStackView.spacing = 16 
         
-        [scorecardView, pitcherLabel].forEach {
+        [scorecardView, pitcherLabel, umpireLabel, placeholderLabel].forEach {
             mainStackView.addArrangedSubview($0)
         }
         
+        placeholderLabel.heightAnchor.constraint(greaterThanOrEqualToConstant: 200).isActive = true
+        
         scorecardView.setHeadersVisible(false)
         scorecardView.delegate = self
+        
+        currentStateView.tapAction = { [weak self] in
+            self?.showLiveAtBatDetail()
+        }
+        
+        currentStateView.longPressAction = { [weak self] in
+            self?.syncWithActiveAtBat()
+        }
         
         // Bidirectional sync for horizontal scrolling
         scorecardView.horizontalScrollCallback = { [weak self] offset in
@@ -172,6 +201,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         }
         
         pitcherLabel.numberOfLines = 0
+        umpireLabel.numberOfLines = 0
         
         let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
         let font = UIFont(name: "PatrickHand-Regular", size: 18) ?? .systemFont(ofSize: 18)
@@ -272,24 +302,37 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         }
     }
 
-    private func updateUI(with linescore: Linescore, pitches: [PitchEvent]) {
+    private func updateUI(with linescore: Linescore, pitches: [PitchEvent], gameData: GameData? = nil) {
         self.currentLinescore = linescore
         let game = currentGames.first(where: { $0.gamePk == gamePk })
         let awayName = game?.teams.away.team.name ?? "Away"
         let homeName = game?.teams.home.team.name ?? "Home"
         
         gameHeaderView.configure(with: linescore, awayNameOverride: awayName, homeNameOverride: homeName)
-        currentStateView.configure(with: linescore, pitches: pitches)
+        currentStateView.configure(with: linescore, pitches: pitches, gameData: gameData)
+        updatePlaceholderVisibility()
         
         let state = linescore.inningState?.lowercased() ?? ""
         var isLive = state.contains("in progress") || state.contains("live")
+        
+        // Show the bar if the game is generally in progress (including mid/end breaks)
+        let isDuringBreak = state == "mid" || state == "end"
+        if isDuringBreak {
+            isLive = true 
+        }
+        
         if let game = currentGames.first(where: { $0.gamePk == gamePk }) {
             let detailedState = game.status.detailedState.lowercased()
             if detailedState.contains("final") || detailedState.contains("completed") { isLive = false }
             else if detailedState.contains("scheduled") || detailedState.contains("pre-game") { isLive = false }
             else if detailedState.contains("in progress") { isLive = true }
         }
+
         currentStateView.isHidden = !isLive
+        
+        // Only highlight the scorecard cell and allow live sheet if we are NOT in a break
+        scorecardView.setIsLive(isLive && !isDuringBreak)
+        
         mainScrollView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: isLive ? 180 : 40, right: 0)
     }
 
@@ -329,12 +372,22 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         let inningCount = max(scorecard.innings.count, 9)
         updateStickyHeaders(inningCount: inningCount)
         updatePitcherList()
+        updateUmpireList()
+        updatePlaceholderVisibility()
+        
+        let inning = scorecard.currentInning ?? 1
+        let currentIsTop = scorecard.isTopInning ?? true
+        let batterId = scorecard.currentBatterId ?? 0
+        let newKey = "\(inning)-\(currentIsTop)-\(batterId)"
         
         if isFirstLoad {
-            scrollToActiveCell(scorecard: scorecard)
+            syncWithActiveAtBat()
+        } else if newKey != lastActiveAtBatKey && batterId != 0 {
+            // Auto-scroll when the at-bat actually changes
+            syncWithActiveAtBat()
         }
         
-        // Update advisory banner... (rest of method)
+        lastActiveAtBatKey = newKey
         
         // Update advisory banner
         if let advisory = scorecard.advisories.first, !dismissedAdvisories.contains(advisory) {
@@ -369,6 +422,104 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         let isHome = teamSegmentedControl.selectedSegmentIndex == 1
         scorecardView.setTeam(isHome: isHome)
         updatePitcherList()
+        updatePlaceholderVisibility()
+    }
+
+    private func updatePlaceholderVisibility() {
+        guard let scorecard = currentScorecard else { 
+            showPlaceholder(true)
+            return 
+        }
+        
+        let isHome = teamSegmentedControl.selectedSegmentIndex == 1
+        let lineup = isHome ? scorecard.lineups.home : scorecard.lineups.away
+        
+        showPlaceholder(lineup.isEmpty)
+    }
+
+    private func showPlaceholder(_ show: Bool) {
+        placeholderLabel.isHidden = !show
+        if show {
+            placeholderLabel.text = "LINEUP NOT YET AVAILABLE"
+        }
+        
+        scorecardView.isHidden = show
+        stickyHeaderContainer.isHidden = show
+        pitcherLabel.isHidden = show
+        umpireLabel.isHidden = show
+    }
+
+    private func showLiveAtBatDetail() {
+        guard let linescore = currentLinescore else { return }
+        
+        let liveEvent = constructLiveAtBatEvent(linescore: linescore, pitches: currentLivePitches)
+        let batterName = linescore.offense?.batter?.fullName ?? "Batter"
+        let pitcherName = linescore.defense?.pitcher?.fullName ?? "Pitcher"
+        
+        let vc = AtBatDetailViewController(event: liveEvent, batterName: batterName, pitcherName: pitcherName)
+        if let sheet = vc.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+        }
+        
+        self.liveDetailVC = vc
+        present(vc, animated: true)
+    }
+
+    private func constructLiveAtBatEvent(linescore: Linescore, pitches: [PitchEvent]) -> AtBatEvent {
+        // Derive balls/strikes from the actual pitches we have if it's more consistent with the list shown
+        let derivedBalls = pitches.filter { $0.isBall }.count
+        let derivedStrikes = pitches.filter { $0.isStrike }.count
+        
+        // Use the higher of the two (linescore is usually more live, but pitches array is what we show)
+        // If we only show 1 pitch, but the linescore says 2 strikes, it looks broken.
+        // We'll trust the pitches list for the detail sheet to avoid this discrepancy.
+        let finalBalls = pitches.isEmpty ? (linescore.balls ?? 0) : derivedBalls
+        let finalStrikes = pitches.isEmpty ? (linescore.strikes ?? 0) : derivedStrikes
+        
+        return AtBatEvent(
+            batterId: linescore.offense?.batter?.id ?? 0,
+            result: "LIVE",
+            description: "Current at bat",
+            balls: finalBalls,
+            strikes: finalStrikes,
+            outs: linescore.outs ?? 0,
+            rbi: 0,
+            bases: BasesReached(
+                first: linescore.offense?.first != nil,
+                second: linescore.offense?.second != nil,
+                third: linescore.offense?.third != nil,
+                home: false,
+                outAtFirst: false,
+                outAtSecond: false,
+                outAtThird: false,
+                outAtHome: false
+            ),
+            pitches: pitches
+        )
+    }
+
+    private func updateLiveDetailSheet(with linescore: Linescore, pitches: [PitchEvent]) {
+        guard let liveVC = liveDetailVC else { return }
+        let updatedEvent = constructLiveAtBatEvent(linescore: linescore, pitches: pitches)
+        liveVC.update(event: updatedEvent)
+    }
+
+    private func updateUmpireList() {
+        guard let scorecard = currentScorecard else { return }
+        let umpires = scorecard.umpires
+        let umpireStrings = umpires.map { "\($0.type): \($0.fullName)" }
+        
+        let attributedText = NSMutableAttributedString(string: "UMPIRES\n", attributes: [
+            .font: UIFont(name: "PermanentMarker-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold),
+            .foregroundColor: UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
+        ])
+        attributedText.append(NSAttributedString(string: umpireStrings.joined(separator: "\n"), attributes: [
+            .font: UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14),
+            .foregroundColor: UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.7)
+        ]))
+        
+        umpireLabel.attributedText = umpireStrings.isEmpty ? nil : attributedText
     }
 
     private func updatePitcherList() {
@@ -393,14 +544,37 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     func didSelectAtBat(_ event: AtBatEvent, batter: ScorecardBatter, pitcherName: String) {
         let actualPitcher = currentLinescore?.defense?.pitcher?.fullName ?? pitcherName
         let vc = AtBatDetailViewController(event: event, batterName: batter.fullName, pitcherName: actualPitcher)
-        if let sheet = vc.sheetPresentationController { sheet.detents = [.medium(), .large()] }
+        if let sheet = vc.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+        }
         present(vc, animated: true)
     }
 
     func didSelectPlayer(_ batter: ScorecardBatter) {
         let vc = PlayerDetailViewController(batter: batter, gameStats: calculatePlayerStats(for: batter))
-        if let sheet = vc.sheetPresentationController { sheet.detents = [.medium()] }
+        if let sheet = vc.sheetPresentationController {
+            sheet.detents = [.medium()]
+            sheet.prefersGrabberVisible = true
+        }
         present(vc, animated: true)
+    }
+
+    func didSelectActiveAtBat() {
+        showLiveAtBatDetail()
+    }
+
+    private func syncWithActiveAtBat() {
+        guard let scorecard = currentScorecard else { return }
+        
+        // Swap to the team at bat
+        let isTop = scorecard.isTopInning ?? true
+        self.teamSegmentedControl.selectedSegmentIndex = isTop ? 0 : 1
+        self.scorecardView.setTeam(isHome: !isTop)
+        self.updatePitcherList()
+        self.updatePlaceholderVisibility()
+        
+        self.scrollToActiveCell(scorecard: scorecard)
     }
 
     private func scrollToActiveCell(scorecard: ScorecardData) {
@@ -431,11 +605,16 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
                 // 2. Vertical Scroll
                 let rowY = CGFloat(rowIndex) * rowHeight
                 let scorecardY = scorecardView.frame.origin.y
-                let targetY = max(0, scorecardY + rowY - (mainScrollView.bounds.height / 3))
-                let maxVOffset = max(0, mainScrollView.contentSize.height - mainScrollView.bounds.height)
-                
-                mainScrollView.setContentOffset(CGPoint(x: 0, y: min(targetY, maxVOffset)), animated: true)
-            }
+
+                // Account for the live at-bat panel (170 points) and bottom inset
+                let livePanelHeight: CGFloat = currentStateView.isHidden ? 0 : 170
+                let visibleHeight = mainScrollView.bounds.height - livePanelHeight
+
+                // Center the row in the remaining visible height
+                let targetY = max(0, scorecardY + rowY - (visibleHeight / 2) + (rowHeight / 2))
+                let maxVOffset = max(0, mainScrollView.contentSize.height - mainScrollView.bounds.height + mainScrollView.contentInset.bottom)
+
+                mainScrollView.setContentOffset(CGPoint(x: 0, y: min(targetY, maxVOffset)), animated: true)            }
         }
     }
 

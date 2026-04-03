@@ -1,7 +1,7 @@
 import Foundation
 
 protocol GameUpdateDelegate: AnyObject {
-    func didUpdateLinescore(_ linescore: Linescore, pitches: [PitchEvent])
+    func didUpdateLinescore(_ linescore: Linescore, pitches: [PitchEvent], gameData: GameData?)
     func didUpdateScorecard(_ scorecard: ScorecardData)
     func didUpdateGameStatus(_ status: String)
 }
@@ -63,7 +63,13 @@ class GameService {
         // 1. Always fetch linescore (smallest, highest frequency)
         let linescore = try await MLBAPIClient.shared.fetchLinescore(gamePk: gamePk)
         
-        // 2. Decide if we need to fetch PBP/Boxscore (ScorecardData)
+        // 2. Fetch live feed (optional, for MVR/Challenges) - Fail-safe
+        var liveFeed: LiveFeedResponse?
+        if !useMockData {
+            liveFeed = try? await MLBAPIClient.shared.fetchLiveFeed(gamePk: gamePk)
+        }
+        
+        // 3. Decide if we need to fetch PBP/Boxscore (ScorecardData)
         var shouldFetchScorecard = false
         
         if lastScorecard != nil {
@@ -107,7 +113,7 @@ class GameService {
                 }
             }
             
-            self.delegate?.didUpdateLinescore(linescore, pitches: currentPitches)
+            self.delegate?.didUpdateLinescore(linescore, pitches: currentPitches, gameData: liveFeed?.gameData)
         }
     }
 
@@ -199,7 +205,16 @@ class GameService {
             guard let player = findPlayer(in: team, id: id), let person = player.person else { return nil }
             let name = person.fullName ?? "Unknown"
             let part = getParticipation(for: id)
-            return ScorecardBatter(id: id, fullName: name, abbreviation: name.components(separatedBy: " ").last ?? "", position: player.position?.abbreviation ?? "", inningEntered: part.entered, inningExited: part.exited)
+            
+            // Handle suffixes like "Jr", "Sr", "II", "III", "IV"
+            let components = name.components(separatedBy: " ")
+            var abbreviation = components.last ?? ""
+            let suffixes = ["Jr", "Sr", "II", "III", "IV", "Jr.", "Sr."]
+            if suffixes.contains(abbreviation) && components.count >= 2 {
+                abbreviation = "\(components[components.count - 2]) \(abbreviation)"
+            }
+            
+            return ScorecardBatter(id: id, fullName: name, abbreviation: abbreviation, position: player.position?.abbreviation ?? "", inningEntered: part.entered, inningExited: part.exited)
         }
 
         func createPitcher(id: Int, team: BoxscoreTeam?) -> ScorecardPitcher? {
@@ -219,6 +234,28 @@ class GameService {
         
         let homePitchers = (boxscore.teams?.home?.pitchers ?? []).compactMap { createPitcher(id: $0, team: boxscore.teams?.home) }
         let awayPitchers = (boxscore.teams?.away?.pitchers ?? []).compactMap { createPitcher(id: $0, team: boxscore.teams?.away) }
+
+        var umpires: [ScorecardUmpire] = []
+        if let officials = boxscore.officials, !officials.isEmpty {
+            umpires = officials.compactMap { official -> ScorecardUmpire? in
+                guard let name = official.official?.fullName, let type = official.officialType else { return nil }
+                let typeMap = ["Home Plate": "HP", "First Base": "1B", "Second Base": "2B", "Third Base": "3B"]
+                return ScorecardUmpire(fullName: name, type: typeMap[type] ?? type)
+            }
+        } else if let info = boxscore.info {
+            // Fallback to parsing the "Umpires" string if officials list is missing
+            if let umpireNote = info.first(where: { $0.label == "Umpires" }), let value = umpireNote.value {
+                // Typical format: "HP: Mark Carlson. 1B: Jordan Baker. 2B: Cory Blaser. 3B: James Hoye."
+                let parts = value.components(separatedBy: ". ")
+                umpires = parts.compactMap { part -> ScorecardUmpire? in
+                    let subParts = part.components(separatedBy: ": ")
+                    guard subParts.count == 2 else { return nil }
+                    let type = subParts[0].trimmingCharacters(in: .whitespaces)
+                    let name = subParts[1].trimmingCharacters(in: .punctuationCharacters).trimmingCharacters(in: .whitespaces)
+                    return ScorecardUmpire(fullName: name, type: type)
+                }
+            }
+        }
 
         // Find game advisories or status changes to show in a banner
         let advisories = allPlays.compactMap { play -> String? in
@@ -243,9 +280,18 @@ class GameService {
                                event.contains("substitution") ||
                                event.contains("defensive sub") ||
                                event.contains("coaching change") ||
-                               event.contains("injury")
+                               event.contains("injury") ||
+                               event.contains("mound visit") ||
+                               event.contains("ballpark visit") ||
+                               event.contains("replay") ||
+                               event.contains("challenge") ||
+                               event.contains("delay") ||
+                               event.contains("timeout") ||
+                               event.contains("turn")
                 
-                return type == "atBat" && !isAction
+                let isFinished = play.result?.event != nil
+                let isLive = play.about?.isComplete == false
+                return type == "atBat" && !isAction && (isFinished || isLive)
             }
             
             let awayEvents = atBatPlays.filter { $0.about?.isTopInning == true }.enumerated().map { (idx, play) in
@@ -264,6 +310,7 @@ class GameService {
             pitchers: ScorecardPitchers(home: homePitchers, away: awayPitchers),
             innings: scorecardInnings,
             advisories: Array(advisories.prefix(3)),
+            umpires: umpires,
             currentInning: playByPlay.currentPlay?.about?.inning,
             isTopInning: playByPlay.currentPlay?.about?.isTopInning,
             currentBatterId: playByPlay.currentPlay?.matchup?.batter?.id
@@ -342,10 +389,11 @@ class GameService {
             outFirst = false
         }
         
-        return AtBatEvent(batterId: batterId, result: scorecardNotation(for: play), description: play.result?.description ?? "", balls: play.count?.balls ?? 0, strikes: play.count?.strikes ?? 0, outs: play.count?.outs ?? 0, rbi: play.result?.rbi ?? 0, bases: BasesReached(first: reachFirst, second: reachSecond, third: reachThird, home: reachHome, outAtFirst: outFirst, outAtSecond: outSecond, outAtThird: outThird, outAtHome: outHome), pitches: pitches)
+        return AtBatEvent(batterId: batterId, result: scorecardNotation(for: play, batterId: batterId), description: play.result?.description ?? "", balls: play.count?.balls ?? 0, strikes: play.count?.strikes ?? 0, outs: play.count?.outs ?? 0, rbi: play.result?.rbi ?? 0, bases: BasesReached(first: reachFirst, second: reachSecond, third: reachThird, home: reachHome, outAtFirst: outFirst, outAtSecond: outSecond, outAtThird: outThird, outAtHome: outHome), pitches: pitches)
     }
 
-    private func scorecardNotation(for play: Play) -> String {
+    private func scorecardNotation(for play: Play, batterId: Int? = nil) -> String {
+        if play.about?.isComplete == false { return "LIVE" }
         let eventType = play.result?.eventType ?? "", event = play.result?.event ?? ""
         switch eventType {
         case "single": return "1B"
@@ -358,22 +406,48 @@ class GameService {
         case "strikeout": return event.contains("Looking") ? "Ʞ" : "K"
         case "field_error", "error": return "E"
         case "field_out", "force_out", "flyout", "popout", "lineout", "grounded_into_double_play":
+            if eventType == "grounded_into_double_play" {
+                // Find the longest credit sequence in this play, usually the one involving the batter's out
+                let allCredits = play.runners?.compactMap { $0.credits?.compactMap { $0.position?.code } } ?? []
+                if let sequence = allCredits.max(by: { $0.count < $1.count }), !sequence.isEmpty {
+                    return "\(sequence.joined(separator: "-"))\nDP"
+                }
+                return "DP"
+            }
             if event == "Flyout" || event == "Pop Out" || event == "Lineout" {
                 if let loc = play.playEvents?.compactMap({ $0.hitData?.location }).last, loc != "0" {
                     let prefix = (event == "Pop Out") ? "P" : (event == "Lineout" ? "L" : "F")
                     return "\(prefix)\(loc)"
                 }
             }
-            if let sequence = play.runners?.first(where: { $0.movement?.isOut == true })?.credits?.compactMap({ $0.position?.code }), !sequence.isEmpty { return sequence.joined(separator: "-") }
+            
+            // For other outs, use the credit sequence if available
+            if let sequence = play.runners?.first(where: { $0.movement?.isOut == true })?.credits?.compactMap({ $0.position?.code }), !sequence.isEmpty {
+                return sequence.joined(separator: "-")
+            }
+            
             if event == "Groundout" { return "G" }
             if event == "Flyout" { return "F" }
             if event == "Pop Out" { return "P" }
             if event == "Lineout" { return "L" }
-            return eventType == "grounded_into_double_play" ? "GDP" : String(event.prefix(3)).uppercased()
+            return String(event.prefix(3)).uppercased()
         case "sac_fly": return "SF"
         case "sac_bunt": return "SAC"
         case "fielders_choice": return "FC"
-        default: return String(event.prefix(3)).uppercased()
+        case "stolen_base": return "SB"
+        case "caught_stealing": return "CS"
+        case "wild_pitch": return "WP"
+        case "passed_ball": return "PB"
+        case "balk": return "BK"
+        case "pickoff_error_1b", "pickoff_error_2b", "pickoff_error_3b": return "E"
+        case "pickoff_1b", "pickoff_2b", "pickoff_3b": return "PO"
+        default: 
+            if event.lowercased().contains("double play") { return "DP" }
+            if event.lowercased().contains("triple play") { return "TP" }
+            if event.lowercased().contains("stolen base") { return "SB" }
+            if event.lowercased().contains("caught stealing") { return "CS" }
+            if event.isEmpty { return "" }
+            return String(event.prefix(3)).uppercased()
         }
     }
 

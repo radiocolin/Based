@@ -35,6 +35,10 @@ extension MLBAPIClient {
         try await fetch(BoxscoreResponse.self, endpoint: "/api/v1/game/\(gamePk)/boxscore")
     }
 
+    func fetchLiveFeed(gamePk: Int) async throws -> LiveFeedResponse {
+        try await fetch(LiveFeedResponse.self, endpoint: "/api/v1.1/game/\(gamePk)/feed/live")
+    }
+
     func fetchSchedule(date: Date) async throws -> [ScheduleGame] {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"

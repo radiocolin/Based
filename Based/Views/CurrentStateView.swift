@@ -18,10 +18,14 @@ class CurrentStateView: UIView {
     private let batterLabel = UILabel()
     private let pitcherLabel = UILabel()
     private let pitchCountLabel = UILabel()
+    private let teamStatusLabel = UILabel()
     
     // Graphics
     private let linesLayer = CAShapeLayer()
     private let topSeparatorLayer = CAShapeLayer()
+    
+    var tapAction: (() -> Void)?
+    var longPressAction: (() -> Void)?
     
     // Constants
     private let paperColor = UIColor(red: 0.99, green: 0.98, blue: 0.96, alpha: 1.0)
@@ -32,10 +36,29 @@ class CurrentStateView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         setupUI()
+        setupGestures()
     }
     
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+    
+    private func setupGestures() {
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
+        addGestureRecognizer(tap)
+        
+        let long = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress))
+        addGestureRecognizer(long)
+    }
+    
+    @objc private func handleTap() {
+        tapAction?()
+    }
+    
+    @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
+        if gesture.state == .began {
+            longPressAction?()
+        }
     }
     
     private func setupUI() {
@@ -79,8 +102,12 @@ class CurrentStateView: UIView {
         pitchCountLabel.textColor = pencilColor.withAlphaComponent(0.5)
         pitchCountLabel.textAlignment = .left
 
+        teamStatusLabel.font = UIFont(name: bodyFont, size: 12) ?? .systemFont(ofSize: 12)
+        teamStatusLabel.textColor = pencilColor.withAlphaComponent(0.6)
+        teamStatusLabel.textAlignment = .left
+
         // Add Subviews
-        [diamondView, pitchTrackView, inningContainer, countLabel, batterLabel, pitcherLabel, pitchCountLabel].forEach {
+        [diamondView, pitchTrackView, inningContainer, countLabel, batterLabel, pitcherLabel, pitchCountLabel, teamStatusLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             contentContainer.addSubview($0)
         }
@@ -133,7 +160,11 @@ class CurrentStateView: UIView {
 
             pitchCountLabel.topAnchor.constraint(equalTo: pitcherLabel.bottomAnchor, constant: 2),
             pitchCountLabel.leadingAnchor.constraint(equalTo: batterLabel.leadingAnchor),
-            pitchCountLabel.trailingAnchor.constraint(equalTo: batterLabel.trailingAnchor)
+            pitchCountLabel.trailingAnchor.constraint(equalTo: batterLabel.trailingAnchor),
+
+            teamStatusLabel.topAnchor.constraint(equalTo: pitchCountLabel.bottomAnchor, constant: 2),
+            teamStatusLabel.leadingAnchor.constraint(equalTo: batterLabel.leadingAnchor),
+            teamStatusLabel.trailingAnchor.constraint(equalTo: batterLabel.trailingAnchor)
         ])
     }
     
@@ -172,21 +203,44 @@ class CurrentStateView: UIView {
         linesLayer.fillColor = UIColor.clear.cgColor
     }
     
-    func configure(with linescore: Linescore, pitches: [PitchEvent]? = nil) {
+    func configure(with linescore: Linescore, pitches: [PitchEvent]? = nil, gameData: GameData? = nil) {
+        let state = linescore.inningState?.lowercased() ?? "---"
+        let isBreak = state == "mid" || state == "end"
+        
         let outs = linescore.outs ?? 0
         let outsText = outs == 1 ? "OUT" : "OUTS"
-        let state = linescore.inningState?.uppercased() ?? "---"
         let ordinal = linescore.currentInningOrdinal?.uppercased() ?? "---"
         
-        inningLabel.text = "\(state) \(ordinal) • \(outs) \(outsText)"
-        batterLabel.text = linescore.offense?.batter?.fullName?.uppercased() ?? "---"
-        pitcherLabel.text = "vs \(linescore.defense?.pitcher?.fullName ?? "---")"
-        countLabel.text = "\(linescore.balls ?? 0)-\(linescore.strikes ?? 0)"
-
-        if let count = linescore.currentPitchCount {
-            pitchCountLabel.text = "\(count) pitches"
-        } else {
+        inningLabel.text = "\(state.uppercased()) \(ordinal) • \(outs) \(outsText)"
+        
+        if isBreak {
+            batterLabel.text = ""
+            pitcherLabel.text = ""
+            countLabel.text = ""
             pitchCountLabel.text = ""
+            teamStatusLabel.text = ""
+        } else {
+            batterLabel.text = linescore.offense?.batter?.fullName?.uppercased() ?? "---"
+            pitcherLabel.text = "vs \(linescore.defense?.pitcher?.fullName ?? "---")"
+            countLabel.text = "\(linescore.balls ?? 0)-\(linescore.strikes ?? 0)"
+            
+            if let count = linescore.currentPitchCount {
+                pitchCountLabel.text = "\(count) pitches"
+            } else {
+                pitchCountLabel.text = ""
+            }
+            
+            // Extract MVR and Challenges from gameData (live feed) - Fail-safe
+            let isTop = linescore.isTopInning ?? true
+            
+            if let gameData = gameData {
+                let mvr = isTop ? (gameData.moundVisits?.home?.remaining ?? 0) : (gameData.moundVisits?.away?.remaining ?? 0)
+                let homeChl = gameData.absChallenges?.home?.remaining ?? 0
+                let awayChl = gameData.absChallenges?.away?.remaining ?? 0
+                teamStatusLabel.text = "MVR: \(mvr) • CHL: H\(homeChl) A\(awayChl)"
+            } else {
+                teamStatusLabel.text = ""
+            }
         }
         
         let bases = BasesReached(
@@ -201,7 +255,9 @@ class CurrentStateView: UIView {
         )
         diamondView.configure(with: bases, style: .liveStatus)
         
-        if let providedPitches = pitches, !providedPitches.isEmpty {
+        if isBreak {
+            pitchTrackView.configure(with: [])
+        } else if let providedPitches = pitches, !providedPitches.isEmpty {
             pitchTrackView.configure(with: providedPitches)
         } else if let linescorePitches = linescore.currentPitches {
             pitchTrackView.configure(with: linescorePitches)

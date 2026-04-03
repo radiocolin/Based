@@ -138,6 +138,49 @@ struct PitchCoordinates: Codable, Sendable {
 
 struct BoxscoreResponse: Codable, Sendable {
     let teams: BoxscoreTeams?
+    let officials: [Official]?
+    let info: [BoxscoreNote]?
+}
+
+struct BoxscoreNote: Codable, Sendable {
+    let label: String?
+    let value: String?
+}
+
+// MARK: - Live Feed
+
+struct LiveFeedResponse: Codable, Sendable {
+    let gameData: GameData?
+}
+
+struct GameData: Codable, Sendable {
+    let moundVisits: MoundVisits?
+    let absChallenges: ABSChallenges?
+}
+
+struct MoundVisits: Codable, Sendable {
+    let away: MoundVisitStats?
+    let home: MoundVisitStats?
+}
+
+struct MoundVisitStats: Codable, Sendable {
+    let used: Int?
+    let remaining: Int?
+}
+
+struct ABSChallenges: Codable, Sendable {
+    let hasChallenges: Bool?
+    let away: ChallengeStats?
+    let home: ChallengeStats?
+}
+
+struct ChallengeStats: Codable, Sendable {
+    let remaining: Int?
+}
+
+struct Official: Codable, Sendable {
+    let official: Player?
+    let officialType: String?
 }
 
 struct BoxscoreTeams: Codable, Sendable {

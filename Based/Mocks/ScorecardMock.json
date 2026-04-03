@@ -3,6 +3,12 @@
     "home": { "id": 143, "name": "Philadelphia Phillies", "link": "/api/v1/teams/143" },
     "away": { "id": 144, "name": "Atlanta Braves", "link": "/api/v1/teams/144" }
   },
+  "officials": [
+    { "officialType": "Home Plate", "official": { "fullName": "Mark Carlson", "id": 1 } },
+    { "officialType": "First Base", "official": { "fullName": "Jordan Baker", "id": 2 } },
+    { "officialType": "Second Base", "official": { "fullName": "Cory Blaser", "id": 3 } },
+    { "officialType": "Third Base", "official": { "fullName": "James Hoye", "id": 4 } }
+  ],
   "lineups": {
     "home": [
       { "id": 664068, "fullName": "Kyle Schwarber", "abbreviation": "SCHWARBER", "position": "LF" },
