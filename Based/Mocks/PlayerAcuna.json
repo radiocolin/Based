@@ -1,0 +1,92 @@
+{
+  "copyright": "Copyright 2026 MLB Advanced Media, L.P.",
+  "people": [
+    {
+      "id": 660670,
+      "fullName": "Ronald Acuna Jr.",
+      "firstName": "Ronald",
+      "lastName": "Acuna Jr.",
+      "primaryNumber": "13",
+      "birthDate": "1997-12-18",
+      "currentAge": 28,
+      "birthCity": "La Guaira",
+      "birthCountry": "Venezuela",
+      "height": "6' 0\"",
+      "weight": 205,
+      "primaryPosition": {
+        "code": "9",
+        "name": "Outfielder",
+        "type": "Outfielder",
+        "abbreviation": "RF"
+      },
+      "batSide": {
+        "code": "R",
+        "description": "Right"
+      },
+      "pitchHand": {
+        "code": "R",
+        "description": "Right"
+      },
+      "currentTeam": {
+        "id": 144,
+        "name": "Atlanta Braves"
+      },
+      "stats": [
+        {
+          "type": { "displayName": "season" },
+          "group": { "displayName": "hitting" },
+          "splits": [
+            {
+              "season": "2026",
+              "stat": {
+                "gamesPlayed": 98,
+                "atBats": 389,
+                "runs": 82,
+                "hits": 124,
+                "doubles": 22,
+                "triples": 3,
+                "homeRuns": 26,
+                "rbi": 68,
+                "stolenBases": 42,
+                "caughtStealing": 8,
+                "baseOnBalls": 62,
+                "strikeOuts": 94,
+                "avg": ".319",
+                "obp": ".418",
+                "slg": ".596",
+                "ops": "1.014"
+              }
+            }
+          ]
+        },
+        {
+          "type": { "displayName": "career" },
+          "group": { "displayName": "hitting" },
+          "splits": [
+            {
+              "season": "Career",
+              "stat": {
+                "gamesPlayed": 682,
+                "atBats": 2584,
+                "runs": 548,
+                "hits": 782,
+                "doubles": 138,
+                "triples": 18,
+                "homeRuns": 168,
+                "rbi": 421,
+                "stolenBases": 198,
+                "caughtStealing": 42,
+                "baseOnBalls": 378,
+                "strikeOuts": 612,
+                "avg": ".303",
+                "obp": ".398",
+                "slg": ".566",
+                "ops": ".964"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "teams": {
+    "home": { "id": 143, "name": "Philadelphia Phillies", "link": "/api/v1/teams/143" },
+    "away": { "id": 144, "name": "Atlanta Braves", "link": "/api/v1/teams/144" }
+  },
+  "lineups": {
+    "home": [
+      { "id": 664068, "fullName": "Kyle Schwarber", "abbreviation": "SCHWARBER", "position": "LF" },
+      { "id": 605141, "fullName": "Trea Turner", "abbreviation": "TURNER", "position": "SS" },
+      { "id": 663993, "fullName": "Bryce Harper", "abbreviation": "HARPER", "position": "1B" },
+      { "id": 592626, "fullName": "Nick Castellanos", "abbreviation": "CASTELLANOS", "position": "RF" },
+      { "id": 621439, "fullName": "Bryson Stott", "abbreviation": "STOTT", "position": "2B" },
+      { "id": 595284, "fullName": "J.T. Realmuto", "abbreviation": "REALMUTO", "position": "C" },
+      { "id": 669016, "fullName": "Brandon Marsh", "abbreviation": "MARSH", "position": "CF" },
+      { "id": 546318, "fullName": "Alec Bohm", "abbreviation": "BOHM", "position": "3B" },
+      { "id": 605400, "fullName": "Johan Rojas", "abbreviation": "ROJAS", "position": "CF" }
+    ],
+    "away": [
+      { "id": 660670, "fullName": "Ronald Acuna Jr.", "abbreviation": "ACUNA", "position": "RF" },
+      { "id": 645277, "fullName": "Ozzie Albies", "abbreviation": "ALBIES", "position": "2B" },
+      { "id": 663586, "fullName": "Austin Riley", "abbreviation": "RILEY", "position": "3B" },
+      { "id": 621566, "fullName": "Matt Olson", "abbreviation": "OLSON", "position": "1B" },
+      { "id": 542303, "fullName": "Marcell Ozuna", "abbreviation": "OZUNA", "position": "DH" },
+      { "id": 592663, "fullName": "Eddie Rosario", "abbreviation": "ROSARIO", "position": "LF" },
+      { "id": 669221, "fullName": "Sean Murphy", "abbreviation": "MURPHY", "position": "C" },
+      { "id": 606149, "fullName": "Orlando Arcia", "abbreviation": "ARCIA", "position": "SS" },
+      { "id": 621020, "fullName": "Michael Harris II", "abbreviation": "HARRIS", "position": "CF" }
+    ]
+  },
+  "innings": [
+    {
+      "num": 1,
+      "ordinal": "1st",
+      "away": [
+        { 
+          "batterId": 660670, 
+          "result": "1B", 
+          "description": "Single to right", 
+          "balls": 2, 
+          "strikes": 2, 
+          "outs": 0, 
+          "rbi": 0, 
+          "bases": { "first": true, "second": false, "third": false, "home": false },
+          "pitches": [
+            { "pitchNumber": 1, "description": "Four-Seam Fastball", "outcome": "Ball", "speed": 96.5, "x": 0.5, "z": 4.2, "zoneTop": 3.5, "zoneBottom": 1.6 },
+            { "pitchNumber": 2, "description": "Slider", "outcome": "Called Strike", "speed": 88.2, "x": 0.7, "z": 1.8, "zoneTop": 3.5, "zoneBottom": 1.6 },
+            { "pitchNumber": 3, "description": "Sinker", "outcome": "Ball", "speed": 95.1, "x": -1.2, "z": 1.2, "zoneTop": 3.5, "zoneBottom": 1.6 },
+            { "pitchNumber": 4, "description": "Four-Seam Fastball", "outcome": "Foul", "speed": 97.2, "x": 0.2, "z": 2.5, "zoneTop": 3.5, "zoneBottom": 1.6 },
+            { "pitchNumber": 5, "description": "Slider", "outcome": "In Play, Run(s)", "speed": 89.0, "x": -0.3, "z": 2.2, "zoneTop": 3.5, "zoneBottom": 1.6 }
+          ]
+        },
+        { "batterId": 645277, "result": "K", "description": "Strikeout swinging", "balls": 1, "strikes": 2, "outs": 1, "rbi": 0, "bases": { "first": false, "second": false, "third": false, "home": false } },
+        { "batterId": 663586, "result": "HR", "description": "Homerun to left center", "balls": 3, "strikes": 2, "outs": 1, "rbi": 2, "bases": { "first": true, "second": true, "third": true, "home": true } },
+        { "batterId": 621566, "result": "F8", "description": "Flyout to center", "balls": 0, "strikes": 1, "outs": 2, "rbi": 0, "bases": { "first": false, "second": false, "third": false, "home": false } },
+        { "batterId": 542303, "result": "6-3", "description": "Groundout SS to 1B", "balls": 1, "strikes": 1, "outs": 3, "rbi": 0, "bases": { "first": false, "second": false, "third": false, "home": false } }
+      ],
+      "home": [
+        { "batterId": 664068, "result": "K", "description": "Strikeout looking", "balls": 2, "strikes": 2, "outs": 1, "rbi": 0, "bases": { "first": false, "second": false, "third": false, "home": false } },
+        { "batterId": 605141, "result": "2B", "description": "Double to left", "balls": 1, "strikes": 0, "outs": 1, "rbi": 0, "bases": { "first": true, "second": true, "third": false, "home": false } },
+        { "batterId": 663993, "result": "F9", "description": "Flyout to right", "balls": 3, "strikes": 2, "outs": 2, "rbi": 0, "bases": { "first": false, "second": false, "third": false, "home": false } },
+        { "batterId": 592626, "result": "4-3", "description": "Groundout 2B to 1B", "balls": 0, "strikes": 0, "outs": 3, "rbi": 0, "bases": { "first": false, "second": false, "third": false, "home": false } }
+      ]
+    },
+    {
+      "num": 2,
+      "ordinal": "2nd",
+      "away": [
+        { "batterId": 592663, "result": "BB", "description": "Walk", "balls": 4, "strikes": 1, "outs": 0, "rbi": 0, "bases": { "first": true, "second": false, "third": false, "home": false } },
+        { "batterId": 669221, "result": "K", "description": "Strikeout swinging", "balls": 1, "strikes": 2, "outs": 1, "rbi": 0, "bases": { "first": false, "second": false, "third": false, "home": false } },
+        { "batterId": 606149, "result": "5-4-3", "description": "Double Play", "balls": 1, "strikes": 0, "outs": 3, "rbi": 0, "bases": { "first": false, "second": false, "third": false, "home": false } }
+      ],
+      "home": [
+        { "batterId": 621439, "result": "1B", "description": "Single", "balls": 1, "strikes": 1, "outs": 0, "rbi": 0, "bases": { "first": true, "second": false, "third": false, "home": false } },
+        { "batterId": 595284, "result": "1B", "description": "Single", "balls": 0, "strikes": 0, "outs": 0, "rbi": 0, "bases": { "first": true, "second": false, "third": false, "home": false } },
+        { "batterId": 669016, "result": "K", "description": "Strikeout", "balls": 1, "strikes": 2, "outs": 1, "rbi": 0, "bases": { "first": false, "second": false, "third": false, "home": false } },
+        { "batterId": 546318, "result": "F7", "description": "Flyout", "balls": 2, "strikes": 2, "outs": 2, "rbi": 0, "bases": { "first": false, "second": false, "third": false, "home": false } },
+        { "batterId": 605400, "result": "K", "description": "Strikeout", "balls": 2, "strikes": 2, "outs": 3, "rbi": 0, "bases": { "first": false, "second": false, "third": false, "home": false } }
+      ]
+    }
+  ]
+}
