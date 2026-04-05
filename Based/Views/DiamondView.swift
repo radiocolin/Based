@@ -11,7 +11,7 @@ class DiamondView: UIView {
     private let basesLayer = CAShapeLayer()
     private let fillLayer = CAShapeLayer() // Use shape layer for pattern fill
     
-    private let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
+    private var pencilColor: UIColor { AppColors.pencil }
     private let baseSize: CGFloat = 8
     
     private var diamondPoints: (home: CGPoint, first: CGPoint, second: CGPoint, third: CGPoint)?
@@ -34,7 +34,7 @@ class DiamondView: UIView {
         layer.addSublayer(fillLayer)
         layer.addSublayer(basesLayer)
         
-        mainDiamondLayer.fillColor = UIColor(white: 0.9, alpha: 1.0).cgColor
+        mainDiamondLayer.fillColor = AppColors.diamondFill.cgColor
         mainDiamondLayer.strokeColor = UIColor.clear.cgColor
         
         fillLayer.fillColor = UIColor.clear.cgColor
@@ -43,6 +43,7 @@ class DiamondView: UIView {
     
     override func layoutSubviews() {
         super.layoutSubviews()
+        mainDiamondLayer.fillColor = AppColors.diamondFill.cgColor
         drawMainDiamond()
         updateActiveBases()
     }
@@ -110,7 +111,7 @@ class DiamondView: UIView {
             }
             
             if isRun || bases.home {
-                let texture = UIImage.pencilTexture(color: .darkGray)
+                let texture = UIImage.pencilTexture(color: AppColors.pencil)
                 fillLayer.fillColor = UIColor(patternImage: texture).cgColor
             }
         }
@@ -160,7 +161,7 @@ class DiamondView: UIView {
             if occupied {
                 bLayer.fillColor = pencilColor.cgColor
             } else {
-                bLayer.fillColor = UIColor.white.withAlphaComponent(0.6).cgColor
+                bLayer.fillColor = AppColors.baseEmpty.cgColor
             }
             basesLayer.addSublayer(bLayer)
         }
@@ -172,7 +173,7 @@ class DiamondView: UIView {
         
         let lineLayer = CAShapeLayer()
         lineLayer.path = path.cgPath
-        lineLayer.strokeColor = UIColor(white: 0.1, alpha: 0.8).cgColor
+        lineLayer.strokeColor = AppColors.lineStroke.cgColor
         lineLayer.lineWidth = 2.5
         lineLayer.lineCap = .round
         lineLayer.lineJoin = .round

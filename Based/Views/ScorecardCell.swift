@@ -27,7 +27,7 @@ class ScorecardCell: UICollectionViewCell {
         contentView.addSubview(diamondView)
         
         // Add Labels
-        let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
+        let pencilColor = AppColors.pencil
         let bodyFont = "PatrickHand-Regular"
         let headerFont = "PermanentMarker-Regular"
         
@@ -107,6 +107,14 @@ class ScorecardCell: UICollectionViewCell {
         diamondView.configure(with: BasesReached(first: false, second: false, third: false, home: false, outAtFirst: false, outAtSecond: false, outAtThird: false, outAtHome: false), style: .scorecard, isRun: false)
         diamondView.alpha = 1.0
         contentView.layer.borderWidth = 0.5
-        contentView.layer.borderColor = UIColor(white: 0.6, alpha: 0.5).cgColor
+        contentView.layer.borderColor = AppColors.grid.cgColor
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // Refresh CGColor-based properties for dark mode changes
+        if contentView.layer.borderWidth == 0.5 {
+            contentView.layer.borderColor = AppColors.grid.cgColor
+        }
     }
 }

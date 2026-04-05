@@ -4,6 +4,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     
     // UI Components
     private let teamSegmentedControl = UISegmentedControl(items: ["Away", "Home"])
+    private lazy var segmentedOverlay = PencilSegmentedOverlay(segmentedControl: teamSegmentedControl)
     private let gameHeaderView = GameHeaderView()
     
     // Sticky Header Container
@@ -12,9 +13,9 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         let label = UILabel()
         label.text = "BATTER"
         label.font = UIFont(name: "PermanentMarker-Regular", size: 14) ?? .systemFont(ofSize: 14, weight: .bold)
-        label.textColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
+        label.textColor = AppColors.pencil
         label.textAlignment = .center
-        label.backgroundColor = UIColor(red: 0.95, green: 0.94, blue: 0.92, alpha: 1.0)
+        label.backgroundColor = AppColors.header
         return label
     }()
     private let horizontalScrollView = UIScrollView()
@@ -27,12 +28,13 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private let pitcherLabel = UILabel()
     private let umpireLabel = UILabel()
     private let gameInfoLabel = UILabel()
+    private let infoColumnsStack = UIStackView()
     
     private let placeholderLabel: UILabel = {
         let label = UILabel()
         label.text = "LINEUP NOT YET AVAILABLE"
         label.font = UIFont(name: "PermanentMarker-Regular", size: 20) ?? .systemFont(ofSize: 20, weight: .bold)
-        label.textColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.4)
+        label.textColor = AppColors.pencil.withAlphaComponent(0.4)
         label.textAlignment = .center
         label.numberOfLines = 0
         label.isHidden = true
@@ -58,6 +60,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private var teamSegmentedTopConstraint: NSLayoutConstraint?
     private var scrollBottomConstraint: NSLayoutConstraint?
     private var dismissedAdvisories: Set<String> = []
+    private var segmentJustChanged = false
 
     private var stickyNameWidthConstraint: NSLayoutConstraint?
 
@@ -80,20 +83,45 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         setupUI()
         setupNavigationBar()
         
+        // Re-enable edge swipe to go back (hidden back button disables it)
+        navigationController?.interactivePopGestureRecognizer?.isEnabled = true
+        navigationController?.interactivePopGestureRecognizer?.delegate = self
+        
+        NotificationCenter.default.addObserver(self, selector: #selector(tintDidChange), name: TintService.tintDidChangeNotification, object: nil)
+        
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: GameDetailViewController, _) in
+            self.setupNavigationBar()
+            self.updateStickyHeaders()
+            if let scorecard = self.currentScorecard {
+                self.scorecardView.configure(with: scorecard)
+            }
+        }
+        
         GameService.shared.delegate = self
         GameService.shared.startPolling(gamePk: gamePk)
+    }
+    
+    @objc private func tintDidChange() {
+        setupNavigationBar()
+        updateStickyHeaders()
+        segmentedOverlay.setNeedsLayout()
+        if let scorecard = currentScorecard {
+            scorecardView.configure(with: scorecard)
+        }
     }
     
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         GameService.shared.stopPolling()
     }
+
+
     
     private func setupNavigationBar() {
         navigationItem.hidesBackButton = true
         
         let font = UIFont(name: "PermanentMarker-Regular", size: 18) ?? .systemFont(ofSize: 18)
-        let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
+        let pencilColor = AppColors.pencil
 
         let backItem = UIBarButtonItem(title: "< BACK", style: .plain, target: self, action: #selector(backTapped))
         backItem.setTitleTextAttributes([.font: font, .foregroundColor: pencilColor], for: .normal)
@@ -102,7 +130,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         
         let appearance = UINavigationBarAppearance()
         appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = UIColor(red: 0.99, green: 0.98, blue: 0.96, alpha: 1.0)
+        appearance.backgroundColor = AppColors.paper
         appearance.shadowColor = .clear
         configurePlainBarButtonAppearance(appearance.buttonAppearance, font: font, color: pencilColor)
         configurePlainBarButtonAppearance(appearance.backButtonAppearance, font: font, color: pencilColor)
@@ -145,7 +173,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     
     func didUpdateLinescore(_ linescore: Linescore, pitches: [PitchEvent], gameData: GameData?) {
         self.currentLivePitches = pitches
-        if let liveVC = liveDetailVC {
+        if liveDetailVC != nil {
             updateLiveDetailSheet(with: linescore, pitches: pitches)
         }
         updateUI(with: linescore, pitches: pitches, gameData: gameData)
@@ -160,9 +188,9 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
     
     private func setupUI() {
-        view.backgroundColor = UIColor(red: 0.99, green: 0.98, blue: 0.96, alpha: 1.0)
+        view.backgroundColor = AppColors.paper
         
-        advisoryBanner.backgroundColor = UIColor(red: 1.0, green: 0.9, blue: 0.9, alpha: 1.0) // Slight red tint
+        advisoryBanner.backgroundColor = AppColors.advisoryBackground
         advisoryBanner.layer.cornerRadius = 8
         advisoryBanner.layer.borderWidth = 1.0
         advisoryBanner.layer.borderColor = UIColor.red.withAlphaComponent(0.3).cgColor
@@ -181,13 +209,13 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         advisoryCloseBtn.translatesAutoresizingMaskIntoConstraints = false
         advisoryBanner.addSubview(advisoryCloseBtn)
         
-        [teamSegmentedControl, gameHeaderView, stickyHeaderContainer, mainScrollView, currentStateView, advisoryBanner].forEach {
+        [teamSegmentedControl, segmentedOverlay, gameHeaderView, stickyHeaderContainer, mainScrollView, currentStateView, advisoryBanner].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview($0)
         }
         
         // Sticky Header Setup
-        stickyHeaderContainer.backgroundColor = UIColor(red: 0.99, green: 0.98, blue: 0.96, alpha: 1.0)
+        stickyHeaderContainer.backgroundColor = AppColors.paper
         
         [topLeftLabel, horizontalScrollView].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
@@ -208,7 +236,15 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         mainStackView.axis = .vertical
         mainStackView.spacing = 4 
         
-        [scorecardView, pitcherLabel, umpireLabel, gameInfoLabel, placeholderLabel].forEach {
+        // Umpires and Game Info side by side
+        infoColumnsStack.axis = .horizontal
+        infoColumnsStack.alignment = .top
+        infoColumnsStack.distribution = .fillEqually
+        infoColumnsStack.spacing = 12
+        infoColumnsStack.addArrangedSubview(umpireLabel)
+        infoColumnsStack.addArrangedSubview(gameInfoLabel)
+        
+        [scorecardView, pitcherLabel, infoColumnsStack, placeholderLabel].forEach {
             mainStackView.addArrangedSubview($0)
         }
         
@@ -236,14 +272,25 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         umpireLabel.numberOfLines = 0
         gameInfoLabel.numberOfLines = 0
         
-        let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
         let font = UIFont(name: "PatrickHand-Regular", size: 18) ?? .systemFont(ofSize: 18)
         
         teamSegmentedControl.selectedSegmentIndex = 0
         teamSegmentedControl.addTarget(self, action: #selector(teamChanged), for: .valueChanged)
+        let segTap = UITapGestureRecognizer(target: self, action: #selector(segmentTapped))
+        segTap.cancelsTouchesInView = false
+        teamSegmentedControl.addGestureRecognizer(segTap)
         
-        let normalAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: pencilColor.withAlphaComponent(0.6)]
-        let selectedAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: pencilColor]
+        // Strip all native chrome — pencil overlay provides the visuals
+        let clear = UIImage()
+        teamSegmentedControl.setBackgroundImage(clear, for: .normal, barMetrics: .default)
+        teamSegmentedControl.setBackgroundImage(clear, for: .selected, barMetrics: .default)
+        teamSegmentedControl.setBackgroundImage(clear, for: .highlighted, barMetrics: .default)
+        teamSegmentedControl.setDividerImage(clear, forLeftSegmentState: .normal, rightSegmentState: .normal, barMetrics: .default)
+        teamSegmentedControl.setDividerImage(clear, forLeftSegmentState: .selected, rightSegmentState: .normal, barMetrics: .default)
+        teamSegmentedControl.setDividerImage(clear, forLeftSegmentState: .normal, rightSegmentState: .selected, barMetrics: .default)
+        
+        let normalAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: AppColors.pencil.withAlphaComponent(0.6)]
+        let selectedAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: AppColors.pencil]
         teamSegmentedControl.setTitleTextAttributes(normalAttrs, for: .normal)
         teamSegmentedControl.setTitleTextAttributes(selectedAttrs, for: .selected)
         
@@ -269,6 +316,11 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             teamSegmentedControl.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             teamSegmentedControl.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
             teamSegmentedControl.heightAnchor.constraint(equalToConstant: 40),
+            
+            segmentedOverlay.topAnchor.constraint(equalTo: teamSegmentedControl.topAnchor),
+            segmentedOverlay.leadingAnchor.constraint(equalTo: teamSegmentedControl.leadingAnchor),
+            segmentedOverlay.trailingAnchor.constraint(equalTo: teamSegmentedControl.trailingAnchor),
+            segmentedOverlay.bottomAnchor.constraint(equalTo: teamSegmentedControl.bottomAnchor),
             
             gameHeaderView.topAnchor.constraint(equalTo: teamSegmentedControl.bottomAnchor, constant: 8),
             gameHeaderView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -306,9 +358,6 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             mainStackView.bottomAnchor.constraint(equalTo: mainScrollView.contentLayoutGuide.bottomAnchor, constant: -24),
             mainStackView.widthAnchor.constraint(equalTo: mainScrollView.frameLayoutGuide.widthAnchor, constant: -32),
             
-            pitcherLabel.leadingAnchor.constraint(equalTo: mainStackView.leadingAnchor),
-            pitcherLabel.trailingAnchor.constraint(equalTo: mainStackView.trailingAnchor),
-            
             currentStateView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             currentStateView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             currentStateView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
@@ -328,17 +377,16 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         stickyNameWidthConstraint?.constant = scorecardView.currentNameWidth
         rightHeaderStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         rightHeaderStack.distribution = .fill
-        let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
         let layout = scorecardView.currentColumnLayout
         for inningLayout in layout.innings {
             let label = UILabel()
             label.text = "\(inningLayout.inningNum)"
             label.textAlignment = .center
             label.font = UIFont(name: "PermanentMarker-Regular", size: 14) ?? .systemFont(ofSize: 14, weight: .bold)
-            label.textColor = pencilColor
-            label.backgroundColor = UIColor(red: 0.95, green: 0.94, blue: 0.92, alpha: 1.0)
+            label.textColor = AppColors.pencil
+            label.backgroundColor = AppColors.header
             label.layer.borderWidth = 0.5
-            label.layer.borderColor = UIColor(white: 0.6, alpha: 0.5).cgColor
+            label.layer.borderColor = AppColors.grid.cgColor
             label.widthAnchor.constraint(equalToConstant: inningWidth * CGFloat(inningLayout.subColumnCount)).isActive = true
             rightHeaderStack.addArrangedSubview(label)
         }
@@ -398,7 +446,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         let awayName = scorecard.teams.away.name ?? "Away"
         let homeName = scorecard.teams.home.name ?? "Home"
         
-        let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
+        let pencilColor = AppColors.pencil
         let font = UIFont(name: "PatrickHand-Regular", size: 18) ?? .systemFont(ofSize: 18)
         let boldFont = UIFont(name: "PermanentMarker-Regular", size: 18) ?? .systemFont(ofSize: 18, weight: .bold)
         
@@ -478,11 +526,21 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     @objc private func teamChanged() {
+        segmentJustChanged = true
         let isHome = teamSegmentedControl.selectedSegmentIndex == 1
         scorecardView.setTeam(isHome: isHome)
         updateStickyHeaders()
         updatePitcherList()
         updatePlaceholderVisibility()
+    }
+
+    @objc private func segmentTapped() {
+        if segmentJustChanged {
+            segmentJustChanged = false
+            return
+        }
+        // Tapped the already-selected segment — jump to active at-bat
+        syncWithActiveAtBat()
     }
 
     private func updatePlaceholderVisibility() {
@@ -504,8 +562,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
                 self.scorecardView.isHidden = show
                 self.stickyHeaderContainer.isHidden = show
                 self.pitcherLabel.isHidden = show
-                self.umpireLabel.isHidden = show
-                self.gameInfoLabel.isHidden = show
+                self.infoColumnsStack.isHidden = show
                 self.view.layoutIfNeeded()
             }
         }
@@ -578,11 +635,11 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         
         let attributedText = NSMutableAttributedString(string: "UMPIRES\n", attributes: [
             .font: UIFont(name: "PermanentMarker-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold),
-            .foregroundColor: UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
+            .foregroundColor: AppColors.pencil
         ])
         attributedText.append(NSAttributedString(string: umpireStrings.joined(separator: "\n"), attributes: [
             .font: UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14),
-            .foregroundColor: UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.7)
+            .foregroundColor: AppColors.pencil.withAlphaComponent(0.7)
         ]))
         
         umpireLabel.attributedText = umpireStrings.isEmpty ? nil : attributedText
@@ -596,11 +653,11 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         
         let attributedText = NSMutableAttributedString(string: "PITCHERS\n", attributes: [
             .font: UIFont(name: "PermanentMarker-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold),
-            .foregroundColor: UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
+            .foregroundColor: AppColors.pencil
         ])
         attributedText.append(NSAttributedString(string: pitcherStrings.joined(separator: "\n"), attributes: [
             .font: UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14),
-            .foregroundColor: UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.7)
+            .foregroundColor: AppColors.pencil.withAlphaComponent(0.7)
         ]))
         
         pitcherLabel.attributedText = pitcherStrings.isEmpty ? nil : attributedText
@@ -627,12 +684,12 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         
         let attributedText = NSMutableAttributedString(string: "GAME INFO\n", attributes: [
             .font: UIFont(name: "PermanentMarker-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold),
-            .foregroundColor: UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
+            .foregroundColor: AppColors.pencil
         ])
         
         let bodyAttrs: [NSAttributedString.Key: Any] = [
             .font: UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14),
-            .foregroundColor: UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.7)
+            .foregroundColor: AppColors.pencil.withAlphaComponent(0.7)
         ]
         
         var lines: [String] = []
@@ -687,6 +744,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
     private func setDisplayedTeam(toBattingTeamForTopInning isTop: Bool) {
         teamSegmentedControl.selectedSegmentIndex = isTop ? 0 : 1
+        segmentedOverlay.setNeedsLayout()
         scorecardView.setTeam(isHome: !isTop)
     }
 
@@ -713,9 +771,10 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 300_000_000) // 300ms delay
                 
-                // 1. Horizontal Scroll
-                let hOffset = max(0, CGFloat(colIndex) * cellWidth - (view.bounds.width / 2) + (cellWidth / 2))
-                scorecardView.syncHorizontalOffset(hOffset)
+                // 1. Horizontal Scroll — clamp to max scrollable offset
+                let maxHOffset = max(0, self.scorecardView.horizontalContentWidth - self.scorecardView.horizontalVisibleWidth)
+                let hOffset = min(max(0, CGFloat(colIndex) * cellWidth - (self.view.bounds.width / 2) + (cellWidth / 2)), maxHOffset)
+                self.scorecardView.syncHorizontalOffset(hOffset)
                 
                 // 2. Vertical Scroll
                 let rowY = CGFloat(rowIndex) * rowHeight
@@ -761,5 +820,12 @@ extension GameDetailViewController: UIScrollViewDelegate {
             // Header scroll -> Card scroll
             scorecardView.syncHorizontalOffset(scrollView.contentOffset.x)
         }
+    }
+}
+
+extension GameDetailViewController: UIGestureRecognizerDelegate {
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        // Only allow the pop gesture when there's something to pop back to
+        return (navigationController?.viewControllers.count ?? 0) > 1
     }
 }

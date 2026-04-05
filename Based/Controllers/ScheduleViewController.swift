@@ -20,14 +20,14 @@ class ScheduleViewController: UIViewController {
         let label = UILabel()
         label.text = "No games scheduled"
         label.font = UIFont(name: "PatrickHand-Regular", size: 20) ?? .systemFont(ofSize: 20)
-        label.textColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.5)
+        label.textColor = AppColors.pencil.withAlphaComponent(0.5)
         label.textAlignment = .center
         label.isHidden = true
         return label
     }()
 
     // Constants
-    private let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
+    private var pencilColor: UIColor { AppColors.pencil }
     private let headerFont = "PermanentMarker-Regular"
     private let bodyFont = "PatrickHand-Regular"
 
@@ -36,15 +36,35 @@ class ScheduleViewController: UIViewController {
         setupUI()
         setupDatePickerOverlay()
         loadSchedule(for: currentDate)
+        
+        NotificationCenter.default.addObserver(self, selector: #selector(tintDidChange), name: TintService.tintDidChangeNotification, object: nil)
+        
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: ScheduleViewController, _) in
+            self.setupNavigationBar()
+            self.collectionView.reloadData()
+        }
+    }
+    
+    @objc private func tintDidChange() {
+        setupNavigationBar()
+        // Re-resolve dynamic colors on header elements
+        let pc = AppColors.pencil
+        prevButton.tintColor = pc
+        nextButton.tintColor = pc
+        dateLabel.textColor = pc
+        noGamesLabel.textColor = pc.withAlphaComponent(0.5)
+        collectionView.reloadData()
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         setupNavigationBar()
     }
+
+
     
     private func setupUI() {
-        view.backgroundColor = UIColor(red: 0.99, green: 0.98, blue: 0.96, alpha: 1.0)
+        view.backgroundColor = AppColors.paper
         
         // Date Header Setup
         dateHeaderView.translatesAutoresizingMaskIntoConstraints = false
@@ -86,7 +106,7 @@ class ScheduleViewController: UIViewController {
         let screenWidth = view.window?.windowScene?.screen.bounds.width ?? view.frame.width
         let width = (screenWidth - padding) / 2
         layout.itemSize = CGSize(width: width, height: 120) 
-        layout.footerReferenceSize = CGSize(width: screenWidth, height: 100)        
+        layout.footerReferenceSize = CGSize(width: screenWidth, height: 140)        
         collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
         collectionView.backgroundColor = .clear
         collectionView.delegate = self
@@ -135,11 +155,9 @@ class ScheduleViewController: UIViewController {
     private func setupNavigationBar() {        title = "BASED"
         
         let font = UIFont(name: "PermanentMarker-Regular", size: 28) ?? .systemFont(ofSize: 28, weight: .bold)
-        let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
-        
         let appearance = UINavigationBarAppearance()
         appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = UIColor(red: 0.99, green: 0.98, blue: 0.96, alpha: 1.0)
+        appearance.backgroundColor = AppColors.paper
         appearance.titleTextAttributes = [.font: font, .foregroundColor: pencilColor]
         appearance.shadowColor = .clear
         configurePlainBarButtonAppearance(appearance.buttonAppearance, color: pencilColor)
@@ -180,14 +198,14 @@ class ScheduleViewController: UIViewController {
         view.addSubview(datePickerOverlay)
         
         let container = UIView()
-        container.backgroundColor = UIColor(red: 0.99, green: 0.98, blue: 0.96, alpha: 1.0)
+        container.backgroundColor = AppColors.paper
         container.layer.cornerRadius = 16
         container.translatesAutoresizingMaskIntoConstraints = false
         datePickerOverlay.addSubview(container)
         
         datePicker.datePickerMode = .date
         datePicker.preferredDatePickerStyle = .inline
-        datePicker.maximumDate = Date()
+        datePicker.maximumDate = Calendar.current.date(byAdding: .day, value: 1, to: Date())
         datePicker.tintColor = pencilColor
         datePicker.translatesAutoresizingMaskIntoConstraints = false
         datePicker.addTarget(self, action: #selector(dateChanged(_:)), for: .valueChanged)
@@ -262,8 +280,9 @@ class ScheduleViewController: UIViewController {
         formatter.dateFormat = "EEEE, MMMM d"
         dateLabel.text = formatter.string(from: currentDate).uppercased()
         
-        let isToday = Calendar.current.isDateInToday(currentDate)
-        nextButton.isEnabled = !isToday
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+        let isTomorrow = Calendar.current.isDate(currentDate, inSameDayAs: tomorrow)
+        nextButton.isEnabled = !isTomorrow
         nextButton.alpha = nextButton.isEnabled ? 1.0 : 0.3
     }
 
@@ -304,7 +323,8 @@ class ScheduleViewController: UIViewController {
     
     @objc private func nextDate() {
         guard let newDate = Calendar.current.date(byAdding: .day, value: 1, to: currentDate) else { return }
-        if newDate > Date() { return }
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+        if Calendar.current.compare(newDate, to: tomorrow, toGranularity: .day) == .orderedDescending { return }
         loadSchedule(for: newDate)
     }
 
@@ -363,60 +383,178 @@ class ScheduleViewController: UIViewController {
 
 // MARK: - Footer View
 
+// MARK: - Pencil Swatch Button
+
+private class PencilSwatchButton: UIControl {
+    let swatchColor: UIColor?  // nil = eraser/reset
+    private let fillLayer = CAShapeLayer()
+    private let borderLayer = CAShapeLayer()
+    private let checkLayer = CAShapeLayer()
+
+    init(color: UIColor?) {
+        self.swatchColor = color
+        super.init(frame: .zero)
+        layer.addSublayer(fillLayer)
+        layer.addSublayer(borderLayer)
+        layer.addSublayer(checkLayer)
+        borderLayer.fillColor = UIColor.clear.cgColor
+        borderLayer.lineWidth = 1.2
+        borderLayer.lineCap = .round
+        checkLayer.fillColor = UIColor.clear.cgColor
+        checkLayer.lineWidth = 1.8
+        checkLayer.lineCap = .round
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    var isCurrentTint: Bool = false {
+        didSet { setNeedsLayout() }
+    }
+
+    override var intrinsicContentSize: CGSize { CGSize(width: 32, height: 32) }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        let radius: CGFloat = min(bounds.width, bounds.height) / 2 - 2
+
+        // Fill
+        let circlePath = UIBezierPath.pencilRoughCircle(center: center, radius: radius, jitter: 0.8)
+        if let c = swatchColor {
+            fillLayer.path = circlePath.cgPath
+            fillLayer.fillColor = c.cgColor
+        } else {
+            // Eraser: empty circle with an X
+            fillLayer.path = circlePath.cgPath
+            fillLayer.fillColor = AppColors.paper.cgColor
+        }
+
+        // Border
+        let borderPath = UIBezierPath.pencilRoughCircle(center: center, radius: radius, jitter: 1.0)
+        borderLayer.path = borderPath.cgPath
+        borderLayer.strokeColor = AppColors.pencil.withAlphaComponent(isCurrentTint ? 0.8 : 0.3).cgColor
+
+        // Check mark or X for eraser
+        if swatchColor == nil {
+            // Draw a small X
+            let s: CGFloat = radius * 0.45
+            let xPath = UIBezierPath()
+            xPath.append(.pencilLine(from: CGPoint(x: center.x - s, y: center.y - s),
+                                     to: CGPoint(x: center.x + s, y: center.y + s), jitter: 0.5))
+            xPath.append(.pencilLine(from: CGPoint(x: center.x + s, y: center.y - s),
+                                     to: CGPoint(x: center.x - s, y: center.y + s), jitter: 0.5))
+            checkLayer.path = xPath.cgPath
+            checkLayer.strokeColor = AppColors.pencil.withAlphaComponent(0.4).cgColor
+        } else if isCurrentTint {
+            // Draw a small check
+            let s: CGFloat = radius * 0.4
+            let checkPath = UIBezierPath()
+            checkPath.append(.pencilLine(
+                from: CGPoint(x: center.x - s * 0.6, y: center.y),
+                to: CGPoint(x: center.x - s * 0.1, y: center.y + s * 0.5), jitter: 0.3))
+            checkPath.append(.pencilLine(
+                from: CGPoint(x: center.x - s * 0.1, y: center.y + s * 0.5),
+                to: CGPoint(x: center.x + s * 0.7, y: center.y - s * 0.5), jitter: 0.3))
+            checkLayer.path = checkPath.cgPath
+            checkLayer.strokeColor = UIColor.white.cgColor
+        } else {
+            checkLayer.path = nil
+        }
+    }
+}
+
 class ScheduleFooterView: UICollectionReusableView {
     static let reuseIdentifier = "ScheduleFooterView"
-    
+
     private let stackView = UIStackView()
     private let madeInStack = UIStackView()
     private let madeWithLabel = UILabel()
     private let heartImageView = UIImageView(image: UIImage(named: "PhiladelphiaLove.symbols")?.withRenderingMode(.alwaysTemplate))
     private let inPhiladelphiaLabel = UILabel()
-    private let byLabel = UILabel()
-    
+
+
+    // Tint row
+    private let tintRow = UIStackView()
+    private let colorWell = UIColorWell()
+    private var swatchButtons: [PencilSwatchButton] = []
+
+    private static let presetColors: [UIColor] = [
+        UIColor(red: 0.00, green: 0.22, blue: 0.52, alpha: 1.0),   // Dodger blue
+        UIColor(red: 0.76, green: 0.09, blue: 0.17, alpha: 1.0),   // Cardinal red
+        UIColor(red: 0.11, green: 0.24, blue: 0.15, alpha: 1.0),   // Oakland green
+        UIColor(red: 0.92, green: 0.38, blue: 0.04, alpha: 1.0),   // Oriole orange
+        UIColor(red: 0.42, green: 0.27, blue: 0.14, alpha: 1.0),   // Padre brown
+    ]
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         setupUI()
+        NotificationCenter.default.addObserver(self, selector: #selector(tintDidChange), name: TintService.tintDidChangeNotification, object: nil)
     }
-    
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-    
+
+    required init?(coder: NSCoder) { fatalError() }
+
     private func setupUI() {
         let font = UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14)
-        let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.6)
-        
-        [madeWithLabel, inPhiladelphiaLabel, byLabel].forEach {
+        let pencilColor = AppColors.pencil.withAlphaComponent(0.6)
+
+        [madeWithLabel, inPhiladelphiaLabel].forEach {
             $0.font = font
             $0.textColor = pencilColor
             $0.textAlignment = .center
         }
-        
+
         madeWithLabel.text = "Made with "
-        inPhiladelphiaLabel.text = " in Philadelphia"
-        byLabel.text = "by Colin Weir"
-        
+        inPhiladelphiaLabel.text = " in Philadelphia by Colin Weir"
+
         heartImageView.contentMode = .scaleAspectFit
         heartImageView.tintColor = .systemRed
         heartImageView.setContentHuggingPriority(.required, for: .horizontal)
         heartImageView.setContentCompressionResistancePriority(.required, for: .horizontal)
-        
+
         madeInStack.axis = .horizontal
         madeInStack.spacing = 0
         madeInStack.alignment = .center
         madeInStack.addArrangedSubview(madeWithLabel)
         madeInStack.addArrangedSubview(heartImageView)
         madeInStack.addArrangedSubview(inPhiladelphiaLabel)
-        
+
+        // Build tint swatch row: eraser + presets + color well
+        tintRow.axis = .horizontal
+        tintRow.spacing = 8
+        tintRow.alignment = .center
+
+        // Eraser button (nil color = reset)
+        let eraserBtn = PencilSwatchButton(color: nil)
+        eraserBtn.addTarget(self, action: #selector(swatchTapped(_:)), for: .touchUpInside)
+        tintRow.addArrangedSubview(eraserBtn)
+        swatchButtons.append(eraserBtn)
+
+        // Preset color swatches
+        for color in Self.presetColors {
+            let btn = PencilSwatchButton(color: color)
+            btn.addTarget(self, action: #selector(swatchTapped(_:)), for: .touchUpInside)
+            tintRow.addArrangedSubview(btn)
+            swatchButtons.append(btn)
+        }
+
+        // Color well for custom
+        colorWell.supportsAlpha = false
+        colorWell.selectedColor = TintService.shared.tintColor
+        colorWell.addTarget(self, action: #selector(colorChanged(_:)), for: .valueChanged)
+        tintRow.addArrangedSubview(colorWell)
+
+        updateSwatchSelection()
+
         stackView.axis = .vertical
-        stackView.spacing = -2
+        stackView.spacing = 8
         stackView.alignment = .center
         stackView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stackView)
-        
+
+        stackView.addArrangedSubview(tintRow)
         stackView.addArrangedSubview(madeInStack)
-        stackView.addArrangedSubview(byLabel)
-        
+
         NSLayoutConstraint.activate([
             stackView.centerXAnchor.constraint(equalTo: centerXAnchor),
             stackView.topAnchor.constraint(equalTo: topAnchor, constant: 16),
@@ -424,6 +562,38 @@ class ScheduleFooterView: UICollectionReusableView {
             heartImageView.heightAnchor.constraint(equalToConstant: 14),
             heartImageView.widthAnchor.constraint(equalToConstant: 16)
         ])
+    }
+
+    private func updateSwatchSelection() {
+        let current = TintService.shared.tintColor
+        for btn in swatchButtons {
+            if let sc = btn.swatchColor, let cur = current {
+                // Compare hue to handle dynamic color resolution
+                var h1: CGFloat = 0, h2: CGFloat = 0
+                var s1: CGFloat = 0, s2: CGFloat = 0
+                sc.getHue(&h1, saturation: &s1, brightness: nil, alpha: nil)
+                cur.getHue(&h2, saturation: &s2, brightness: nil, alpha: nil)
+                btn.isCurrentTint = abs(h1 - h2) < 0.02 && abs(s1 - s2) < 0.1
+            } else {
+                btn.isCurrentTint = (btn.swatchColor == nil && current == nil)
+            }
+        }
+    }
+
+    @objc private func swatchTapped(_ sender: PencilSwatchButton) {
+        TintService.shared.tintColor = sender.swatchColor
+        colorWell.selectedColor = sender.swatchColor
+    }
+
+    @objc private func colorChanged(_ sender: UIColorWell) {
+        TintService.shared.tintColor = sender.selectedColor
+    }
+
+    @objc private func tintDidChange() {
+        updateSwatchSelection()
+        // Refresh attribution label colors
+        let pencilColor = AppColors.pencil.withAlphaComponent(0.6)
+        [madeWithLabel, inPhiladelphiaLabel].forEach { $0.textColor = pencilColor }
     }
 }
 
@@ -452,9 +622,8 @@ extension ScheduleViewController: UICollectionViewDataSource, UICollectionViewDe
         
         // Setup handwriting back button for the detail view
         let font = UIFont(name: "PermanentMarker-Regular", size: 18) ?? .systemFont(ofSize: 18)
-        let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
         let backItem = UIBarButtonItem(title: "< BACK", style: .plain, target: nil, action: nil)
-        backItem.setTitleTextAttributes([.font: font, .foregroundColor: pencilColor], for: .normal)
+        backItem.setTitleTextAttributes([.font: font, .foregroundColor: AppColors.pencil], for: .normal)
         navigationItem.backBarButtonItem = backItem
         
         navigationController?.pushViewController(detailVC, animated: true)

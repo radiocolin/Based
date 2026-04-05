@@ -29,8 +29,8 @@ class CurrentStateView: UIView {
     var longPressAction: (() -> Void)?
     
     // Constants
-    private let paperColor = UIColor(red: 0.99, green: 0.98, blue: 0.96, alpha: 1.0)
-    private let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
+    private let paperColor = AppColors.paper
+    private var pencilColor: UIColor { AppColors.pencil }
     private let headerFont = "PermanentMarker-Regular"
     private let bodyFont = "PatrickHand-Regular"
     

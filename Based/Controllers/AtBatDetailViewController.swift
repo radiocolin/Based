@@ -23,8 +23,8 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
     private let linesLayer = CAShapeLayer()
     
     // Constants
-    private let paperColor = UIColor(red: 0.99, green: 0.98, blue: 0.96, alpha: 1.0)
-    private let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
+    private let paperColor = AppColors.paper
+    private var pencilColor: UIColor { AppColors.pencil }
     private let headerFont = "PermanentMarker-Regular"
     private let bodyFont = "PatrickHand-Regular"
     
@@ -117,7 +117,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         descriptionLabel.text = event.description
         descriptionLabel.font = UIFont(name: bodyFont, size: 18) ?? .systemFont(ofSize: 18)
         descriptionLabel.textColor = pencilColor.withAlphaComponent(0.8)
-        descriptionLabel.textAlignment = .center
+        descriptionLabel.textAlignment = .left
         descriptionLabel.numberOfLines = 0
         descriptionLabel.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(descriptionLabel)
@@ -244,7 +244,7 @@ class PitchCell: UITableViewCell {
         [numLabel, descLabel, speedLabel, outcomeLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             contentView.addSubview($0)
-            $0.textColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
+            $0.textColor = AppColors.pencil
             $0.font = UIFont(name: "PatrickHand-Regular", size: 18)
         }
         

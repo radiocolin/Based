@@ -31,8 +31,8 @@ class GamePickerView: UIView {
     private let borderLayer = CAShapeLayer()
 
     // Constants
-    private let paperColor = UIColor(red: 0.99, green: 0.98, blue: 0.96, alpha: 1.0)
-    private let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
+    private let paperColor = AppColors.paper
+    private var pencilColor: UIColor { AppColors.pencil }
     private let headerFont = "PermanentMarker-Regular"
     private let bodyFont = "PatrickHand-Regular"
 
@@ -223,9 +223,9 @@ class GameCardCell: UICollectionViewCell {
     
     private let linesLayer = CAShapeLayer()
 
-    private let paperColor = UIColor(red: 0.99, green: 0.98, blue: 0.96, alpha: 1.0)
-    private let selectedColor = UIColor(red: 0.93, green: 0.92, blue: 0.90, alpha: 1.0)
-    private let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
+    private let paperColor = AppColors.paper
+    private var selectedColor: UIColor { AppColors.selected }
+    private var pencilColor: UIColor { AppColors.pencil }
     private let headerFont = "PermanentMarker-Regular"
     private let bodyFont = "PatrickHand-Regular"
 
@@ -334,6 +334,14 @@ class GameCardCell: UICollectionViewCell {
             homeScoreLabel.text = ""
         }
 
+        // Refresh pencil-colored elements
+        let pc = pencilColor
+        awayScoreLabel.textColor = pc
+        homeScoreLabel.textColor = pc
+        atLabel.textColor = pc.withAlphaComponent(0.3)
+        statusLabel.textColor = pc.withAlphaComponent(0.7)
+        venueLabel.textColor = pc.withAlphaComponent(0.5)
+
         // Status & Venue
         statusLabel.text = formatStatus(game)
         venueLabel.text = game.venue?.name?.uppercased() ?? ""
@@ -341,7 +349,9 @@ class GameCardCell: UICollectionViewCell {
         // Selection state
         contentView.backgroundColor = isSelected ? selectedColor : paperColor
         contentView.layer.borderWidth = isSelected ? 1.5 : 0
-        contentView.layer.borderColor = isSelected ? pencilColor.withAlphaComponent(0.4).cgColor : UIColor.clear.cgColor
+        contentView.layer.borderColor = isSelected ? pc.withAlphaComponent(0.4).cgColor : UIColor.clear.cgColor
+
+        setNeedsLayout()
     }
 
     private func abbreviation(for teamName: String) -> String {

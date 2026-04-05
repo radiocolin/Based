@@ -23,7 +23,7 @@ class AtBatGraphicView: UIView {
         diamondView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(diamondView)
         
-        let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
+        let pencilColor = AppColors.pencil
         let bodyFont = "PatrickHand-Regular"
         let headerFont = "PermanentMarker-Regular"
         

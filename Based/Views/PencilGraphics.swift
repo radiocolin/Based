@@ -2,6 +2,7 @@ import UIKit
 
 extension UIBezierPath {
     /// Creates a "rough" hand-drawn path between two points.
+    /// Jitter is deterministic so the path looks identical for the same endpoints.
     static func pencilLine(from start: CGPoint, to end: CGPoint, jitter: CGFloat = 0.6) -> UIBezierPath {
         let path = UIBezierPath()
         path.move(to: start)
@@ -11,6 +12,13 @@ extension UIBezierPath {
         
         let segments = max(3, Int(distance / 10))
         
+        // Seed from endpoints so the same line always produces the same wobble
+        var seed: UInt64 = 5381
+        seed = ((seed &<< 5) &+ seed) &+ UInt64(bitPattern: Int64((start.x * 100).rounded()))
+        seed = ((seed &<< 5) &+ seed) &+ UInt64(bitPattern: Int64((start.y * 100).rounded()))
+        seed = ((seed &<< 5) &+ seed) &+ UInt64(bitPattern: Int64((end.x * 100).rounded()))
+        seed = ((seed &<< 5) &+ seed) &+ UInt64(bitPattern: Int64((end.y * 100).rounded()))
+        
         for i in 1...segments {
             let t = CGFloat(i) / CGFloat(segments)
             let x = start.x + (end.x - start.x) * t
@@ -19,8 +27,12 @@ extension UIBezierPath {
             if i == segments {
                 path.addLine(to: end)
             } else {
-                let offX = CGFloat.random(in: -jitter...jitter)
-                let offY = CGFloat.random(in: -jitter...jitter)
+                seed = seed &* 6364136223846793005 &+ 1442695040888963407
+                let r1 = CGFloat(Double(seed >> 33) / Double(1 << 31)) - 1.0
+                seed = seed &* 6364136223846793005 &+ 1442695040888963407
+                let r2 = CGFloat(Double(seed >> 33) / Double(1 << 31)) - 1.0
+                let offX = r1 * jitter
+                let offY = r2 * jitter
                 path.addLine(to: CGPoint(x: x + offX, y: y + offY))
             }
         }
@@ -59,10 +71,44 @@ extension UIBezierPath {
         return path
     }
 
+    /// Creates a wobbly, imperfect circle path.
+    static func pencilRoughCircle(center: CGPoint, radius: CGFloat, jitter: CGFloat = 1.0) -> UIBezierPath {
+        let path = UIBezierPath()
+        guard radius > 0 else { return path }
+        let segments = 24
+        var seed: UInt64 = 5381
+        seed = ((seed &<< 5) &+ seed) &+ UInt64(bitPattern: Int64((center.x * 100).rounded()))
+        seed = ((seed &<< 5) &+ seed) &+ UInt64(bitPattern: Int64((center.y * 100).rounded()))
+        seed = ((seed &<< 5) &+ seed) &+ UInt64(bitPattern: Int64((radius * 100).rounded()))
+
+        for i in 0...segments {
+            let angle = CGFloat(i) / CGFloat(segments) * 2 * .pi
+            seed = seed &* 6364136223846793005 &+ 1442695040888963407
+            let r = CGFloat(Double(seed >> 33) / Double(1 << 31)) - 1.0
+            let rOff = r * jitter
+            let x = center.x + (radius + rOff) * cos(angle)
+            let y = center.y + (radius + rOff) * sin(angle)
+            if i == 0 {
+                path.move(to: CGPoint(x: x, y: y))
+            } else {
+                path.addLine(to: CGPoint(x: x, y: y))
+            }
+        }
+        path.close()
+        return path
+    }
+
     /// Creates a dense back-and-forth scribble shading effect.
+    /// Jitter is deterministic for the same rect.
     static func pencilScribble(in rect: CGRect, jitter: CGFloat = 1.0) -> UIBezierPath {
         let path = UIBezierPath()
         guard rect.width.isFinite && rect.width > 2 && rect.height.isFinite && rect.height > 2 else { return path }
+        
+        var seed: UInt64 = 5381
+        seed = ((seed &<< 5) &+ seed) &+ UInt64(bitPattern: Int64((rect.minX * 100).rounded()))
+        seed = ((seed &<< 5) &+ seed) &+ UInt64(bitPattern: Int64((rect.minY * 100).rounded()))
+        seed = ((seed &<< 5) &+ seed) &+ UInt64(bitPattern: Int64((rect.width * 100).rounded()))
+        seed = ((seed &<< 5) &+ seed) &+ UInt64(bitPattern: Int64((rect.height * 100).rounded()))
         
         let spacing: CGFloat = 1.5
         let totalWidth = rect.width + rect.height
@@ -78,8 +124,12 @@ extension UIBezierPath {
             
             if cs != ce {
                 path.move(to: cs)
-                let mid = CGPoint(x: (cs.x + ce.x)/2 + CGFloat.random(in: -jitter...jitter),
-                                 y: (cs.y + ce.y)/2 + CGFloat.random(in: -jitter...jitter))
+                seed = seed &* 6364136223846793005 &+ 1442695040888963407
+                let r1 = CGFloat(Double(seed >> 33) / Double(1 << 31)) - 1.0
+                seed = seed &* 6364136223846793005 &+ 1442695040888963407
+                let r2 = CGFloat(Double(seed >> 33) / Double(1 << 31)) - 1.0
+                let mid = CGPoint(x: (cs.x + ce.x)/2 + r1 * jitter,
+                                 y: (cs.y + ce.y)/2 + r2 * jitter)
                 path.addLine(to: mid)
                 path.addLine(to: ce)
             }
@@ -100,16 +150,24 @@ extension UIImage {
         context.setLineWidth(0.5)
         context.setLineCap(.round)
         
+        // Use a deterministic sequence so the texture doesn't change between redraws
+        var seed: UInt64 = 48271
+        func nextRandom(in range: ClosedRange<CGFloat>) -> CGFloat {
+            seed = seed &* 6364136223846793005 &+ 1442695040888963407
+            let normalized = CGFloat(Double(seed >> 33) / Double(1 << 31)) // 0..~2
+            return range.lowerBound + (normalized / 2.0) * (range.upperBound - range.lowerBound)
+        }
+        
         for _ in 0..<Int(size.width * size.height * density) {
-            let startX = CGFloat.random(in: -5...size.width)
-            let startY = CGFloat.random(in: -5...size.height)
-            let length = CGFloat.random(in: 4...12)
-            let angle = CGFloat.pi / 4 + CGFloat.random(in: -0.2...0.2)
+            let startX = nextRandom(in: -5...size.width)
+            let startY = nextRandom(in: -5...size.height)
+            let length = nextRandom(in: 4...12)
+            let angle = CGFloat.pi / 4 + nextRandom(in: -0.2...0.2)
             
             let endX = startX + length * cos(angle)
             let endY = startY + length * sin(angle)
             
-            let alpha = CGFloat.random(in: 0.05...0.25)
+            let alpha = nextRandom(in: 0.05...0.25)
             color.withAlphaComponent(alpha).setStroke()
             
             context.move(to: CGPoint(x: startX, y: startY))
@@ -123,149 +181,109 @@ extension UIImage {
     }
 }
 
-// MARK: - Overhauled Custom Pencil Segmented Control
+// MARK: - Pencil Overlay for UISegmentedControl
 
-class PencilSegmentedControl: UIControl {
-    private var items: [String] = []
-    var selectedIndex: Int = 0 {
-        didSet {
-            updateSelectedState(animated: true)
-            sendActions(for: .valueChanged)
-        }
-    }
-    
-    private let containerView = UIView()
+/// A transparent overlay that draws hand-drawn pencil borders on top of a
+/// standard UISegmentedControl. Passes all touches through so the native
+/// control keeps working normally.
+class PencilSegmentedOverlay: UIView {
+
+    private weak var segmentedControl: UISegmentedControl?
+    private let borderLayer = CAShapeLayer()
     private let selectionView = UIView()
-    private let selectionScribble = UIView()
-    
-    private let containerBorder = CAShapeLayer()
-    private let selectionBorder = CAShapeLayer()
-    private let selectionMask = CAShapeLayer()
-    
-    private let stackView = UIStackView()
-    private var buttons: [UIButton] = []
-    
-    private let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
-    private let headerFont = "PermanentMarker-Regular"
-    
-    init(items: [String]) {
+    private let scribbleLayer = CAShapeLayer()
+    private var lastRenderedIndex: Int = -1
+
+    init(segmentedControl: UISegmentedControl) {
+        self.segmentedControl = segmentedControl
         super.init(frame: .zero)
-        self.items = items
-        setupUI()
+        isUserInteractionEnabled = false
+
+        borderLayer.fillColor = UIColor.clear.cgColor
+        borderLayer.lineWidth = 1.2
+        borderLayer.lineCap = .round
+        layer.addSublayer(borderLayer)
+
+        // Selection view slides; scribble is drawn inside it
+        selectionView.isUserInteractionEnabled = false
+        scribbleLayer.lineWidth = 0.8
+        scribbleLayer.fillColor = UIColor.clear.cgColor
+        scribbleLayer.opacity = 0.25
+        selectionView.layer.addSublayer(scribbleLayer)
+        addSubview(selectionView)
+
+        segmentedControl.addTarget(self, action: #selector(selectionChanged), for: .valueChanged)
     }
-    
+
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
-    private func setupUI() {
-        backgroundColor = .clear
-        
-        // Main container box - matches system picker feel
-        containerView.isUserInteractionEnabled = false
-        containerView.backgroundColor = UIColor(red: 0.95, green: 0.94, blue: 0.92, alpha: 0.5)
-        containerView.layer.addSublayer(containerBorder)
-        addSubview(containerView)
-        containerView.translatesAutoresizingMaskIntoConstraints = false
-        
-        // Sliding selection highlight
-        selectionView.isUserInteractionEnabled = false
-        selectionView.layer.addSublayer(selectionBorder)
-        selectionView.layer.mask = selectionMask
-        
-        selectionScribble.backgroundColor = UIColor(patternImage: UIImage.pencilTexture(color: .darkGray, density: 0.25))
-        selectionScribble.alpha = 0.7
-        selectionView.addSubview(selectionScribble)
-        selectionScribble.translatesAutoresizingMaskIntoConstraints = false
-        
-        addSubview(selectionView)
-        
-        // Buttons
-        stackView.axis = .horizontal
-        stackView.distribution = .fillEqually
-        stackView.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(stackView)
-        
-        NSLayoutConstraint.activate([
-            containerView.topAnchor.constraint(equalTo: topAnchor),
-            containerView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            containerView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            containerView.bottomAnchor.constraint(equalTo: bottomAnchor),
-            
-            stackView.topAnchor.constraint(equalTo: topAnchor),
-            stackView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            stackView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            stackView.bottomAnchor.constraint(equalTo: bottomAnchor),
-            
-            selectionScribble.topAnchor.constraint(equalTo: selectionView.topAnchor),
-            selectionScribble.leadingAnchor.constraint(equalTo: selectionView.leadingAnchor),
-            selectionScribble.trailingAnchor.constraint(equalTo: selectionView.trailingAnchor),
-            selectionScribble.bottomAnchor.constraint(equalTo: selectionView.bottomAnchor)
-        ])
-        
-        for (index, title) in items.enumerated() {
-            let btn = UIButton(type: .custom)
-            btn.setTitle(title, for: .normal)
-            btn.titleLabel?.font = UIFont(name: headerFont, size: 16)
-            btn.setTitleColor(pencilColor.withAlphaComponent(0.6), for: .normal)
-            btn.setTitleColor(pencilColor, for: .selected)
-            btn.tag = index
-            btn.addTarget(self, action: #selector(buttonTapped(_:)), for: .touchUpInside)
-            stackView.addArrangedSubview(btn)
-            buttons.append(btn)
-        }
-        
-        updateSelectedState(animated: false)
+
+    @objc private func selectionChanged() {
+        animateSelection()
     }
-    
-    @objc private func buttonTapped(_ sender: UIButton) {
-        selectedIndex = sender.tag
-    }
-    
-    private func updateSelectedState(animated: Bool) {
-        let work = {
-            for (index, btn) in self.buttons.enumerated() {
-                btn.isSelected = (index == self.selectedIndex)
-            }
-            self.layoutSelection()
-        }
-        
-        if animated {
-            UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.8, initialSpringVelocity: 0.5, options: [.beginFromCurrentState], animations: work)
-        } else {
-            work()
-        }
-    }
-    
-    private func layoutSelection() {
-        guard selectedIndex < buttons.count else { return }
-        let selectedBtn = buttons[selectedIndex]
-        
-        // Update selection frame to match button exactly
-        selectionView.frame = selectedBtn.frame.insetBy(dx: 4, dy: 4)
-        
-        // Update paths for the new size
-        selectionMask.path = UIBezierPath.pencilRoughRect(rect: selectionView.bounds, jitter: 1.5).cgPath
-        selectionBorder.path = UIBezierPath.pencilRoughRect(rect: selectionView.bounds, jitter: 1.5).cgPath
-        selectionBorder.strokeColor = pencilColor.withAlphaComponent(0.4).cgColor
-        selectionBorder.fillColor = UIColor.clear.cgColor
-        selectionBorder.lineWidth = 1.0
-    }
-    
+
     override func layoutSubviews() {
         super.layoutSubviews()
-        
-        // Container border
-        containerBorder.path = UIBezierPath.pencilRoughRect(rect: containerView.bounds, jitter: 1.0).cgPath
-        containerBorder.strokeColor = pencilColor.withAlphaComponent(0.3).cgColor
-        containerBorder.fillColor = UIColor.clear.cgColor
-        containerBorder.lineWidth = 1.0
-        
-        layoutSelection()
+        redrawBorder()
+        // Position without animation on layout
+        moveSelection(animated: false)
     }
-    
-    func setTitle(_ title: String, forSegmentAt index: Int) {
-        guard index < buttons.count else { return }
-        buttons[index].setTitle(title, for: .normal)
+
+    private func redrawBorder() {
+        guard let sc = segmentedControl else { return }
+        let path = UIBezierPath()
+
+        // Outer rough rect
+        path.append(.pencilRoughRect(rect: bounds, jitter: 1.2))
+
+        // Vertical dividers between segments
+        let count = sc.numberOfSegments
+        guard count > 1 else { return }
+        let segW = bounds.width / CGFloat(count)
+        for i in 1..<count {
+            let x = segW * CGFloat(i)
+            path.append(.pencilLine(
+                from: CGPoint(x: x, y: bounds.minY + 4),
+                to: CGPoint(x: x, y: bounds.maxY - 4),
+                jitter: 0.8
+            ))
+        }
+
+        borderLayer.path = path.cgPath
+        borderLayer.strokeColor = AppColors.pencil.withAlphaComponent(0.4).cgColor
+    }
+
+    private func animateSelection() {
+        UIView.animate(withDuration: 0.25, delay: 0, usingSpringWithDamping: 0.85, initialSpringVelocity: 0.5, options: .beginFromCurrentState) {
+            self.moveSelection(animated: true)
+        }
+    }
+
+    private func moveSelection(animated: Bool) {
+        guard let sc = segmentedControl, sc.selectedSegmentIndex >= 0 else {
+            selectionView.isHidden = true
+            return
+        }
+        selectionView.isHidden = false
+
+        let count = sc.numberOfSegments
+        let segW = bounds.width / CGFloat(count)
+        let targetFrame = CGRect(
+            x: segW * CGFloat(sc.selectedSegmentIndex) + 3,
+            y: 3,
+            width: segW - 6,
+            height: bounds.height - 6
+        )
+        selectionView.frame = targetFrame
+
+        // Only regenerate the scribble when the segment size changes or on first draw
+        if lastRenderedIndex != sc.selectedSegmentIndex || scribbleLayer.path == nil {
+            let localRect = CGRect(origin: .zero, size: targetFrame.size)
+            scribbleLayer.path = UIBezierPath.pencilScribble(in: localRect, jitter: 0.8).cgPath
+            scribbleLayer.strokeColor = AppColors.pencil.cgColor
+            scribbleLayer.frame = localRect
+            lastRenderedIndex = sc.selectedSegmentIndex
+        }
     }
 }

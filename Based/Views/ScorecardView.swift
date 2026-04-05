@@ -15,9 +15,9 @@ class ScorecardView: UIView {
         let label = UILabel()
         label.text = "BATTER"
         label.font = UIFont(name: "PermanentMarker-Regular", size: 14) ?? .systemFont(ofSize: 14, weight: .bold)
-        label.textColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
+        label.textColor = AppColors.pencil
         label.textAlignment = .center
-        label.backgroundColor = UIColor(red: 0.95, green: 0.94, blue: 0.92, alpha: 1.0)
+        label.backgroundColor = AppColors.header
         return label
     }()
     
@@ -50,7 +50,7 @@ class ScorecardView: UIView {
         super.init(frame: frame)
         setupUI()
         setupCollectionViews()
-        backgroundColor = UIColor(red: 0.99, green: 0.98, blue: 0.96, alpha: 1.0)
+        backgroundColor = AppColors.paper
         layer.cornerRadius = 16
         clipsToBounds = true
     }
@@ -152,16 +152,15 @@ class ScorecardView: UIView {
 
     private func updateHeaderLabels() {
         rightHeaderStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
         for inningLayout in columnLayout.innings {
             let label = UILabel()
             label.text = "\(inningLayout.inningNum)"
             label.textAlignment = .center
             label.font = UIFont(name: "PermanentMarker-Regular", size: 14) ?? .systemFont(ofSize: 14, weight: .bold)
-            label.textColor = pencilColor
-            label.backgroundColor = UIColor(red: 0.95, green: 0.94, blue: 0.92, alpha: 1.0)
+            label.textColor = AppColors.pencil
+            label.backgroundColor = AppColors.header
             label.layer.borderWidth = 0.5
-            label.layer.borderColor = UIColor(white: 0.6, alpha: 0.5).cgColor
+            label.layer.borderColor = AppColors.grid.cgColor
             label.widthAnchor.constraint(equalToConstant: inningWidth * CGFloat(inningLayout.subColumnCount)).isActive = true
             rightHeaderStack.addArrangedSubview(label)
         }
@@ -254,6 +253,9 @@ class ScorecardView: UIView {
         rightScrollView.contentOffset.x = offset
     }
 
+    var horizontalContentWidth: CGFloat { rightScrollView.contentSize.width }
+    var horizontalVisibleWidth: CGFloat { rightScrollView.bounds.width }
+
     var currentColumnLayout: ColumnLayout { columnLayout }
     var currentNameWidth: CGFloat { nameWidth }
 
@@ -345,12 +347,12 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate {
         
         if rowIndex >= lineup.count { return UICollectionViewCell() }
         let batter = lineup[rowIndex]
-        let rowBackgroundColor = rowIndex % 2 == 0 ? UIColor.clear : UIColor(red: 0.95, green: 0.95, blue: 0.9, alpha: 0.3)
+        let rowBackgroundColor = rowIndex % 2 == 0 ? UIColor.clear : AppColors.alternateRow
         
         if collectionView == leftCollectionView {
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "NameCell", for: indexPath) as! LabelCell
-            let nameAttrs: [NSAttributedString.Key: Any] = [.font: UIFont(name: "PatrickHand-Regular", size: 18) ?? .systemFont(ofSize: 18), .foregroundColor: UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 1.0)]
-            let posAttrs: [NSAttributedString.Key: Any] = [.font: UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14), .foregroundColor: UIColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1.0)]
+            let nameAttrs: [NSAttributedString.Key: Any] = [.font: UIFont(name: "PatrickHand-Regular", size: 18) ?? .systemFont(ofSize: 18), .foregroundColor: AppColors.pencil]
+            let posAttrs: [NSAttributedString.Key: Any] = [.font: UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14), .foregroundColor: AppColors.pencil.withAlphaComponent(0.5)]
             
             let text = NSMutableAttributedString(string: "\(batter.abbreviation)\n", attributes: nameAttrs)
             var posText = batter.position
@@ -380,7 +382,7 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate {
             let isAfterExit = batter.inningExited != nil && inningNum > (batter.inningExited ?? 99)
             
             if isBeforeEntry || isAfterExit {
-                cell.backgroundColor = UIColor(white: 0.9, alpha: 0.6)
+                cell.backgroundColor = AppColors.inactive
             } else {
                 cell.backgroundColor = rowBackgroundColor
             }
@@ -397,7 +399,7 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate {
                 cell.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.08)
             } else {
                 cell.contentView.layer.borderWidth = 0.5
-                cell.contentView.layer.borderColor = UIColor(white: 0.6, alpha: 0.5).cgColor
+                cell.contentView.layer.borderColor = AppColors.grid.cgColor
             }
             
             cell.configure(with: event)

@@ -10,7 +10,7 @@ class PitchTrackView: UIView {
     private let pitchesLayer = CALayer()
     
     // Constants
-    private let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
+    private var pencilColor: UIColor { AppColors.pencil }
     
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -26,7 +26,7 @@ class PitchTrackView: UIView {
         layer.addSublayer(zoneLayer)
         layer.addSublayer(pitchesLayer)
         
-        zoneLayer.fillColor = UIColor(white: 0.9, alpha: 0.5).cgColor
+        zoneLayer.fillColor = AppColors.zoneFill.cgColor
         zoneLayer.strokeColor = pencilColor.withAlphaComponent(0.6).cgColor
         zoneLayer.lineWidth = 1.5
         zoneLayer.lineDashPattern = [4, 4]
@@ -44,6 +44,8 @@ class PitchTrackView: UIView {
     
     private func drawContent() {
         pitchesLayer.sublayers?.forEach { $0.removeFromSuperlayer() }
+        zoneLayer.fillColor = AppColors.zoneFill.cgColor
+        zoneLayer.strokeColor = pencilColor.withAlphaComponent(0.6).cgColor
         
         // Default zone if no data
         let top = pitches.first?.zoneTop ?? 3.5

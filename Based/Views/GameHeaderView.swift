@@ -32,8 +32,8 @@ class GameHeaderView: UIView {
     private let linesLayer = CAShapeLayer()
     
     // Constants
-    private let paperColor = UIColor(red: 0.99, green: 0.98, blue: 0.96, alpha: 1.0)
-    private let pencilColor = UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
+    private let paperColor = AppColors.paper
+    private var pencilColor: UIColor { AppColors.pencil }
     private let headerFont = "PermanentMarker-Regular"
     private let bodyFont = "PatrickHand-Regular"
     
@@ -56,12 +56,12 @@ class GameHeaderView: UIView {
         
         // Shading Views
         let headerBackground = UIView()
-        headerBackground.backgroundColor = UIColor(red: 0.95, green: 0.94, blue: 0.92, alpha: 1.0)
+        headerBackground.backgroundColor = AppColors.header
         headerBackground.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(headerBackground)
         
         let statsBackground = UIView()
-        statsBackground.backgroundColor = UIColor(red: 0.93, green: 0.92, blue: 0.90, alpha: 1.0)
+        statsBackground.backgroundColor = AppColors.selected
         statsBackground.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(statsBackground)
         
