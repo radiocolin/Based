@@ -28,18 +28,25 @@ class ScorecardCell: UICollectionViewCell {
         
         // Add Labels
         let pencilColor = AppColors.pencil
-        let bodyFont = "PatrickHand-Regular"
-        let headerFont = "PermanentMarker-Regular"
+        let dataFont = "PermanentMarker-Regular"
+        let legibilityFont = "PatrickHand-Regular"
         
-        [resultLabel, ballsLabel, strikesLabel, outsLabel].forEach {
+        [resultLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
-            $0.font = UIFont(name: bodyFont, size: 12) ?? .systemFont(ofSize: 12)
+            $0.font = UIFont(name: dataFont, size: 18) ?? .systemFont(ofSize: 18, weight: .bold)
             $0.textColor = pencilColor
             $0.textAlignment = .center
             contentView.addSubview($0)
         }
         
-        resultLabel.font = UIFont(name: headerFont, size: 18) ?? .systemFont(ofSize: 18, weight: .bold)
+        [ballsLabel, strikesLabel, outsLabel].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+            $0.font = UIFont(name: legibilityFont, size: 12) ?? .systemFont(ofSize: 12)
+            $0.textColor = pencilColor
+            $0.textAlignment = .center
+            contentView.addSubview($0)
+        }
+        
         resultLabel.numberOfLines = 0
         resultLabel.adjustsFontSizeToFitWidth = true
         resultLabel.minimumScaleFactor = 0.5

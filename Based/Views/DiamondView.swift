@@ -9,7 +9,9 @@ class DiamondView: UIView {
     
     private let mainDiamondLayer = CAShapeLayer()
     private let basesLayer = CAShapeLayer()
-    private let fillLayer = CAShapeLayer() // Use shape layer for pattern fill
+    private let fillLayer = CAShapeLayer()
+    private let fillTextureLayer = CAShapeLayer()
+    private let fillMaskLayer = CAShapeLayer()
     
     private var pencilColor: UIColor { AppColors.pencil }
     private let baseSize: CGFloat = 8
@@ -32,6 +34,7 @@ class DiamondView: UIView {
     private func setupLayers() {
         layer.addSublayer(mainDiamondLayer)
         layer.addSublayer(fillLayer)
+        layer.addSublayer(fillTextureLayer)
         layer.addSublayer(basesLayer)
         
         mainDiamondLayer.fillColor = AppColors.diamondFill.cgColor
@@ -39,6 +42,13 @@ class DiamondView: UIView {
         
         fillLayer.fillColor = UIColor.clear.cgColor
         fillLayer.strokeColor = UIColor.clear.cgColor
+
+        fillTextureLayer.fillColor = UIColor.clear.cgColor
+        fillTextureLayer.strokeColor = UIColor.clear.cgColor
+        fillTextureLayer.lineWidth = 0.8
+        fillTextureLayer.lineCap = .round
+        fillTextureLayer.lineJoin = .round
+        fillTextureLayer.mask = fillMaskLayer
     }
     
     override func layoutSubviews() {
@@ -69,6 +79,12 @@ class DiamondView: UIView {
         
         mainDiamondLayer.path = path.cgPath
         fillLayer.path = path.cgPath
+        fillMaskLayer.path = path.cgPath
+        fillTextureLayer.frame = bounds
+        fillTextureLayer.path = UIBezierPath.pencilScribble(
+            in: bounds.insetBy(dx: bounds.width * 0.15, dy: bounds.height * 0.15),
+            jitter: 0.8
+        ).cgPath
     }
     
     func configure(with bases: BasesReached, style: Style = .scorecard, isRun: Bool = false) {
@@ -83,6 +99,7 @@ class DiamondView: UIView {
         
         basesLayer.sublayers?.forEach { $0.removeFromSuperlayer() }
         fillLayer.fillColor = UIColor.clear.cgColor
+        fillTextureLayer.strokeColor = UIColor.clear.cgColor
         
         let path = UIBezierPath()
         
@@ -111,8 +128,8 @@ class DiamondView: UIView {
             }
             
             if isRun || bases.home {
-                let texture = UIImage.pencilTexture(color: AppColors.pencil)
-                fillLayer.fillColor = UIColor(patternImage: texture).cgColor
+                fillLayer.fillColor = AppColors.pencil.withAlphaComponent(0.08).cgColor
+                fillTextureLayer.strokeColor = AppColors.pencil.withAlphaComponent(0.12).cgColor
             }
         }
 

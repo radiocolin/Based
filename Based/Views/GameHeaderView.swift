@@ -34,8 +34,8 @@ class GameHeaderView: UIView {
     // Constants
     private let paperColor = AppColors.paper
     private var pencilColor: UIColor { AppColors.pencil }
-    private let headerFont = "PermanentMarker-Regular"
-    private let bodyFont = "PatrickHand-Regular"
+    private let headerFont = "PatrickHand-Regular"
+    private let bodyFont = "PermanentMarker-Regular"
     
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -101,8 +101,8 @@ class GameHeaderView: UIView {
             $0.font = UIFont(name: bodyFont, size: 18) ?? .systemFont(ofSize: 18)
         }
         
-        awayName.font = UIFont(name: headerFont, size: 18) ?? .systemFont(ofSize: 18, weight: .bold)
-        homeName.font = UIFont(name: headerFont, size: 18) ?? .systemFont(ofSize: 18, weight: .bold)
+        awayName.font = UIFont(name: bodyFont, size: 18) ?? .systemFont(ofSize: 18, weight: .bold)
+        homeName.font = UIFont(name: bodyFont, size: 18) ?? .systemFont(ofSize: 18, weight: .bold)
         
         for i in 1...9 {
             let h = createLabel(text: "\(i)", font: headerFont, size: 16)

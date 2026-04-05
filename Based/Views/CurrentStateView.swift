@@ -84,7 +84,7 @@ class CurrentStateView: UIView {
         inningContainer.backgroundColor = pencilColor.withAlphaComponent(0.08)
         inningContainer.layer.cornerRadius = 4
 
-        inningLabel.font = UIFont(name: headerFont, size: 12) ?? .systemFont(ofSize: 12, weight: .bold)
+        inningLabel.font = UIFont(name: bodyFont, size: 14) ?? .systemFont(ofSize: 14, weight: .bold)
         inningLabel.textColor = pencilColor.withAlphaComponent(0.9)
         inningLabel.textAlignment = .center
 
@@ -222,8 +222,9 @@ class CurrentStateView: UIView {
         let outs = linescore.outs ?? 0
         let outsText = outs == 1 ? "OUT" : "OUTS"
         let ordinal = linescore.currentInningOrdinal?.uppercased() ?? "---"
+        let side = linescore.inningHalf?.uppercased() ?? ""
         
-        inningLabel.text = "\(state.uppercased()) \(ordinal) • \(outs) \(outsText)"
+        inningLabel.text = "\(side) \(ordinal) • \(outs) \(outsText)"
         
         if isBreak {
             batterLabel.text = ""

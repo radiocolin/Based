@@ -1,0 +1,11 @@
+Overview:
+Based is a hand-drawn style MLB scorecard app for iOS. It provides live scorecards, game schedules, and detailed at-bat breakdowns with a unique pencil-and-paper aesthetic.
+
+What to Test:
+- Game Navigation: Browse games by date in the schedule view and ensure your favorite teams are pinned correctly.
+- Scorecard Accuracy: View live or completed games to check if the scorecard layout matches the actual game events (batter lineups, at-bat results, and inning-by-inning scoring).
+- At-Bat Detail: Tap into specific at-bats to view pitch-by-pitch tracking visualizations and verify they reflect the live game data accurately.
+- Player Profiles: Tap on any player name to view their bio and season/career batting stats.
+- Customization: Test the pencil color theme customization (Tint Service) by choosing from presets or using the custom color picker.
+- Data Loading: Observe how the app handles live updates from the MLB Stats API during active games.
+- Visuals: Check for any layout issues with the hand-drawn UI elements (rendered with UIBezierPath) across different device sizes.

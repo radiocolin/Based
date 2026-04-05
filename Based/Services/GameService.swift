@@ -220,8 +220,8 @@ class GameService {
         func createPitcher(id: Int, team: BoxscoreTeam?) -> ScorecardPitcher? {
             guard let player = findPlayer(in: team, id: id), let person = player.person else { return nil }
             let stats = player.stats?.pitching
-            let ip = stats?.inningsPitched ?? "0.0", er = stats?.runs ?? 0, k = stats?.strikeOuts ?? 0, bb = stats?.baseOnBalls ?? 0, h = stats?.hits ?? 0
-            return ScorecardPitcher(id: id, fullName: person.fullName ?? "Unknown", stats: "\(ip) IP, \(h) H, \(er) ER, \(bb) BB, \(k) K")
+            let ip = stats?.inningsPitched ?? "0.0", er = stats?.runs ?? 0, k = stats?.strikeOuts ?? 0, bb = stats?.baseOnBalls ?? 0, h = stats?.hits ?? 0, r = stats?.runs ?? 0
+            return ScorecardPitcher(id: id, fullName: person.fullName ?? "Unknown", stats: "\(ip) IP, \(h) H, \(er) ER, \(bb) BB, \(k) K", ip: ip, h: h, r: r, er: er, bb: bb, k: k)
         }
 
         let homeLineup = (boxscore.teams?.home?.batters ?? [])
@@ -413,7 +413,9 @@ class GameService {
 
     private func scorecardNotation(for play: Play, batterId: Int? = nil) -> String {
         if play.about?.isComplete == false { return "LIVE" }
-        let eventType = play.result?.eventType ?? "", event = play.result?.event ?? ""
+        let eventType = play.result?.eventType ?? ""
+        let event = play.result?.event ?? ""
+        let normalizedEvent = event.lowercased()
         switch eventType {
         case "single": return "1B"
         case "double": return "2B"
@@ -425,17 +427,34 @@ class GameService {
         case "strikeout":
             let lastPitchCode = play.playEvents?.last(where: { $0.isPitch == true })?.details?.code ?? ""
             return lastPitchCode == "C" ? "Ʞ" : "K"
+        case "balk": return "BK"
+        case "wild_pitch": return "WP"
+        case "passed_ball": return "PB"
+        case "stolen_base": return "SB"
+        case "caught_stealing": return "CS"
         case "field_error", "error": return "E"
-        case "field_out", "force_out", "flyout", "popout", "lineout", "grounded_into_double_play":
+        case "fielders_choice", "fielders_choice_out": return "FC"
+        case "sac_fly": return "SF"
+        case "sac_bunt", "sac_bunt_double_play", "bunt_groundout", "bunt_pop_out": return "SAC"
+        case "field_out", "force_out", "flyout", "foul_fly", "popout", "lineout", "grounded_into_double_play", "grounded_into_triple_play":
             if eventType == "grounded_into_double_play" {
                 // Find the longest credit sequence in this play, usually the one involving the batter's out
                 let allCredits = play.runners?.compactMap { $0.credits?.compactMap { $0.position?.code } } ?? []
                 if let sequence = allCredits.max(by: { $0.count < $1.count }), !sequence.isEmpty {
-                    return "\(sequence.joined(separator: "-"))\nDP"
+                    return "\(sequence.joined(separator: "-"))\nGIDP"
                 }
-                return "DP"
+                return "GIDP"
             }
-            if event == "Flyout" || event == "Pop Out" || event == "Lineout" {
+            if eventType == "grounded_into_triple_play" {
+                return "TP"
+            }
+            if event == "Flyout" || event == "Foul Fly" {
+                if let loc = play.playEvents?.compactMap({ $0.hitData?.location }).last, loc != "0" {
+                    return "F\(loc)"
+                }
+                return "F"
+            }
+            if event == "Pop Out" || event == "Lineout" {
                 if let loc = play.playEvents?.compactMap({ $0.hitData?.location }).last, loc != "0" {
                     let prefix = (event == "Pop Out") ? "P" : (event == "Lineout" ? "L" : "F")
                     return "\(prefix)\(loc)"
@@ -447,26 +466,38 @@ class GameService {
                 return sequence.joined(separator: "-")
             }
             
-            if event == "Groundout" { return "G" }
-            if event == "Flyout" { return "F" }
-            if event == "Pop Out" { return "P" }
-            if event == "Lineout" { return "L" }
+            if eventType == "force_out" || normalizedEvent.contains("forceout") || normalizedEvent.contains("force out") { return "FO" }
+            if normalizedEvent.contains("unassisted") { return "U" }
+            if normalizedEvent.contains("groundout") || normalizedEvent.contains("ground out") { return "G" }
+            if normalizedEvent.contains("bunt") { return "BUNT" }
+            if normalizedEvent.contains("flyout") || normalizedEvent.contains("foul fly") { return "F" }
+            if normalizedEvent.contains("lineout") || normalizedEvent.contains("line drive") { return "L" }
+            if normalizedEvent.contains("pop out") || normalizedEvent.contains("popup") { return "P" }
             return String(event.prefix(3)).uppercased()
-        case "sac_fly": return "SF"
-        case "sac_bunt": return "SAC"
-        case "fielders_choice": return "FC"
-        case "stolen_base": return "SB"
-        case "caught_stealing": return "CS"
-        case "wild_pitch": return "WP"
-        case "passed_ball": return "PB"
-        case "balk": return "BK"
         case "pickoff_error_1b", "pickoff_error_2b", "pickoff_error_3b": return "E"
         case "pickoff_1b", "pickoff_2b", "pickoff_3b": return "PO"
         default: 
-            if event.lowercased().contains("double play") { return "DP" }
-            if event.lowercased().contains("triple play") { return "TP" }
-            if event.lowercased().contains("stolen base") { return "SB" }
-            if event.lowercased().contains("caught stealing") { return "CS" }
+            if normalizedEvent.contains("called out on strikes") || normalizedEvent.contains("strikeout looking") {
+                return "Ʞ"
+            }
+            if normalizedEvent.contains("strikeout") || normalizedEvent.contains("struck out") { return "K" }
+            if normalizedEvent.contains("intentional walk") { return "IBB" }
+            if normalizedEvent.contains("walk") { return "BB" }
+            if normalizedEvent.contains("hit by pitch") { return "HBP" }
+            if normalizedEvent.contains("fielder") && normalizedEvent.contains("choice") { return "FC" }
+            if normalizedEvent.contains("sacrifice fly") { return "SF" }
+            if normalizedEvent.contains("sacrifice") || normalizedEvent.contains("sac bunt") || normalizedEvent.contains("sacrifice bunt") { return "SAC" }
+            if normalizedEvent.contains("double play") { return "GIDP" }
+            if normalizedEvent.contains("triple play") { return "TP" }
+            if normalizedEvent.contains("stolen base") { return "SB" }
+            if normalizedEvent.contains("caught stealing") { return "CS" }
+            if normalizedEvent.contains("passed ball") { return "PB" }
+            if normalizedEvent.contains("wild pitch") { return "WP" }
+            if normalizedEvent.contains("balk") { return "BK" }
+            if normalizedEvent.contains("forceout") || normalizedEvent.contains("force out") { return "FO" }
+            if normalizedEvent.contains("line drive") { return "L" }
+            if normalizedEvent.contains("foul fly") { return "F" }
+            if normalizedEvent.contains("error") { return "E" }
             if event.isEmpty { return "" }
             return String(event.prefix(3)).uppercased()
         }

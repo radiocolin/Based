@@ -12,7 +12,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private let topLeftLabel: UILabel = {
         let label = UILabel()
         label.text = "BATTER"
-        label.font = UIFont(name: "PermanentMarker-Regular", size: 14) ?? .systemFont(ofSize: 14, weight: .bold)
+        label.font = UIFont(name: "PatrickHand-Regular", size: 18) ?? .systemFont(ofSize: 18, weight: .bold)
         label.textColor = AppColors.pencil
         label.textAlignment = .center
         label.backgroundColor = AppColors.header
@@ -25,7 +25,12 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private let mainScrollView = UIScrollView()
     private let mainStackView = UIStackView()
     private let scorecardView = ScorecardView()
-    private let pitcherLabel = UILabel()
+    private let pitcherContainer: UIStackView = {
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 2
+        return stack
+    }()
     private let umpireLabel = UILabel()
     private let gameInfoLabel = UILabel()
     private let infoColumnsStack = UIStackView()
@@ -66,6 +71,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
     // Constants
     private let inningWidth: CGFloat = 60
+    private let statWidth: CGFloat = 40
     private let headerHeight: CGFloat = 32
 
     init(gamePk: Int, games: [ScheduleGame]) {
@@ -128,6 +134,9 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         backItem.setTitleTextAttributes([.font: font, .foregroundColor: pencilColor.withAlphaComponent(0.5)], for: .highlighted)
         navigationItem.leftBarButtonItem = backItem
         
+        let shareItem = UIBarButtonItem(image: UIImage(systemName: "square.and.arrow.up"), style: .plain, target: self, action: #selector(shareScorecard))
+        navigationItem.rightBarButtonItem = shareItem
+        
         let appearance = UINavigationBarAppearance()
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = AppColors.paper
@@ -142,6 +151,35 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     
     @objc private func backTapped() {
         navigationController?.popViewController(animated: true)
+    }
+
+    @objc private func shareScorecard() {
+        guard let scorecard = currentScorecard else { return }
+        
+        let activityIndicator = UIActivityIndicatorView(style: .large)
+        activityIndicator.center = view.center
+        activityIndicator.hidesWhenStopped = true
+        view.addSubview(activityIndicator)
+        activityIndicator.startAnimating()
+        
+        view.isUserInteractionEnabled = false
+        
+        Task {
+            let generator = ScorecardImageGenerator()
+            let image = await generator.generate(scorecard: scorecard, linescore: self.currentLinescore)
+            
+            await MainActor.run {
+                activityIndicator.stopAnimating()
+                activityIndicator.removeFromSuperview()
+                self.view.isUserInteractionEnabled = true
+                
+                let activityVC = UIActivityViewController(activityItems: [image], applicationActivities: nil)
+                if let popover = activityVC.popoverPresentationController {
+                    popover.barButtonItem = self.navigationItem.rightBarButtonItem
+                }
+                self.present(activityVC, animated: true)
+            }
+        }
     }
 
     private func configurePlainBarButtonAppearance(_ appearance: UIBarButtonItemAppearance, font: UIFont, color: UIColor) {
@@ -239,12 +277,14 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         // Umpires and Game Info side by side
         infoColumnsStack.axis = .horizontal
         infoColumnsStack.alignment = .top
-        infoColumnsStack.distribution = .fillEqually
+        infoColumnsStack.distribution = .fill
         infoColumnsStack.spacing = 12
         infoColumnsStack.addArrangedSubview(umpireLabel)
         infoColumnsStack.addArrangedSubview(gameInfoLabel)
         
-        [scorecardView, pitcherLabel, infoColumnsStack, placeholderLabel].forEach {
+        gameInfoLabel.widthAnchor.constraint(equalToConstant: 200).isActive = true
+        
+        [scorecardView, pitcherContainer, infoColumnsStack, placeholderLabel].forEach {
             mainStackView.addArrangedSubview($0)
         }
         
@@ -268,7 +308,6 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             }
         }
         
-        pitcherLabel.numberOfLines = 0
         umpireLabel.numberOfLines = 0
         gameInfoLabel.numberOfLines = 0
         
@@ -382,12 +421,24 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             let label = UILabel()
             label.text = "\(inningLayout.inningNum)"
             label.textAlignment = .center
-            label.font = UIFont(name: "PermanentMarker-Regular", size: 14) ?? .systemFont(ofSize: 14, weight: .bold)
+            label.font = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
             label.textColor = AppColors.pencil
             label.backgroundColor = AppColors.header
             label.layer.borderWidth = 0.5
             label.layer.borderColor = AppColors.grid.cgColor
             label.widthAnchor.constraint(equalToConstant: inningWidth * CGFloat(inningLayout.subColumnCount)).isActive = true
+            rightHeaderStack.addArrangedSubview(label)
+        }
+        for stat in layout.statColumns {
+            let label = UILabel()
+            label.text = stat
+            label.textAlignment = .center
+            label.font = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
+            label.textColor = AppColors.pencil
+            label.backgroundColor = AppColors.header
+            label.layer.borderWidth = 0.5
+            label.layer.borderColor = AppColors.grid.cgColor
+            label.widthAnchor.constraint(equalToConstant: statWidth).isActive = true
             rightHeaderStack.addArrangedSubview(label)
         }
     }
@@ -568,7 +619,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
                 self.placeholderLabel.isHidden = !show
                 self.scorecardView.isHidden = show
                 self.stickyHeaderContainer.isHidden = show
-                self.pitcherLabel.isHidden = show
+                self.pitcherContainer.isHidden = show
                 self.infoColumnsStack.isHidden = show
                 self.view.layoutIfNeeded()
             }
@@ -641,7 +692,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         let umpireStrings = umpires.map { "\($0.type): \($0.fullName)" }
         
         let attributedText = NSMutableAttributedString(string: "UMPIRES\n", attributes: [
-            .font: UIFont(name: "PermanentMarker-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold),
+            .font: UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold),
             .foregroundColor: AppColors.pencil
         ])
         attributedText.append(NSAttributedString(string: umpireStrings.joined(separator: "\n"), attributes: [
@@ -656,18 +707,66 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         guard let scorecard = currentScorecard else { return }
         let isHome = teamSegmentedControl.selectedSegmentIndex == 1
         let pitchers = isHome ? scorecard.pitchers.home : scorecard.pitchers.away
-        let pitcherStrings = pitchers.map { "\($0.fullName): \($0.stats)" }
         
-        let attributedText = NSMutableAttributedString(string: "PITCHERS\n", attributes: [
-            .font: UIFont(name: "PermanentMarker-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold),
-            .foregroundColor: AppColors.pencil
-        ])
-        attributedText.append(NSAttributedString(string: pitcherStrings.joined(separator: "\n"), attributes: [
-            .font: UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14),
-            .foregroundColor: AppColors.pencil.withAlphaComponent(0.7)
-        ]))
+        pitcherContainer.arrangedSubviews.forEach { $0.removeFromSuperview() }
         
-        pitcherLabel.attributedText = pitcherStrings.isEmpty ? nil : attributedText
+        guard !pitchers.isEmpty else { return }
+        
+        let titleLabel = UILabel()
+        titleLabel.text = "PITCHERS"
+        titleLabel.font = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
+        titleLabel.textColor = AppColors.pencil
+        pitcherContainer.addArrangedSubview(titleLabel)
+        
+        // Header Row
+        let headerRow = UIStackView()
+        headerRow.axis = .horizontal
+        headerRow.spacing = 4
+        
+        let nameHeader = UILabel()
+        nameHeader.text = "NAME"
+        nameHeader.font = UIFont(name: "PatrickHand-Regular", size: 12) ?? .systemFont(ofSize: 12, weight: .bold)
+        nameHeader.textColor = AppColors.pencil.withAlphaComponent(0.6)
+        headerRow.addArrangedSubview(nameHeader)
+        
+        let statLabels = ["IP", "H", "R", "ER", "BB", "K"]
+        for label in statLabels {
+            let l = UILabel()
+            l.text = label
+            l.font = UIFont(name: "PatrickHand-Regular", size: 12) ?? .systemFont(ofSize: 12, weight: .bold)
+            l.textColor = AppColors.pencil.withAlphaComponent(0.6)
+            l.textAlignment = .center
+            l.widthAnchor.constraint(equalToConstant: 30).isActive = true
+            headerRow.addArrangedSubview(l)
+        }
+        pitcherContainer.addArrangedSubview(headerRow)
+        
+        // Pitcher Rows
+        for (idx, pitcher) in pitchers.enumerated() {
+            let row = UIStackView()
+            row.axis = .horizontal
+            row.spacing = 4
+            row.backgroundColor = idx % 2 == 1 ? AppColors.alternateRow.withAlphaComponent(0.5) : .clear
+            
+            let nameLabel = UILabel()
+            nameLabel.text = pitcher.fullName
+            nameLabel.font = UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14)
+            nameLabel.textColor = AppColors.pencil
+            row.addArrangedSubview(nameLabel)
+            
+            let stats = [pitcher.ip, "\(pitcher.h)", "\(pitcher.r)", "\(pitcher.er)", "\(pitcher.bb)", "\(pitcher.k)"]
+            for val in stats {
+                let l = UILabel()
+                l.text = val
+                l.font = UIFont(name: "PermanentMarker-Regular", size: 12) ?? .systemFont(ofSize: 12)
+                l.textColor = AppColors.pencil
+                l.textAlignment = .center
+                l.widthAnchor.constraint(equalToConstant: 30).isActive = true
+                row.addArrangedSubview(l)
+            }
+            
+            pitcherContainer.addArrangedSubview(row)
+        }
     }
 
     private func updateGameInfo() {
@@ -690,27 +789,33 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         let labelMap = ["First pitch": "First Pitch", "T": "Duration", "Att": "Attendance"]
         
         let attributedText = NSMutableAttributedString(string: "GAME INFO\n", attributes: [
-            .font: UIFont(name: "PermanentMarker-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold),
+            .font: UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold),
             .foregroundColor: AppColors.pencil
         ])
         
-        let bodyAttrs: [NSAttributedString.Key: Any] = [
+        let labelAttrs: [NSAttributedString.Key: Any] = [
             .font: UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14),
             .foregroundColor: AppColors.pencil.withAlphaComponent(0.7)
         ]
         
-        var lines: [String] = []
+        let valueAttrs: [NSAttributedString.Key: Any] = [
+            .font: UIFont(name: "PermanentMarker-Regular", size: 12) ?? .systemFont(ofSize: 12),
+            .foregroundColor: AppColors.pencil.withAlphaComponent(0.7)
+        ]
+        
         for item in infoItems {
             let displayLabel = labelMap[item.label] ?? item.label
             let value = (item.value ?? "").trimmingCharacters(in: CharacterSet(charactersIn: "."))
-            lines.append("\(displayLabel): \(value)")
-        }
-        if let dateItem = dateItem {
-            lines.append(dateItem.label)
+            
+            attributedText.append(NSAttributedString(string: "\(displayLabel): ", attributes: labelAttrs))
+            attributedText.append(NSAttributedString(string: "\(value)\n", attributes: valueAttrs))
         }
         
-        attributedText.append(NSAttributedString(string: lines.joined(separator: "\n"), attributes: bodyAttrs))
-        gameInfoLabel.attributedText = lines.isEmpty ? nil : attributedText
+        if let dateItem = dateItem {
+            attributedText.append(NSAttributedString(string: dateItem.label, attributes: valueAttrs))
+        }
+        
+        gameInfoLabel.attributedText = attributedText
     }
 
     // MARK: - ScorecardViewDelegate
@@ -800,24 +905,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
     private func calculatePlayerStats(for batter: ScorecardBatter) -> PlayerGameStats {
         guard let scorecard = currentScorecard else { return PlayerGameStats(atBats: 0, hits: 0, runs: 0, rbi: 0, walks: 0, strikeouts: 0) }
-        var atBats = 0, hits = 0, runs = 0, rbi = 0, walks = 0, strikeouts = 0
-        for inning in scorecard.innings {
-            let isHome = teamSegmentedControl.selectedSegmentIndex == 1
-            let events = isHome ? inning.home : inning.away
-            for event in events where event.batterId == batter.id {
-                let result = event.result
-                if result == "BB" || result == "IBB" || result == "HBP" { walks += 1 }
-                else if result == "SF" || result == "SAC" {}
-                else {
-                    atBats += 1
-                    if ["1B", "2B", "3B", "HR"].contains(result) { hits += 1 }
-                }
-                if result == "HR" { runs += 1 }
-                rbi += event.rbi
-                if result == "K" || result == "Ʞ" { strikeouts += 1 }
-            }
-        }
-        return PlayerGameStats(atBats: atBats, hits: hits, runs: runs, rbi: rbi, walks: walks, strikeouts: strikeouts)
+        let isHome = teamSegmentedControl.selectedSegmentIndex == 1
+        return scorecard.calculatePlayerStats(for: batter.id, isHome: isHome)
     }
 }
 

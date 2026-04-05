@@ -14,7 +14,7 @@ class ScorecardView: UIView {
     private let topLeftLabel: UILabel = {
         let label = UILabel()
         label.text = "BATTER"
-        label.font = UIFont(name: "PermanentMarker-Regular", size: 14) ?? .systemFont(ofSize: 14, weight: .bold)
+        label.font = UIFont(name: "PatrickHand-Regular", size: 18) ?? .systemFont(ofSize: 18, weight: .bold)
         label.textColor = AppColors.pencil
         label.textAlignment = .center
         label.backgroundColor = AppColors.header
@@ -38,11 +38,12 @@ class ScorecardView: UIView {
     private var isHomeTeam = false
     private var areHeadersVisible = true
     private var isLive = false
-    private var columnLayout = ColumnLayout(innings: (1...9).map { InningColumnLayout(inningNum: $0, subColumnCount: 1, startColumn: $0 - 1) }, totalColumns: 9)
+    private var columnLayout = ColumnLayout(innings: (1...9).map { InningColumnLayout(inningNum: $0, subColumnCount: 1, startColumn: $0 - 1) })
     
     // Constants
     private var nameWidth: CGFloat = 90
     private let inningWidth: CGFloat = 60
+    private let statWidth: CGFloat = 40
     private let headerHeight: CGFloat = 32
     private let rowHeight: CGFloat = 70
     
@@ -93,6 +94,7 @@ class ScorecardView: UIView {
         rightCollectionView.backgroundColor = .clear
         rightCollectionView.isScrollEnabled = false
         rightCollectionView.register(ScorecardCell.self, forCellWithReuseIdentifier: ScorecardCell.reuseIdentifier)
+        rightCollectionView.register(LabelCell.self, forCellWithReuseIdentifier: LabelCell.reuseIdentifier)
         rightCollectionView.translatesAutoresizingMaskIntoConstraints = false
         rightScrollView.addSubview(rightCollectionView)
         
@@ -136,7 +138,9 @@ class ScorecardView: UIView {
     private var rightContentWidthConstraint: NSLayoutConstraint?
     private func updateContentWidth() {
         rightContentWidthConstraint?.isActive = false
-        rightContentWidthConstraint = rightCollectionView.widthAnchor.constraint(equalToConstant: inningWidth * CGFloat(columnLayout.totalColumns))
+        let inningsWidth = inningWidth * CGFloat(columnLayout.innings.map { $0.subColumnCount }.reduce(0, +))
+        let statsWidthTotal = statWidth * CGFloat(columnLayout.statColumns.count)
+        rightContentWidthConstraint = rightCollectionView.widthAnchor.constraint(equalToConstant: inningsWidth + statsWidthTotal)
         rightContentWidthConstraint?.isActive = true
         rightHeaderStack.widthAnchor.constraint(equalTo: rightCollectionView.widthAnchor).isActive = true
     }
@@ -156,12 +160,24 @@ class ScorecardView: UIView {
             let label = UILabel()
             label.text = "\(inningLayout.inningNum)"
             label.textAlignment = .center
-            label.font = UIFont(name: "PermanentMarker-Regular", size: 14) ?? .systemFont(ofSize: 14, weight: .bold)
+            label.font = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
             label.textColor = AppColors.pencil
             label.backgroundColor = AppColors.header
             label.layer.borderWidth = 0.5
             label.layer.borderColor = AppColors.grid.cgColor
             label.widthAnchor.constraint(equalToConstant: inningWidth * CGFloat(inningLayout.subColumnCount)).isActive = true
+            rightHeaderStack.addArrangedSubview(label)
+        }
+        for stat in columnLayout.statColumns {
+            let label = UILabel()
+            label.text = stat
+            label.textAlignment = .center
+            label.font = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
+            label.textColor = AppColors.pencil
+            label.backgroundColor = AppColors.header
+            label.layer.borderWidth = 0.5
+            label.layer.borderColor = AppColors.grid.cgColor
+            label.widthAnchor.constraint(equalToConstant: statWidth).isActive = true
             rightHeaderStack.addArrangedSubview(label)
         }
     }
@@ -291,7 +307,7 @@ class ScorecardView: UIView {
     private func computeColumnLayout() -> ColumnLayout {
         guard let data = scorecardData else {
             let innings = (1...9).map { InningColumnLayout(inningNum: $0, subColumnCount: 1, startColumn: $0 - 1) }
-            return ColumnLayout(innings: innings, totalColumns: 9)
+            return ColumnLayout(innings: innings)
         }
         
         let lineup = isHomeTeam ? data.lineups.home : data.lineups.away
@@ -314,19 +330,24 @@ class ScorecardView: UIView {
             runningColumn += maxABs
         }
         
-        return ColumnLayout(innings: layouts, totalColumns: runningColumn)
+        return ColumnLayout(innings: layouts)
     }
 
     override var intrinsicContentSize: CGSize {
         guard let data = scorecardData else { return CGSize(width: UIView.noIntrinsicMetric, height: 200) }
         let lineupCount = isHomeTeam ? data.lineups.home.count : data.lineups.away.count
         let h = areHeadersVisible ? headerHeight : 0
-        let totalHeight = h + (CGFloat(lineupCount) * rowHeight)
+        let totalHeight = h + (CGFloat(lineupCount + 1) * rowHeight)
         return CGSize(width: UIView.noIntrinsicMetric, height: totalHeight)
+    }
+    
+    private func calculatePlayerStats(for batterId: Int) -> PlayerGameStats {
+        guard let data = scorecardData else { return PlayerGameStats(atBats: 0, hits: 0, runs: 0, rbi: 0, walks: 0, strikeouts: 0) }
+        return data.calculatePlayerStats(for: batterId, isHome: isHomeTeam)
     }
 }
 
-extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate {
+extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate, UICollectionViewDelegateFlowLayout {
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         if scrollView == rightScrollView {
             horizontalScrollCallback?(scrollView.contentOffset.x)
@@ -335,8 +356,18 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate {
 
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
         guard let data = scorecardData else { return 0 }
-        let lineupCount = isHomeTeam ? data.lineups.home.count : data.lineups.away.count
+        let lineupCount = (isHomeTeam ? data.lineups.home.count : data.lineups.away.count) + 1 // +1 for totals
         return collectionView == leftCollectionView ? lineupCount : lineupCount * columnLayout.totalColumns
+    }
+    
+    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
+        if collectionView == leftCollectionView {
+            return CGSize(width: nameWidth, height: rowHeight)
+        } else {
+            let col = indexPath.item % columnLayout.totalColumns
+            let width = columnLayout.statInfo(forColumn: col) != nil ? statWidth : inningWidth
+            return CGSize(width: width, height: rowHeight)
+        }
     }
     
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
@@ -345,13 +376,21 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate {
         let totalCols = columnLayout.totalColumns
         let rowIndex = (collectionView == leftCollectionView) ? indexPath.item : indexPath.item / totalCols
         
-        if rowIndex >= lineup.count { return UICollectionViewCell() }
-        let batter = lineup[rowIndex]
+        let isTotalsRow = rowIndex == lineup.count
         let rowBackgroundColor = rowIndex % 2 == 0 ? UIColor.clear : AppColors.alternateRow
         
         if collectionView == leftCollectionView {
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "NameCell", for: indexPath) as! LabelCell
-            let nameAttrs: [NSAttributedString.Key: Any] = [.font: UIFont(name: "PatrickHand-Regular", size: 18) ?? .systemFont(ofSize: 18), .foregroundColor: AppColors.pencil]
+            if isTotalsRow {
+                cell.label.text = "TOTALS"
+                cell.label.font = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
+                cell.label.textAlignment = .center
+                cell.backgroundColor = AppColors.header
+                return cell
+            }
+            
+            let batter = lineup[rowIndex]
+            let nameAttrs: [NSAttributedString.Key: Any] = [.font: UIFont(name: "PermanentMarker-Regular", size: 16) ?? .systemFont(ofSize: 16), .foregroundColor: AppColors.pencil]
             let posAttrs: [NSAttributedString.Key: Any] = [.font: UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14), .foregroundColor: AppColors.pencil.withAlphaComponent(0.5)]
             
             let text = NSMutableAttributedString(string: "\(batter.abbreviation)\n", attributes: nameAttrs)
@@ -365,8 +404,63 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate {
             cell.backgroundColor = rowBackgroundColor
             return cell
         } else {
-            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: ScorecardCell.reuseIdentifier, for: indexPath) as! ScorecardCell
             let col = indexPath.item % totalCols
+            
+            // Handle Stat Columns
+            if let statType = columnLayout.statInfo(forColumn: col) {
+                let cell = collectionView.dequeueReusableCell(withReuseIdentifier: LabelCell.reuseIdentifier, for: indexPath) as! LabelCell
+                cell.label.font = UIFont(name: "PermanentMarker-Regular", size: 16) ?? .systemFont(ofSize: 16)
+                
+                if isTotalsRow {
+                    var totalValue = 0
+                    for batter in lineup {
+                        let stats = calculatePlayerStats(for: batter.id)
+                        switch statType {
+                        case "AB": totalValue += stats.atBats
+                        case "R": totalValue += stats.runs
+                        case "H": totalValue += stats.hits
+                        case "RBI": totalValue += stats.rbi
+                        default: break
+                        }
+                    }
+                    cell.label.text = "\(totalValue)"
+                    cell.label.font = UIFont(name: "PermanentMarker-Regular", size: 18) ?? .systemFont(ofSize: 18, weight: .bold)
+                    cell.backgroundColor = AppColors.header
+                } else {
+                    let batter = lineup[rowIndex]
+                    let stats = calculatePlayerStats(for: batter.id)
+                    switch statType {
+                    case "AB": cell.label.text = "\(stats.atBats)"
+                    case "R": cell.label.text = "\(stats.runs)"
+                    case "H": cell.label.text = "\(stats.hits)"
+                    case "RBI": cell.label.text = "\(stats.rbi)"
+                    default: cell.label.text = "-"
+                    }
+                    cell.backgroundColor = rowBackgroundColor
+                }
+                return cell
+            }
+            
+            // Handle Inning Columns
+            if isTotalsRow {
+                let cell = collectionView.dequeueReusableCell(withReuseIdentifier: LabelCell.reuseIdentifier, for: indexPath) as! LabelCell
+                if let (inningNum, _) = columnLayout.inningInfo(forColumn: col) {
+                    let inningObj = data.innings.first { $0.num == inningNum }
+                    let events = isHomeTeam ? (inningObj?.home ?? []) : (inningObj?.away ?? [])
+                    let runs = events.reduce(0) { $0 + $1.rbi } // This is a rough estimate of runs in inning, MLB API usually provides runs per inning in linescore
+                    // Actually, let's use the actual runs from linescore if available? 
+                    // For now, let's just leave it empty or show inning total if we can calculate it accurately.
+                    // Linescore is better for inning totals.
+                    cell.label.text = "" 
+                } else {
+                    cell.label.text = ""
+                }
+                cell.backgroundColor = AppColors.header
+                return cell
+            }
+            
+            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: ScorecardCell.reuseIdentifier, for: indexPath) as! ScorecardCell
+            let batter = lineup[rowIndex]
             
             guard let (inningNum, subIndex) = columnLayout.inningInfo(forColumn: col) else {
                 cell.configure(with: nil)
@@ -412,7 +506,7 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate {
         let lineup = isHomeTeam ? data.lineups.home : data.lineups.away
         let totalCols = columnLayout.totalColumns
         let rowIndex = (collectionView == leftCollectionView) ? indexPath.item : indexPath.item / totalCols
-        if rowIndex >= lineup.count { return }
+        if rowIndex >= lineup.count { return } // Totals row not selectable
         let batter = lineup[rowIndex]
         
         if collectionView == leftCollectionView {

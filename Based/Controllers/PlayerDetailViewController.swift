@@ -326,14 +326,3 @@ class PlayerDetailViewController: UIViewController {
         layer.lineJoin = .round
     }
 }
-
-// MARK: - Player Game Stats Model
-
-struct PlayerGameStats {
-    let atBats: Int
-    let hits: Int
-    let runs: Int
-    let rbi: Int
-    let walks: Int
-    let strikeouts: Int
-}
