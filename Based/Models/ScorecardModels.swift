@@ -1,7 +1,7 @@
 import Foundation
 
 // MARK: - Scorecard Model
-struct ScorecardData: Codable, Sendable {
+struct ScorecardData: Codable, Sendable, Equatable {
     let teams: ScorecardTeams
     let lineups: Lineups
     let pitchers: ScorecardPitchers
@@ -14,22 +14,22 @@ struct ScorecardData: Codable, Sendable {
     let currentBatterId: Int?
 }
 
-struct GameInfoItem: Codable, Sendable {
+struct GameInfoItem: Codable, Sendable, Equatable {
     let label: String
     let value: String?
 }
 
-struct ScorecardUmpire: Codable, Sendable {
+struct ScorecardUmpire: Codable, Sendable, Equatable {
     let fullName: String
     let type: String // HP, 1B, 2B, 3B
 }
 
-struct ScorecardPitchers: Codable, Sendable {
+struct ScorecardPitchers: Codable, Sendable, Equatable {
     let home: [ScorecardPitcher]
     let away: [ScorecardPitcher]
 }
 
-struct ScorecardPitcher: Codable, Sendable {
+struct ScorecardPitcher: Codable, Sendable, Equatable {
     let id: Int
     let fullName: String
     let stats: String
@@ -41,17 +41,17 @@ struct ScorecardPitcher: Codable, Sendable {
     let k: Int
 }
 
-struct ScorecardTeams: Codable, Sendable {
+struct ScorecardTeams: Codable, Sendable, Equatable {
     let home: Team
     let away: Team
 }
 
-struct Lineups: Codable, Sendable {
+struct Lineups: Codable, Sendable, Equatable {
     let home: [ScorecardBatter]
     let away: [ScorecardBatter]
 }
 
-struct ScorecardBatter: Codable, Identifiable, Sendable {
+struct ScorecardBatter: Codable, Identifiable, Sendable, Equatable {
     let id: Int
     let fullName: String
     let abbreviation: String
@@ -61,14 +61,14 @@ struct ScorecardBatter: Codable, Identifiable, Sendable {
     let inningExited: Int?
 }
 
-struct ScorecardInning: Codable, Sendable {
+struct ScorecardInning: Codable, Sendable, Equatable {
     let num: Int
     let ordinal: String
     let home: [AtBatEvent]
     let away: [AtBatEvent]
 }
 
-struct AtBatEvent: Codable, Sendable {
+struct AtBatEvent: Codable, Sendable, Equatable {
     let batterId: Int
     let result: String // e.g., "1B", "K", "HR", "F8"
     let description: String
@@ -80,7 +80,7 @@ struct AtBatEvent: Codable, Sendable {
     let pitches: [PitchEvent]?
 }
 
-struct PitchEvent: Codable, Sendable {
+struct PitchEvent: Codable, Sendable, Equatable {
     let pitchNumber: Int
     let description: String
     let outcome: String // "Ball", "Strike", "Foul", "In Play"
@@ -110,7 +110,7 @@ struct PitchEvent: Codable, Sendable {
 }
 
 /// An annotation to draw on the diamond (e.g. "E6", "SB", "CS")
-struct BaseAnnotation: Codable, Sendable {
+struct BaseAnnotation: Codable, Sendable, Equatable {
     enum Kind: String, Codable, Sendable {
         case error          // "E6" — next to the base reached
         case stolenBase     // "SB" — next to the base stolen to
@@ -121,7 +121,7 @@ struct BaseAnnotation: Codable, Sendable {
     let label: String   // e.g. "E6", "SB", "CS"
 }
 
-struct BasesReached: Codable, Sendable {
+struct BasesReached: Codable, Sendable, Equatable {
     let first: Bool
     let second: Bool
     let third: Bool

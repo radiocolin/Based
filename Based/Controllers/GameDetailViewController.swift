@@ -58,6 +58,9 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private var currentLinescore: Linescore?
     private var currentScorecard: ScorecardData?
     private var currentLivePitches: [PitchEvent] = []
+    private var currentUmpires: [ScorecardUmpire] = []
+    private var currentGameInfo: [GameInfoItem] = []
+    private var currentPitchers: [ScorecardPitcher] = []
     private weak var liveDetailVC: AtBatDetailViewController?
     private var lastActiveAtBatKey: String?
     private let gamePk: Int
@@ -212,6 +215,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     // MARK: - GameUpdateDelegate
     
     func didUpdateLinescore(_ linescore: Linescore, pitches: [PitchEvent], gameData: GameData?) {
+        if linescore == currentLinescore && pitches == currentLivePitches { return }
         self.currentLivePitches = pitches
         if liveDetailVC != nil {
             updateLiveDetailSheet(with: linescore, pitches: pitches)
@@ -220,6 +224,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
     
     func didUpdateScorecard(_ scorecard: ScorecardData) {
+        if scorecard == currentScorecard { return }
         updateScorecard(with: scorecard)
     }
     
@@ -470,6 +475,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             isLive = false
         }
         
+        let wasLive = self.isGameLive
         self.isGameLive = isLive
         updateTeamSegmentedControlTitles()
 
@@ -496,6 +502,11 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         }
         
         scorecardView.setIsLive(isLive && !isDuringBreak)
+        
+        // Auto-sync on first live detection
+        if !wasLive && isLive {
+            syncWithActiveAtBat()
+        }
     }
 
     private func updateScorecard(with scorecard: ScorecardData) {
@@ -529,8 +540,10 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         let newKey = "\(inning)-\(currentIsTop)-\(batterId)"
         
         if isFirstLoad {
-            syncWithActiveAtBat()
-        } else if newKey != lastActiveAtBatKey && batterId != 0 {
+            if isGameLive {
+                syncWithActiveAtBat()
+            }
+        } else if isGameLive && newKey != lastActiveAtBatKey && batterId != 0 {
             // Auto-scroll only if viewing the team at bat
             let viewingBattingTeam = (currentIsTop && teamSegmentedControl.selectedSegmentIndex == 0) ||
                                      (!currentIsTop && teamSegmentedControl.selectedSegmentIndex == 1)
@@ -599,6 +612,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     @objc private func segmentTapped() {
+        guard isGameLive else { return }
         if segmentJustChanged {
             segmentJustChanged = false
             return
@@ -696,6 +710,9 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private func updateUmpireList() {
         guard let scorecard = currentScorecard else { return }
         let umpires = scorecard.umpires
+        if umpires == currentUmpires { return }
+        self.currentUmpires = umpires
+        
         let umpireStrings = umpires.map { "\($0.type): \($0.fullName)" }
         
         let attributedText = NSMutableAttributedString(string: "UMPIRES\n", attributes: [
@@ -714,6 +731,9 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         guard let scorecard = currentScorecard else { return }
         let isHome = teamSegmentedControl.selectedSegmentIndex == 1
         let pitchers = isHome ? scorecard.pitchers.home : scorecard.pitchers.away
+        
+        if pitchers == currentPitchers { return }
+        self.currentPitchers = pitchers
         
         pitcherContainer.arrangedSubviews.forEach { $0.removeFromSuperview() }
         
@@ -778,6 +798,9 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
     private func updateGameInfo() {
         guard let scorecard = currentScorecard else { return }
+        
+        if scorecard.gameInfo == currentGameInfo { return }
+        self.currentGameInfo = scorecard.gameInfo
         
         // Filter to game info fields we want below the scorecard
         let displayLabels = ["First pitch", "T", "Att", "Venue"]
@@ -850,7 +873,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     private func syncWithActiveAtBat() {
-        guard let scorecard = currentScorecard else { return }
+        guard isGameLive, let scorecard = currentScorecard else { return }
         
         // Swap to the team at bat
         let isTop = scorecard.isTopInning ?? true
@@ -868,7 +891,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     private func scrollToActiveCell(scorecard: ScorecardData) {
-        guard let inningNum = scorecard.currentInning,
+        guard isGameLive,
+              let inningNum = scorecard.currentInning,
               let batterId = scorecard.currentBatterId,
               let isTop = scorecard.isTopInning else { return }
         

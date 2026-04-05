@@ -183,13 +183,16 @@ class ScorecardView: UIView {
     }
     
     func configure(with data: ScorecardData) {
+        let hasChanges = data != scorecardData
         self.scorecardData = data
         self.columnLayout = computeColumnLayout()
         updateNameColumnWidth()
         updateHeaderLabels()
         updateContentWidth()
-        leftCollectionView.reloadData()
-        rightCollectionView.reloadData()
+        if hasChanges {
+            leftCollectionView.reloadData()
+            rightCollectionView.reloadData()
+        }
         invalidateIntrinsicContentSize()
     }
     

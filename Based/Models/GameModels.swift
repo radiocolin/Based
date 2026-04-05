@@ -1,6 +1,6 @@
 import Foundation
 
-struct Linescore: Codable, Sendable {
+struct Linescore: Codable, Sendable, Equatable {
     let currentInning: Int?
     let currentInningOrdinal: String?
     let inningState: String?
@@ -20,44 +20,44 @@ struct Linescore: Codable, Sendable {
     let weather: Weather?
 }
 
-struct Venue: Codable, Sendable {
+struct Venue: Codable, Sendable, Equatable {
     let id: Int?
     let name: String?
     let location: VenueLocation?
 }
 
-struct VenueLocation: Codable, Sendable {
+struct VenueLocation: Codable, Sendable, Equatable {
     let city: String?
     let state: String?
     let stateAbbrev: String?
 }
 
-struct Weather: Codable, Sendable {
+struct Weather: Codable, Sendable, Equatable {
     let condition: String?
     let temp: String?
     let wind: String?
 }
 
-struct Inning: Codable, Sendable {
+struct Inning: Codable, Sendable, Equatable {
     let num: Int?
     let ordinalNum: String?
     let home: InningStats?
     let away: InningStats?
 }
 
-struct InningStats: Codable, Sendable {
+struct InningStats: Codable, Sendable, Equatable {
     let runs: Int?
     let hits: Int?
     let errors: Int?
     let leftOnBase: Int?
 }
 
-struct LinescoreTeams: Codable, Sendable {
+struct LinescoreTeams: Codable, Sendable, Equatable {
     let home: TeamGameStats?
     let away: TeamGameStats?
 }
 
-struct TeamGameStats: Codable, Sendable {
+struct TeamGameStats: Codable, Sendable, Equatable {
     let team: Team?
     let runs: Int?
     let hits: Int?
@@ -67,19 +67,19 @@ struct TeamGameStats: Codable, Sendable {
     let challenges: Challenges?
 }
 
-struct Challenges: Codable, Sendable {
+struct Challenges: Codable, Sendable, Equatable {
     let used: Int?
     let remaining: Int?
     let successful: Int?
 }
 
-struct Team: Codable, Sendable {
+struct Team: Codable, Sendable, Equatable {
     let id: Int?
     let name: String?
     let link: String?
 }
 
-struct Offense: Codable, Sendable {
+struct Offense: Codable, Sendable, Equatable {
     let batter: Player?
     let onDeck: Player?
     let inHole: Player?
@@ -90,7 +90,7 @@ struct Offense: Codable, Sendable {
     let team: Team?
 }
 
-struct Defense: Codable, Sendable {
+struct Defense: Codable, Sendable, Equatable {
     let pitcher: Player?
     let catcher: Player?
     let first: Player?
@@ -103,7 +103,7 @@ struct Defense: Codable, Sendable {
     let team: Team?
 }
 
-struct Player: Codable, Sendable {
+struct Player: Codable, Sendable, Equatable {
     let id: Int?
     let fullName: String?
     let link: String?
@@ -134,7 +134,7 @@ struct PlayerInfo: Codable, Sendable {
     let stats: [StatGroup]?
 }
 
-struct Position: Codable, Sendable {
+struct Position: Codable, Sendable, Equatable {
     let code: String?
     let name: String?
     let type: String?
