@@ -63,7 +63,11 @@ final class ScorecardImageGenerator {
         let gameInfoHeight: CGFloat = filteredInfo.isEmpty ? 0 : 100
         
         let inningCount = max(9, linescore?.innings?.count ?? 9)
-        let sbWidth: CGFloat = 200 + (CGFloat(inningCount) * 80) + 40 + (3 * 80) + 30
+        let sbTeamCol: CGFloat = 140
+        let sbInningCol: CGFloat = 65
+        let sbStatCol: CGFloat = 70
+        let sbSepGap: CGFloat = 15
+        let sbWidth: CGFloat = sbTeamCol + CGFloat(inningCount) * sbInningCol + sbSepGap + 3 * sbStatCol
         
         var totalHeight: CGFloat = config.margin
         totalHeight += 120 // Scoreboard
@@ -139,58 +143,100 @@ final class ScorecardImageGenerator {
     // MARK: - Drawing Helpers
     
     private func drawScoreboard(in rect: CGRect, linescore: Linescore?, scorecard: ScorecardData, ctx: CGContext) {
-        ctx.setStrokeColor(config.pencilColor.withAlphaComponent(0.4).cgColor)
-        ctx.setLineWidth(1.5)
-        UIBezierPath.pencilRoughRect(rect: rect, jitter: 1.5).stroke()
-        
         let awayName = linescore?.teams?.away?.team?.name ?? scorecard.teams.away.name ?? "Away"
         let homeName = linescore?.teams?.home?.team?.name ?? scorecard.teams.home.name ?? "Home"
-        
         let awayAbbr = teamAbbreviation(for: awayName)
         let homeAbbr = teamAbbreviation(for: homeName)
-        
         let teamColorA = TeamColorProvider.color(for: awayName)
         let teamColorH = TeamColorProvider.color(for: homeName)
         
-        let abbrFont = UIFont(name: "PermanentMarker-Regular", size: 36) ?? .systemFont(ofSize: 36, weight: .bold)
-        let scoreFont = UIFont(name: "PermanentMarker-Regular", size: 32) ?? .systemFont(ofSize: 32, weight: .bold)
+        let abbrFont = UIFont(name: "PermanentMarker-Regular", size: 30) ?? .systemFont(ofSize: 30, weight: .bold)
+        let scoreFont = UIFont(name: "PermanentMarker-Regular", size: 26) ?? .systemFont(ofSize: 26, weight: .bold)
         let headerFont = UIFont(name: "PatrickHand-Regular", size: 20) ?? .systemFont(ofSize: 20)
-        let inningRFont = UIFont(name: "PermanentMarker-Regular", size: 24) ?? .systemFont(ofSize: 24)
+        let inningRFont = UIFont(name: "PermanentMarker-Regular", size: 22) ?? .systemFont(ofSize: 22)
         
-        // Abbreviations
-        NSAttributedString(string: awayAbbr, attributes: [.font: abbrFont, .foregroundColor: teamColorA]).draw(at: CGPoint(x: rect.minX + 30, y: rect.minY + 10))
-        NSAttributedString(string: homeAbbr, attributes: [.font: abbrFont, .foregroundColor: teamColorH]).draw(at: CGPoint(x: rect.minX + 30, y: rect.minY + 60))
-        
-        // Inning grid
+        // Table dimensions (must match sbWidth calculation)
+        let teamColWidth: CGFloat = 140
+        let inningColWidth: CGFloat = 65
+        let statColWidth: CGFloat = 70
+        let separatorGap: CGFloat = 15
         let inningCount = max(9, linescore?.innings?.count ?? 9)
-        let startX = rect.minX + 180
-        for i in 1...inningCount {
-            let x = startX + CGFloat(i-1) * 80
-            NSAttributedString(string: "\(i)", attributes: [.font: headerFont, .foregroundColor: config.pencilColor.withAlphaComponent(0.5)]).draw(at: CGPoint(x: x, y: rect.minY + 10))
-            if let inning = linescore?.innings?.first(where: { $0.num == i }) {
-                NSAttributedString(string: "\(inning.away?.runs ?? 0)", attributes: [.font: inningRFont, .foregroundColor: config.pencilColor]).draw(at: CGPoint(x: x, y: rect.minY + 40))
-                NSAttributedString(string: "\(inning.home?.runs ?? 0)", attributes: [.font: inningRFont, .foregroundColor: config.pencilColor]).draw(at: CGPoint(x: x, y: rect.minY + 80))
+        let tableWidth = teamColWidth + CGFloat(inningCount) * inningColWidth + separatorGap + 3 * statColWidth
+        let rowHeight: CGFloat = 40
+        let tableHeight: CGFloat = 3 * rowHeight
+        
+        // Center the table in the given rect
+        let tableX = rect.midX - tableWidth / 2
+        let tableY = rect.midY - tableHeight / 2
+        
+        // Draw outer border
+        ctx.setStrokeColor(config.pencilColor.withAlphaComponent(0.4).cgColor)
+        ctx.setLineWidth(1.5)
+        UIBezierPath.pencilRoughRect(rect: CGRect(x: tableX, y: tableY, width: tableWidth, height: tableHeight), jitter: 1.5).stroke()
+        
+        // Draw horizontal row dividers
+        ctx.setStrokeColor(config.gridColor.cgColor)
+        ctx.setLineWidth(0.5)
+        for row in 1..<3 {
+            let y = tableY + CGFloat(row) * rowHeight
+            UIBezierPath.pencilLine(from: CGPoint(x: tableX, y: y), to: CGPoint(x: tableX + tableWidth, y: y), jitter: 0.3).stroke()
+        }
+        
+        // Draw vertical separator between innings and R/H/E
+        let rheX = tableX + teamColWidth + CGFloat(inningCount) * inningColWidth + separatorGap / 2
+        ctx.setStrokeColor(config.pencilColor.withAlphaComponent(0.3).cgColor)
+        ctx.setLineWidth(1.0)
+        UIBezierPath.pencilLine(from: CGPoint(x: rheX, y: tableY), to: CGPoint(x: rheX, y: tableY + tableHeight), jitter: 0.3).stroke()
+        
+        // Helper to draw centered text in a cell
+        func drawCentered(_ text: String, in cellRect: CGRect, attrs: [NSAttributedString.Key: Any]) {
+            let size = (text as NSString).size(withAttributes: attrs)
+            NSAttributedString(string: text, attributes: attrs).draw(at: CGPoint(
+                x: cellRect.midX - size.width / 2,
+                y: cellRect.midY - size.height / 2
+            ))
+        }
+        
+        let headerAttrs: [NSAttributedString.Key: Any] = [.font: headerFont, .foregroundColor: config.pencilColor.withAlphaComponent(0.5)]
+        let scoreAttrs: [NSAttributedString.Key: Any] = [.font: inningRFont, .foregroundColor: config.pencilColor]
+        let totalAttrs: [NSAttributedString.Key: Any] = [.font: scoreFont, .foregroundColor: config.pencilColor]
+        
+        // Row 0 — Header: inning numbers + R H E
+        let headerRowRect = { (col: Int) -> CGRect in
+            CGRect(x: tableX + teamColWidth + CGFloat(col) * inningColWidth, y: tableY, width: inningColWidth, height: rowHeight)
+        }
+        for i in 0..<inningCount {
+            drawCentered("\(i + 1)", in: headerRowRect(i), attrs: headerAttrs)
+        }
+        let rheStartX = tableX + teamColWidth + CGFloat(inningCount) * inningColWidth + separatorGap
+        for (i, label) in ["R", "H", "E"].enumerated() {
+            drawCentered(label, in: CGRect(x: rheStartX + CGFloat(i) * statColWidth, y: tableY, width: statColWidth, height: rowHeight), attrs: headerAttrs)
+        }
+        
+        // Row 1 — Away team
+        let awayRowY = tableY + rowHeight
+        drawCentered(awayAbbr, in: CGRect(x: tableX, y: awayRowY, width: teamColWidth, height: rowHeight), attrs: [.font: abbrFont, .foregroundColor: teamColorA])
+        for i in 0..<inningCount {
+            if let inning = linescore?.innings?.first(where: { $0.num == i + 1 }) {
+                drawCentered("\(inning.away?.runs ?? 0)", in: CGRect(x: tableX + teamColWidth + CGFloat(i) * inningColWidth, y: awayRowY, width: inningColWidth, height: rowHeight), attrs: scoreAttrs)
             }
         }
-        
-        // R H E Totals (Closer to grid)
-        let statStartX = startX + CGFloat(inningCount) * 80 + 20
-        let headers = ["R", "H", "E"]
-        for (i, h) in headers.enumerated() {
-            let x = statStartX + CGFloat(i) * 80
-            NSAttributedString(string: h, attributes: [.font: headerFont, .foregroundColor: config.pencilColor.withAlphaComponent(0.5)]).draw(at: CGPoint(x: x, y: rect.minY + 10))
+        let awayRHE = ["\(linescore?.teams?.away?.runs ?? 0)", "\(linescore?.teams?.away?.hits ?? 0)", "\(linescore?.teams?.away?.errors ?? 0)"]
+        for (i, val) in awayRHE.enumerated() {
+            drawCentered(val, in: CGRect(x: rheStartX + CGFloat(i) * statColWidth, y: awayRowY, width: statColWidth, height: rowHeight), attrs: totalAttrs)
         }
         
-        let awayStats = ["\(linescore?.teams?.away?.runs ?? 0)", "\(linescore?.teams?.away?.hits ?? 0)", "\(linescore?.teams?.away?.errors ?? 0)"]
-        let homeStats = ["\(linescore?.teams?.home?.runs ?? 0)", "\(linescore?.teams?.home?.hits ?? 0)", "\(linescore?.teams?.home?.errors ?? 0)"]
-        
-        for (i, s) in awayStats.enumerated() {
-            let x = statStartX + CGFloat(i) * 80
-            NSAttributedString(string: s, attributes: [.font: scoreFont, .foregroundColor: config.pencilColor]).draw(at: CGPoint(x: x, y: rect.minY + 40))
+        // Row 2 — Home team
+        let homeRowY = tableY + 2 * rowHeight
+        drawCentered(homeAbbr, in: CGRect(x: tableX, y: homeRowY, width: teamColWidth, height: rowHeight), attrs: [.font: abbrFont, .foregroundColor: teamColorH])
+        for i in 0..<inningCount {
+            if let inning = linescore?.innings?.first(where: { $0.num == i + 1 }) {
+                drawCentered("\(inning.home?.runs ?? 0)", in: CGRect(x: tableX + teamColWidth + CGFloat(i) * inningColWidth, y: homeRowY, width: inningColWidth, height: rowHeight), attrs: scoreAttrs)
+            }
         }
-        for (i, s) in homeStats.enumerated() {
-            let x = statStartX + CGFloat(i) * 80
-            NSAttributedString(string: s, attributes: [.font: scoreFont, .foregroundColor: config.pencilColor]).draw(at: CGPoint(x: x, y: rect.minY + 80))
+        let homeRHE = ["\(linescore?.teams?.home?.runs ?? 0)", "\(linescore?.teams?.home?.hits ?? 0)", "\(linescore?.teams?.home?.errors ?? 0)"]
+        for (i, val) in homeRHE.enumerated() {
+            drawCentered(val, in: CGRect(x: rheStartX + CGFloat(i) * statColWidth, y: homeRowY, width: statColWidth, height: rowHeight), attrs: totalAttrs)
         }
     }
     

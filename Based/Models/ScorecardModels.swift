@@ -109,6 +109,18 @@ struct PitchEvent: Codable, Sendable {
     }
 }
 
+/// An annotation to draw on the diamond (e.g. "E6", "SB", "CS")
+struct BaseAnnotation: Codable, Sendable {
+    enum Kind: String, Codable, Sendable {
+        case error          // "E6" — next to the base reached
+        case stolenBase     // "SB" — next to the base stolen to
+        case caughtStealing // "CS" — next to the out-line between bases
+    }
+    let kind: Kind
+    let base: Int       // 1=1B, 2=2B, 3=3B, 4=home
+    let label: String   // e.g. "E6", "SB", "CS"
+}
+
 struct BasesReached: Codable, Sendable {
     let first: Bool
     let second: Bool
@@ -120,6 +132,9 @@ struct BasesReached: Codable, Sendable {
     let outAtSecond: Bool?
     let outAtThird: Bool?
     let outAtHome: Bool?
+    
+    // Diamond annotations (errors, stolen bases, caught stealing)
+    let annotations: [BaseAnnotation]?
 }
 
 // MARK: - Column Layout (batting-around support)

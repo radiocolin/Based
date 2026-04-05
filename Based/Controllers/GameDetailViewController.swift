@@ -680,7 +680,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
                 outAtFirst: false,
                 outAtSecond: false,
                 outAtThird: false,
-                outAtHome: false
+                outAtHome: false,
+                annotations: nil
             ),
             pitches: pitches
         )

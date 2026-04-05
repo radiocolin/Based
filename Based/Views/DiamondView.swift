@@ -188,6 +188,14 @@ class DiamondView: UIView {
         drawBaseBox(at: p.third, occupied: bases.third, base: 3)
         drawBaseBox(at: p.home, occupied: bases.home, base: 0)
         
+        // Draw caught-stealing out indicators (half-line + perpendicular between bases)
+        if style == .scorecard, let annotations = bases.annotations {
+            for annotation in annotations where annotation.kind == .caughtStealing {
+                let (fromPt, toPt) = basePath(to: annotation.base, points: p)
+                addSegment(from: fromPt, to: toPt, wasOut: true)
+            }
+        }
+        
         let lineLayer = CAShapeLayer()
         lineLayer.path = path.cgPath
         lineLayer.strokeColor = AppColors.lineStroke.cgColor
@@ -195,5 +203,97 @@ class DiamondView: UIView {
         lineLayer.lineCap = .round
         lineLayer.lineJoin = .round
         basesLayer.addSublayer(lineLayer)
+        
+        // Draw text annotations (errors, stolen bases, caught stealing)
+        if style == .scorecard, let annotations = bases.annotations {
+            for annotation in annotations {
+                drawAnnotation(annotation, points: p)
+            }
+        }
+    }
+    
+    /// Draws a text annotation (E6, SB, CS) near the appropriate base on the diamond.
+    /// Font scales with diamond size so labels are legible in both small scorecard cells
+    /// and the larger AtBatDetailViewController graphic.
+    /// Positions avoid the existing corner labels (balls=top-left, strikes=top-right, outs=bottom-right).
+    private func drawAnnotation(_ annotation: BaseAnnotation, points p: (home: CGPoint, first: CGPoint, second: CGPoint, third: CGPoint)) {
+        // Scale font with diamond size (8pt at ~48px diamond, ~14pt at ~144px)
+        let diamondSize = min(bounds.width, bounds.height) * 0.8
+        let fontSize = max(8, min(16, diamondSize * 0.18))
+        let font = UIFont(name: "PatrickHand-Regular", size: fontSize) ?? .systemFont(ofSize: fontSize, weight: .medium)
+        let color = pencilColor.withAlphaComponent(0.85)
+        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
+        let textSize = (annotation.label as NSString).size(withAttributes: attrs)
+        let offset = max(1, diamondSize * 0.02)
+        
+        // Determine the reference point
+        let refPoint: CGPoint
+        if annotation.kind == .caughtStealing {
+            // Position slightly past the midpoint toward the target base (60% along the path)
+            // so the label sits just beyond the perpendicular slash mark
+            let (fromPt, toPt) = basePath(to: annotation.base, points: p)
+            let t: CGFloat = 0.65
+            refPoint = CGPoint(x: fromPt.x + (toPt.x - fromPt.x) * t,
+                               y: fromPt.y + (toPt.y - fromPt.y) * t)
+        } else {
+            refPoint = baseVertex(annotation.base, points: p)
+        }
+        
+        var x: CGFloat
+        var y: CGFloat
+        
+        if annotation.kind == .caughtStealing {
+            // Center directly on the base path
+            x = refPoint.x - textSize.width / 2
+            y = refPoint.y - textSize.height / 2
+        } else {
+            // Position to avoid corner labels:
+            //   Top-left = balls, Top-right = strikes, Bottom-right = outs
+            switch annotation.base {
+            case 1: // First base (right vertex) — below, centered
+                x = refPoint.x - textSize.width / 2
+                y = refPoint.y + offset
+            case 2: // Second base (top vertex) — to the LEFT (away from strikes corner)
+                x = refPoint.x - textSize.width - offset
+                y = refPoint.y - textSize.height / 2
+            case 3: // Third base (left vertex) — below (toward free bottom-left corner)
+                x = refPoint.x - textSize.width / 2
+                y = refPoint.y + offset
+            default: // Home (bottom vertex) — to the LEFT (away from outs corner)
+                x = refPoint.x - textSize.width - offset
+                y = refPoint.y - textSize.height / 2
+            }
+        }
+        
+        // Clamp within cell bounds
+        x = max(1, min(x, bounds.width - textSize.width - 1))
+        y = max(1, min(y, bounds.height - textSize.height - 1))
+        
+        let textLayer = CATextLayer()
+        textLayer.string = NSAttributedString(string: annotation.label, attributes: attrs)
+        textLayer.frame = CGRect(x: x, y: y, width: textSize.width + 2, height: textSize.height)
+        textLayer.contentsScale = traitCollection.displayScale
+        textLayer.isWrapped = false
+        basesLayer.addSublayer(textLayer)
+    }
+    
+    /// Returns the vertex point for a given base number (1=1B, 2=2B, 3=3B, 4=home).
+    private func baseVertex(_ base: Int, points p: (home: CGPoint, first: CGPoint, second: CGPoint, third: CGPoint)) -> CGPoint {
+        switch base {
+        case 1: return p.first
+        case 2: return p.second
+        case 3: return p.third
+        default: return p.home
+        }
+    }
+    
+    /// Returns the (from, to) points for the base path leading to a given base.
+    private func basePath(to base: Int, points p: (home: CGPoint, first: CGPoint, second: CGPoint, third: CGPoint)) -> (CGPoint, CGPoint) {
+        switch base {
+        case 2: return (p.first, p.second)   // 1B → 2B
+        case 3: return (p.second, p.third)   // 2B → 3B
+        case 4: return (p.third, p.home)     // 3B → Home
+        default: return (p.home, p.first)    // Home → 1B
+        }
     }
 }

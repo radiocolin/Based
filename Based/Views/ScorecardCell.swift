@@ -80,7 +80,7 @@ class ScorecardCell: UICollectionViewCell {
             strikesLabel.text = ""
             outsLabel.text = ""
             // Pass empty bases to clear diamond
-            diamondView.configure(with: BasesReached(first: false, second: false, third: false, home: false, outAtFirst: false, outAtSecond: false, outAtThird: false, outAtHome: false), style: .scorecard)
+            diamondView.configure(with: BasesReached(first: false, second: false, third: false, home: false, outAtFirst: false, outAtSecond: false, outAtThird: false, outAtHome: false, annotations: nil), style: .scorecard)
             diamondView.alpha = 0.3 // Make it faint when empty
             return
         }
@@ -115,7 +115,7 @@ class ScorecardCell: UICollectionViewCell {
         ballsLabel.text = ""
         strikesLabel.text = ""
         outsLabel.text = ""
-        diamondView.configure(with: BasesReached(first: false, second: false, third: false, home: false, outAtFirst: false, outAtSecond: false, outAtThird: false, outAtHome: false), style: .scorecard, isRun: false)
+        diamondView.configure(with: BasesReached(first: false, second: false, third: false, home: false, outAtFirst: false, outAtSecond: false, outAtThird: false, outAtHome: false, annotations: nil), style: .scorecard, isRun: false)
         diamondView.alpha = 1.0
         contentView.layer.borderWidth = 0.5
         contentView.layer.borderColor = AppColors.grid.cgColor

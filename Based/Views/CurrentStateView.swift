@@ -279,7 +279,8 @@ class CurrentStateView: UIView {
             outAtFirst: false,
             outAtSecond: false,
             outAtThird: false,
-            outAtHome: false
+            outAtHome: false,
+            annotations: nil
         )
         diamondView.configure(with: bases, style: .liveStatus)
         
