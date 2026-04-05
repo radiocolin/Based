@@ -89,7 +89,10 @@ class ScorecardCell: UICollectionViewCell {
             .paragraphStyle: paragraphStyle,
             .font: resultLabel.font ?? .systemFont(ofSize: 18)
         ]
-        resultLabel.attributedText = NSAttributedString(string: event.result, attributes: attributes)
+        let isCalledK = event.result == "Ʞ"
+        let displayResult = isCalledK ? "K" : event.result
+        resultLabel.attributedText = NSAttributedString(string: displayResult, attributes: attributes)
+        resultLabel.transform = isCalledK ? CGAffineTransform(scaleX: -1, y: 1) : .identity
         
         ballsLabel.text = "\(event.balls)B"
         strikesLabel.text = "\(event.strikes)S"
@@ -100,6 +103,7 @@ class ScorecardCell: UICollectionViewCell {
     
     override func prepareForReuse() {
         super.prepareForReuse()
+        resultLabel.transform = .identity
         resultLabel.text = ""
         ballsLabel.text = ""
         strikesLabel.text = ""

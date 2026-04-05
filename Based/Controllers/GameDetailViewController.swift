@@ -410,6 +410,13 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             isLive = false
         }
         
+        // Override with authoritative game status from schedule data
+        let gameStatus = game?.status.detailedState ?? ""
+        let statusCode = game?.status.statusCode ?? ""
+        if gameStatus == "Final" || gameStatus == "Game Over" || gameStatus == "Completed Early" || statusCode == "F" || statusCode == "O" {
+            isLive = false
+        }
+        
         let isDuringBreak = state == "mid" || state == "end"
         
         // Always ensure scroll view bottom matches live panel state

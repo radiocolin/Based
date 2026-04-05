@@ -422,7 +422,9 @@ class GameService {
         case "walk": return "BB"
         case "intent_walk": return "IBB"
         case "hit_by_pitch": return "HBP"
-        case "strikeout": return event.contains("Looking") ? "Ʞ" : "K"
+        case "strikeout":
+            let lastPitchCode = play.playEvents?.last(where: { $0.isPitch == true })?.details?.code ?? ""
+            return lastPitchCode == "C" ? "Ʞ" : "K"
         case "field_error", "error": return "E"
         case "field_out", "force_out", "flyout", "popout", "lineout", "grounded_into_double_play":
             if eventType == "grounded_into_double_play" {

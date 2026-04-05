@@ -44,7 +44,9 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         
         // Update UI components
         let isLive = event.result == "LIVE"
-        resultLabel.text = isLive ? "LIVE" : event.result
+        let isCalledK = event.result == "Ʞ"
+        resultLabel.text = isLive ? "LIVE" : (isCalledK ? "K" : event.result)
+        resultLabel.transform = isCalledK ? CGAffineTransform(scaleX: -1, y: 1) : .identity
         descriptionLabel.text = isLive ? "Current at bat" : event.description
         
         if let pitches = event.pitches {
@@ -62,7 +64,9 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         
         // Initial setup for LIVE state if needed
         let isLive = event.result == "LIVE"
-        resultLabel.text = isLive ? "LIVE" : event.result
+        let isCalledK = event.result == "Ʞ"
+        resultLabel.text = isLive ? "LIVE" : (isCalledK ? "K" : event.result)
+        resultLabel.transform = isCalledK ? CGAffineTransform(scaleX: -1, y: 1) : .identity
         descriptionLabel.text = isLive ? "Current at bat" : event.description
     }
     
@@ -87,7 +91,8 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         batterLabel.textAlignment = .center
         batterLabel.numberOfLines = 0
         
-        resultLabel.text = event.result
+        resultLabel.text = event.result == "Ʞ" ? "K" : event.result
+        resultLabel.transform = event.result == "Ʞ" ? CGAffineTransform(scaleX: -1, y: 1) : .identity
         resultLabel.font = UIFont(name: "PermanentMarker-Regular", size: 32) ?? .systemFont(ofSize: 32, weight: .bold)
         resultLabel.textColor = pencilColor
         

@@ -75,7 +75,10 @@ class AtBatGraphicView: UIView {
                 .paragraphStyle: paragraphStyle,
                 .font: resultLabel.font ?? .systemFont(ofSize: 36)
             ]
-            resultLabel.attributedText = NSAttributedString(string: event.result, attributes: attributes)
+            let isCalledK = event.result == "Ʞ"
+            let displayResult = isCalledK ? "K" : event.result
+            resultLabel.attributedText = NSAttributedString(string: displayResult, attributes: attributes)
+            resultLabel.transform = isCalledK ? CGAffineTransform(scaleX: -1, y: 1) : .identity
         }
         
         ballsLabel.text = "\(event.balls)B"
