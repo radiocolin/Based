@@ -464,7 +464,6 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         }
         
         // Override with authoritative game status from schedule data
-        let game = currentGames.first(where: { $0.gamePk == gamePk })
         let gameStatus = game?.status.detailedState ?? ""
         let statusCode = game?.status.statusCode ?? ""
         if gameStatus == "Final" || gameStatus == "Game Over" || gameStatus == "Completed Early" || statusCode == "F" || statusCode == "O" || gameStatus == "Scheduled" || gameStatus == "Pre-Game" {

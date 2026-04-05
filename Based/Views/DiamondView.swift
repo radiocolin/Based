@@ -82,7 +82,7 @@ class DiamondView: UIView {
         fillMaskLayer.path = path.cgPath
         fillTextureLayer.frame = bounds
         fillTextureLayer.path = UIBezierPath.pencilScribble(
-            in: bounds.insetBy(dx: bounds.width * 0.15, dy: bounds.height * 0.15),
+            in: bounds,
             jitter: 0.8
         ).cgPath
     }
