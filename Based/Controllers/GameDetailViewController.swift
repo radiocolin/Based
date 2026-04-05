@@ -61,6 +61,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private weak var liveDetailVC: AtBatDetailViewController?
     private var lastActiveAtBatKey: String?
     private let gamePk: Int
+    private var isGameLive = false
 
     private var teamSegmentedTopConstraint: NSLayoutConstraint?
     private var scrollBottomConstraint: NSLayoutConstraint?
@@ -111,6 +112,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         setupNavigationBar()
         updateStickyHeaders()
         segmentedOverlay.setNeedsLayout()
+        updateTeamSegmentedControlTitles()
         if let scorecard = currentScorecard {
             scorecardView.configure(with: scorecard)
         }
@@ -462,12 +464,16 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         }
         
         // Override with authoritative game status from schedule data
+        let game = currentGames.first(where: { $0.gamePk == gamePk })
         let gameStatus = game?.status.detailedState ?? ""
         let statusCode = game?.status.statusCode ?? ""
-        if gameStatus == "Final" || gameStatus == "Game Over" || gameStatus == "Completed Early" || statusCode == "F" || statusCode == "O" {
+        if gameStatus == "Final" || gameStatus == "Game Over" || gameStatus == "Completed Early" || statusCode == "F" || statusCode == "O" || gameStatus == "Scheduled" || gameStatus == "Pre-Game" {
             isLive = false
         }
         
+        self.isGameLive = isLive
+        updateTeamSegmentedControlTitles()
+
         let isDuringBreak = state == "mid" || state == "end"
         
         // Always ensure scroll view bottom matches live panel state
@@ -500,28 +506,10 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         let wasViewingBattingTeam = !isFirstLoad && teamSegmentedControl.selectedSegmentIndex == (previousIsTop ? 0 : 1)
         self.currentScorecard = scorecard
         
-        // Update Segmented Control Titles with prominent at-bat indicator
-        let awayName = scorecard.teams.away.name ?? "Away"
-        let homeName = scorecard.teams.home.name ?? "Home"
-        
-        let pencilColor = AppColors.pencil
-        let font = UIFont(name: "PatrickHand-Regular", size: 18) ?? .systemFont(ofSize: 18)
-        let boldFont = UIFont(name: "PermanentMarker-Regular", size: 18) ?? .systemFont(ofSize: 18, weight: .bold)
+        updateTeamSegmentedControlTitles()
         
         let isTop = scorecard.isTopInning ?? true
-        
-        // Away (Index 0)
-        let awayAttrTitle = NSMutableAttributedString(string: isTop ? "● \(awayName)" : awayName)
-        awayAttrTitle.addAttributes([.font: isTop ? boldFont : font, .foregroundColor: isTop ? pencilColor : pencilColor.withAlphaComponent(0.6)], range: NSRange(location: 0, length: awayAttrTitle.length))
-        
-        // Home (Index 1)
-        let homeAttrTitle = NSMutableAttributedString(string: !isTop ? "● \(homeName)" : homeName)
-        homeAttrTitle.addAttributes([.font: !isTop ? boldFont : font, .foregroundColor: !isTop ? pencilColor : pencilColor.withAlphaComponent(0.6)], range: NSRange(location: 0, length: homeAttrTitle.length))
-        
-        // Use standard titles since UISegmentedControl attributedTitle support can be finicky with custom fonts across iOS versions
-        teamSegmentedControl.setTitle(isTop ? "● \(awayName)" : awayName, forSegmentAt: 0)
-        teamSegmentedControl.setTitle(!isTop ? "● \(homeName)" : homeName, forSegmentAt: 1)
-        
+
         // Default to the team at bat on first load
         if isFirstLoad {
             setDisplayedTeam(toBattingTeamForTopInning: isTop)
@@ -567,6 +555,25 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             teamSegmentedTopConstraint = teamSegmentedControl.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8)
             teamSegmentedTopConstraint?.isActive = true
         }
+    }
+
+    private func updateTeamSegmentedControlTitles() {
+        guard let scorecard = currentScorecard else { return }
+        
+        let awayName = scorecard.teams.away.name ?? "Away"
+        let homeName = scorecard.teams.home.name ?? "Home"
+        
+        let isTop = scorecard.isTopInning ?? true
+        
+        // Only show prominent at-bat indicator dot if the game is live
+        let showAwayDot = isGameLive && isTop
+        let showHomeDot = isGameLive && !isTop
+        
+        let awayTitle = showAwayDot ? "● \(awayName)" : awayName
+        let homeTitle = showHomeDot ? "● \(homeName)" : homeName
+        
+        teamSegmentedControl.setTitle(awayTitle, forSegmentAt: 0)
+        teamSegmentedControl.setTitle(homeTitle, forSegmentAt: 1)
     }
     
     @objc private func closeAdvisory() {
