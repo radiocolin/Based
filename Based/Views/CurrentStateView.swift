@@ -64,6 +64,7 @@ class CurrentStateView: UIView {
     
     private func setupUI() {
         backgroundColor = paperColor
+        pitchTrackView.displayStyle = .compact
         
         addSubview(contentContainer)
         contentContainer.translatesAutoresizingMaskIntoConstraints = false
@@ -141,11 +142,11 @@ class CurrentStateView: UIView {
             countLabel.centerXAnchor.constraint(equalTo: diamondView.centerXAnchor),
             countLabel.widthAnchor.constraint(equalTo: diamondView.widthAnchor),
 
-            // Col 2: Strike Zone (Center ~70pts, narrower)
+            // Col 2: Strike Zone (Center)
             pitchTrackView.leadingAnchor.constraint(equalTo: diamondView.trailingAnchor, constant: 8),
             pitchTrackView.topAnchor.constraint(equalTo: contentContainer.topAnchor, constant: 4),
             pitchTrackView.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor, constant: -4),
-            pitchTrackView.widthAnchor.constraint(equalToConstant: 70),
+            pitchTrackView.widthAnchor.constraint(equalToConstant: 82),
 
             // Col 3: Stats (Right - improved layout)
             // Inning header with shading
@@ -200,13 +201,11 @@ class CurrentStateView: UIView {
         path.append(UIBezierPath.pencilLine(from: CGPoint(x: b.width, y: b.height), to: CGPoint(x: 0, y: b.height)))
         path.append(UIBezierPath.pencilLine(from: CGPoint(x: 0, y: b.height), to: .zero))
         
-        // Vertical Dividers
-        // Left Column Width ~ 100 (diamond 85 + padding)
-        let div1X: CGFloat = 100
+        // Vertical dividers follow the actual subview layout so compact sizing stays aligned.
+        let div1X = diamondView.frame.maxX + 7
         path.append(UIBezierPath.pencilLine(from: CGPoint(x: div1X, y: 0), to: CGPoint(x: div1X, y: b.height)))
 
-        // Divider after center column (left col + center col width)
-        let div2X: CGFloat = 100 + 78 // Left column + center column (70 + padding)
+        let div2X = pitchTrackView.frame.maxX + 4
         path.append(UIBezierPath.pencilLine(from: CGPoint(x: div2X, y: 0), to: CGPoint(x: div2X, y: b.height)))
         
         linesLayer.path = path.cgPath

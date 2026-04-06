@@ -1,3 +1,5 @@
+-Improved the pitch tracker in smaller views
+
 At-Bat Detail — Pitcher Fix
 - Open a completed game and tap any at-bat in the scorecard. Verify the pitcher name shown in the detail sheet matches the pitcher who actually faced that batter (not the current pitcher).
 - Check this across multiple innings, especially after a pitching change.

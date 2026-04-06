@@ -30,6 +30,7 @@ class TimelineCell: UITableViewCell {
     private func setupUI() {
         backgroundColor = .clear
         selectionStyle = .none
+        pitchTrackView.displayStyle = .compact
         
         leftContainer.axis = .vertical
         leftContainer.spacing = 12
@@ -91,12 +92,12 @@ class TimelineCell: UITableViewCell {
             leftContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 12),
             leftContainer.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12),
             leftContainer.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -12),
-            leftContainer.widthAnchor.constraint(equalToConstant: 80),
+            leftContainer.widthAnchor.constraint(equalToConstant: 88),
             
-            pitchTrackView.widthAnchor.constraint(equalToConstant: 70),
-            pitchTrackView.heightAnchor.constraint(equalToConstant: 80),
+            pitchTrackView.widthAnchor.constraint(equalToConstant: 78),
+            pitchTrackView.heightAnchor.constraint(equalToConstant: 92),
             
-            diamondContainer.widthAnchor.constraint(equalToConstant: 80),
+            diamondContainer.widthAnchor.constraint(equalToConstant: 88),
             diamondContainer.heightAnchor.constraint(equalToConstant: 80),
             
             diamondView.centerXAnchor.constraint(equalTo: diamondContainer.centerXAnchor),

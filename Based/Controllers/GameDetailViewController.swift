@@ -81,6 +81,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private let inningWidth: CGFloat = 56
     private let statWidth: CGFloat = 38
     private let headerHeight: CGFloat = 32
+    private let visibleSegmentedTopInset: CGFloat = 8
+    private let hiddenSegmentedTopInset: CGFloat = -48
 
     init(gamePk: Int, games: [ScheduleGame]) {
         self.gamePk = gamePk
@@ -234,7 +236,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         timelineView.alpha = isTimelineMode ? 1 : 0
         
         // Adjust constraints to move headers
-        teamSegmentedTopConstraint?.constant = isTimelineMode ? -48 : 8
+        teamSegmentedTopConstraint?.constant = isTimelineMode ? hiddenSegmentedTopInset : visibleSegmentedTopInset
     }
 
     @objc private func shareScorecard() {
@@ -673,12 +675,18 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             advisoryLabel.text = advisory
             advisoryBanner.isHidden = false
             teamSegmentedTopConstraint?.isActive = false
-            teamSegmentedTopConstraint = teamSegmentedControl.topAnchor.constraint(equalTo: advisoryBanner.bottomAnchor, constant: 8)
+            teamSegmentedTopConstraint = teamSegmentedControl.topAnchor.constraint(
+                equalTo: advisoryBanner.bottomAnchor,
+                constant: isTimelineMode ? hiddenSegmentedTopInset : visibleSegmentedTopInset
+            )
             teamSegmentedTopConstraint?.isActive = true
         } else {
             advisoryBanner.isHidden = true
             teamSegmentedTopConstraint?.isActive = false
-            teamSegmentedTopConstraint = teamSegmentedControl.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8)
+            teamSegmentedTopConstraint = teamSegmentedControl.topAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.topAnchor,
+                constant: isTimelineMode ? hiddenSegmentedTopInset : visibleSegmentedTopInset
+            )
             teamSegmentedTopConstraint?.isActive = true
         }
     }
@@ -710,7 +718,10 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         UIView.animate(withDuration: 0.3) {
             self.advisoryBanner.isHidden = true
             self.teamSegmentedTopConstraint?.isActive = false
-            self.teamSegmentedTopConstraint = self.teamSegmentedControl.topAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.topAnchor, constant: 8)
+            self.teamSegmentedTopConstraint = self.teamSegmentedControl.topAnchor.constraint(
+                equalTo: self.view.safeAreaLayoutGuide.topAnchor,
+                constant: self.isTimelineMode ? self.hiddenSegmentedTopInset : self.visibleSegmentedTopInset
+            )
             self.teamSegmentedTopConstraint?.isActive = true
             self.view.layoutIfNeeded()
         }

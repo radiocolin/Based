@@ -1,9 +1,52 @@
 import UIKit
 
 class PitchTrackView: UIView {
+    enum DisplayStyle {
+        case regular
+        case compact
+
+        var margin: CGFloat {
+            switch self {
+            case .regular:
+                return 2
+            case .compact:
+                return 1
+            }
+        }
+
+        var ballDiameter: CGFloat {
+            switch self {
+            case .regular:
+                return 16
+            case .compact:
+                return 12
+            }
+        }
+
+        var numberFontSize: CGFloat {
+            switch self {
+            case .regular:
+                return 10
+            case .compact:
+                return 8
+            }
+        }
+
+        var numberVerticalOffset: CGFloat {
+            switch self {
+            case .regular:
+                return 1
+            case .compact:
+                return 0.5
+            }
+        }
+    }
     
     // Data
     private var pitches: [PitchEvent] = []
+    var displayStyle: DisplayStyle = .regular {
+        didSet { setNeedsLayout() }
+    }
     
     // Graphics
     private let zoneLayer = CAShapeLayer()
@@ -55,7 +98,7 @@ class PitchTrackView: UIView {
         // X: -1.5 to 1.5 (3 ft width)
         // Z: 0.0 to 5.0 (5 ft height)
         
-        let margin: CGFloat = 2 // Minimal margins to maximize strike zone
+        let margin = displayStyle.margin
         let w = bounds.width - 2 * margin
         let h = bounds.height - 2 * margin
         
@@ -103,7 +146,7 @@ class PitchTrackView: UIView {
         
         // --- Draw Pitches ---
         // Use a fixed readable size for pitch indicators
-        let ballDiameter: CGFloat = 16
+        let ballDiameter = displayStyle.ballDiameter
 
         for pitch in pitches {
             guard let x = pitch.x, let z = pitch.z else { continue }
@@ -128,12 +171,16 @@ class PitchTrackView: UIView {
             // Number
             let numLayer = CATextLayer()
             numLayer.string = "\(pitch.pitchNumber)"
-            numLayer.fontSize = 10
-            numLayer.font = UIFont(name: "PermanentMarker-Regular", size: 10)
+            numLayer.fontSize = displayStyle.numberFontSize
+            numLayer.font = UIFont(name: "PermanentMarker-Regular", size: displayStyle.numberFontSize)
             numLayer.alignmentMode = .center
-            // Center vertically within the ballDiameter (16)
-            // PermanentMarker usually sits a bit low, so we offset upwards slightly
-            numLayer.frame = CGRect(x: 0, y: 1, width: ballDiameter, height: ballDiameter)
+            // PermanentMarker usually sits a bit low, so we offset upwards slightly.
+            numLayer.frame = CGRect(
+                x: 0,
+                y: displayStyle.numberVerticalOffset,
+                width: ballDiameter,
+                height: ballDiameter
+            )
             numLayer.foregroundColor = UIColor.white.cgColor
             numLayer.contentsScale = traitCollection.displayScale
 
