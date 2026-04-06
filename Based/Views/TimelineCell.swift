@@ -8,7 +8,6 @@ class TimelineCell: UITableViewCell {
     private let infoStack = UIStackView()
     private let batterLabel = UILabel()
     private let pitcherLabel = UILabel()
-    private let inningLabel = UILabel()
     private let descriptionLabel = UILabel()
     
     private let leftContainer = UIStackView()
@@ -49,14 +48,10 @@ class TimelineCell: UITableViewCell {
         pitcherLabel.font = UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14)
         pitcherLabel.textColor = AppColors.pencil.withAlphaComponent(0.7)
         
-        inningLabel.font = UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14)
-        inningLabel.textColor = AppColors.pencil.withAlphaComponent(0.6)
-        
         descriptionLabel.font = UIFont(name: "PatrickHand-Regular", size: 15) ?? .systemFont(ofSize: 15)
         descriptionLabel.textColor = AppColors.pencil
         descriptionLabel.numberOfLines = 0
         
-        infoStack.addArrangedSubview(inningLabel)
         infoStack.addArrangedSubview(batterLabel)
         infoStack.addArrangedSubview(pitcherLabel)
         infoStack.addArrangedSubview(descriptionLabel)
@@ -86,9 +81,6 @@ class TimelineCell: UITableViewCell {
         
         batterLabel.text = event.batterName.uppercased()
         pitcherLabel.text = "vs \(event.pitcherName)"
-        
-        let side = event.isTop ? "TOP" : "BOT"
-        inningLabel.text = "\(side) \(event.inning)"
         
         descriptionLabel.text = event.description
     }

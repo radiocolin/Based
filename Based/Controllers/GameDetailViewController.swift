@@ -168,21 +168,42 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     @objc private func toggleTimelineMode() {
         isTimelineMode.toggle()
         
-        UIView.transition(with: view, duration: 0.3, options: .transitionCrossDissolve) {
-            self.setupNavigationBar()
+        self.setupNavigationBar()
+
+        if isTimelineMode {
+            timelineView.isHidden = false
+            timelineView.alpha = 0
+        } else {
+            teamSegmentedControl.isHidden = false
+            segmentedOverlay.isHidden = false
+            stickyHeaderContainer.isHidden = false
+            mainScrollView.isHidden = false
+        }
+
+        UIView.animate(withDuration: 0.4, delay: 0, usingSpringWithDamping: 0.9, initialSpringVelocity: 0, options: .curveEaseInOut) {
             self.updateUIForMode()
+            self.view.layoutIfNeeded()
+        } completion: { _ in
+            if self.isTimelineMode {
+                self.teamSegmentedControl.isHidden = true
+                self.segmentedOverlay.isHidden = true
+                self.stickyHeaderContainer.isHidden = true
+                self.mainScrollView.isHidden = true
+            } else {
+                self.timelineView.isHidden = true
+            }
         }
     }
 
     private func updateUIForMode() {
-        teamSegmentedControl.isHidden = isTimelineMode
-        segmentedOverlay.isHidden = isTimelineMode
-        stickyHeaderContainer.isHidden = isTimelineMode
-        mainScrollView.isHidden = isTimelineMode
-        timelineView.isHidden = !isTimelineMode
+        teamSegmentedControl.alpha = isTimelineMode ? 0 : 1
+        segmentedOverlay.alpha = isTimelineMode ? 0 : 1
+        stickyHeaderContainer.alpha = isTimelineMode ? 0 : 1
+        mainScrollView.alpha = isTimelineMode ? 0 : 1
+        timelineView.alpha = isTimelineMode ? 1 : 0
         
-        // Adjust constraints
-        teamSegmentedTopConstraint?.constant = isTimelineMode ? -48 : 8 // Move up out of way
+        // Adjust constraints to move headers
+        teamSegmentedTopConstraint?.constant = isTimelineMode ? -48 : 8
     }
 
     @objc private func shareScorecard() {
@@ -287,6 +308,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         }
         
         timelineView.isHidden = true
+        timelineView.alpha = 0
         timelineView.delegate = self
         
         // Sticky Header Setup
