@@ -65,8 +65,8 @@ class TimelineCell: UITableViewCell {
             pitchTrackView.widthAnchor.constraint(equalToConstant: 70),
             pitchTrackView.heightAnchor.constraint(equalToConstant: 80),
             
-            diamondView.widthAnchor.constraint(equalToConstant: 60),
-            diamondView.heightAnchor.constraint(equalToConstant: 60),
+            diamondView.widthAnchor.constraint(equalToConstant: 80),
+            diamondView.heightAnchor.constraint(equalToConstant: 80),
             
             infoStack.leadingAnchor.constraint(equalTo: leftContainer.trailingAnchor, constant: 16),
             infoStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -12),
@@ -77,7 +77,7 @@ class TimelineCell: UITableViewCell {
     
     func configure(with event: AtBatEvent) {
         pitchTrackView.configure(with: event.pitches ?? [])
-        diamondView.configure(with: event.bases, style: .scorecard, isRun: event.bases.home)
+        diamondView.configure(with: event.bases, style: .scorecard, isRun: event.result == "HR")
         
         batterLabel.text = event.batterName.uppercased()
         pitcherLabel.text = "vs \(event.pitcherName)"

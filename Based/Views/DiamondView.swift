@@ -75,6 +75,11 @@ class DiamondView: UIView {
         fillTextureLayer.lineWidth = baseStrokeWidth
         drawMainDiamond()
         updateActiveBases()
+        
+        // Ensure text layers use correct scale after layout
+        basesLayer.sublayers?.compactMap { $0 as? CATextLayer }.forEach {
+            $0.contentsScale = traitCollection.displayScale
+        }
     }
     
     private func drawMainDiamond() {
