@@ -237,7 +237,7 @@ class DiamondView: UIView {
         // Draw text annotations (errors, stolen bases, caught stealing)
         if style == .scorecard, let annotations = bases.annotations {
             for annotation in annotations {
-                drawAnnotation(annotation, points: p)
+                drawAnnotation(annotation, points: p, color: accentColor)
             }
         }
     }
@@ -271,12 +271,11 @@ class DiamondView: UIView {
     //     │   ↓CS    ◇ Home  ↓CS    │  CS on lower paths → DOWN
     //     └──────────────────────────┘
 
-    private func drawAnnotation(_ annotation: BaseAnnotation, points p: (home: CGPoint, first: CGPoint, second: CGPoint, third: CGPoint)) {
+    private func drawAnnotation(_ annotation: BaseAnnotation, points p: (home: CGPoint, first: CGPoint, second: CGPoint, third: CGPoint), color: UIColor) {
         let diamondSize = min(bounds.width, bounds.height) * 0.8
         let fontSize = max(8, min(16, diamondSize * 0.18))
         let font = UIFont(name: "PatrickHand-Regular", size: fontSize) ?? .systemFont(ofSize: fontSize, weight: .medium)
-        let color = (accentColorOverride ?? pencilColor).withAlphaComponent(0.85)
-        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
+        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color.withAlphaComponent(0.85)]
         let textSize = (annotation.label as NSString).size(withAttributes: attrs)
 
         let anchor: CGPoint
