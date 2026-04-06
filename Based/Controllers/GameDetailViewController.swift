@@ -782,7 +782,12 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         let batterName = linescore.offense?.batter?.fullName ?? "Batter"
         let pitcherName = linescore.defense?.pitcher?.fullName ?? "Pitcher"
         
-        let vc = AtBatDetailViewController(event: liveEvent, batterName: batterName, pitcherName: pitcherName)
+        let vc = AtBatDetailViewController(
+            event: liveEvent,
+            batterName: batterName,
+            pitcherName: pitcherName,
+            accentColor: teamAccentColor(isTopInning: liveEvent.isTop)
+        )
         configureAtBatDetailCallbacks(vc, event: liveEvent, batterName: batterName, pitcherName: pitcherName)
         if let sheet = vc.sheetPresentationController {
             sheet.detents = [.medium(), .large()]
@@ -1015,7 +1020,12 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
     // MARK: - TimelineViewDelegate
     func didSelectTimelineAtBat(_ event: AtBatEvent) {
-        let vc = AtBatDetailViewController(event: event, batterName: event.batterName, pitcherName: event.pitcherName)
+        let vc = AtBatDetailViewController(
+            event: event,
+            batterName: event.batterName,
+            pitcherName: event.pitcherName,
+            accentColor: teamAccentColor(isTopInning: event.isTop)
+        )
         configureAtBatDetailCallbacks(vc, event: event, batterName: event.batterName, pitcherName: event.pitcherName)
         if let sheet = vc.sheetPresentationController {
             sheet.detents = [.medium(), .large()]
@@ -1038,7 +1048,12 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
     // MARK: - ScorecardViewDelegate
     func didSelectAtBat(_ event: AtBatEvent, batter: ScorecardBatter, pitcherName: String) {
-        let vc = AtBatDetailViewController(event: event, batterName: batter.fullName, pitcherName: event.pitcherName)
+        let vc = AtBatDetailViewController(
+            event: event,
+            batterName: batter.fullName,
+            pitcherName: event.pitcherName,
+            accentColor: teamAccentColor(isTopInning: event.isTop)
+        )
         configureAtBatDetailCallbacks(vc, event: event, batterName: batter.fullName, pitcherName: event.pitcherName)
         if let sheet = vc.sheetPresentationController {
             sheet.detents = [.medium(), .large()]
@@ -1182,6 +1197,13 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             }
         }
         return ScorecardPitcher(id: id, fullName: fallbackName, stats: "", ip: "0.0", h: 0, r: 0, er: 0, bb: 0, k: 0)
+    }
+
+    private func teamAccentColor(isTopInning: Bool) -> UIColor? {
+        guard let scorecard = currentScorecard else { return nil }
+        let teamName = isTopInning ? scorecard.teams.away.name : scorecard.teams.home.name
+        guard let teamName else { return nil }
+        return TeamColorProvider.color(for: teamName)
     }
 
     @objc private func handlePitcherNameTap(_ gesture: UITapGestureRecognizer) {

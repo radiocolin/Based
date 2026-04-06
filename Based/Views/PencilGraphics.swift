@@ -100,7 +100,7 @@ extension UIBezierPath {
 
     /// Creates a dense back-and-forth scribble shading effect.
     /// Jitter is deterministic for the same rect.
-    static func pencilScribble(in rect: CGRect, jitter: CGFloat = 1.0) -> UIBezierPath {
+    static func pencilScribble(in rect: CGRect, jitter: CGFloat = 1.0, spacing: CGFloat = 1.5) -> UIBezierPath {
         let path = UIBezierPath()
         guard rect.width.isFinite && rect.width > 2 && rect.height.isFinite && rect.height > 2 else { return path }
         
@@ -110,12 +110,12 @@ extension UIBezierPath {
         seed = ((seed &<< 5) &+ seed) &+ UInt64(bitPattern: Int64((rect.width * 100).rounded()))
         seed = ((seed &<< 5) &+ seed) &+ UInt64(bitPattern: Int64((rect.height * 100).rounded()))
         
-        let spacing: CGFloat = 1.5
+        let lineSpacing = max(0.8, spacing)
         let totalWidth = rect.width + rect.height
-        let steps = Int(totalWidth / spacing)
+        let steps = Int(totalWidth / lineSpacing)
         
         for i in 0...steps {
-            let offset = CGFloat(i) * spacing
+            let offset = CGFloat(i) * lineSpacing
             let start = CGPoint(x: rect.minX + offset - rect.height, y: rect.maxY)
             let end = CGPoint(x: rect.minX + offset, y: rect.minY)
             

@@ -33,7 +33,14 @@ class DiamondView: UIView {
         let diamondSize = min(bounds.width, bounds.height) * 0.8
         return max(0.5, min(1.5, diamondSize * 0.015))
     }
-    
+
+    /// Looser spacing on larger diamonds keeps the scribble readable instead of
+    /// collapsing into a solid fill on the at-bat detail view.
+    private var textureSpacing: CGFloat {
+        let diamondSize = min(bounds.width, bounds.height) * 0.8
+        return max(1.5, min(3.0, diamondSize * 0.02))
+    }
+
     private var diamondPoints: (home: CGPoint, first: CGPoint, second: CGPoint, third: CGPoint)?
     private var bases: BasesReached?
     private var isRun: Bool = false
@@ -64,7 +71,6 @@ class DiamondView: UIView {
 
         fillTextureLayer.fillColor = UIColor.clear.cgColor
         fillTextureLayer.strokeColor = UIColor.clear.cgColor
-        fillTextureLayer.lineWidth = 1.0
         fillTextureLayer.lineCap = .round
         fillTextureLayer.lineJoin = .round
         fillTextureLayer.mask = fillMaskLayer
@@ -73,7 +79,6 @@ class DiamondView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         mainDiamondLayer.fillColor = AppColors.diamondFill.cgColor
-        fillTextureLayer.lineWidth = baseStrokeWidth
         drawMainDiamond()
         updateActiveBases()
         
@@ -104,15 +109,33 @@ class DiamondView: UIView {
         
         mainDiamondLayer.path = path.cgPath
         fillLayer.path = path.cgPath
-        fillMaskLayer.path = path.cgPath
+        let localRect = CGRect(origin: .zero, size: bounds.size)
+        let localCX = localRect.midX
+        let localCY = localRect.midY
+        let localPath = UIBezierPath()
+        localPath.move(to: CGPoint(x: localCX, y: localCY + size / 2))
+        localPath.addLine(to: CGPoint(x: localCX + size / 2, y: localCY))
+        localPath.addLine(to: CGPoint(x: localCX, y: localCY - size / 2))
+        localPath.addLine(to: CGPoint(x: localCX - size / 2, y: localCY))
+        localPath.close()
+
         fillTextureLayer.frame = bounds
         fillTextureLayer.path = UIBezierPath.pencilScribble(
-            in: bounds,
-            jitter: 0.8
+            in: localRect,
+            jitter: 0.8,
+            spacing: textureSpacing
         ).cgPath
+        fillTextureLayer.lineWidth = max(0.6, min(1.2, min(bounds.width, bounds.height) * 0.008))
+        fillMaskLayer.frame = bounds
+        fillMaskLayer.path = localPath.cgPath
     }
     
-    func configure(with bases: BasesReached, style: Style = .scorecard, isRun: Bool = false, accentColor: UIColor? = nil) {
+    func configure(
+        with bases: BasesReached,
+        style: Style = .scorecard,
+        isRun: Bool = false,
+        accentColor: UIColor? = nil
+    ) {
         self.bases = bases
         self.style = style
         self.isRun = isRun
@@ -125,6 +148,7 @@ class DiamondView: UIView {
         
         basesLayer.sublayers?.forEach { $0.removeFromSuperlayer() }
         fillLayer.fillColor = UIColor.clear.cgColor
+        fillTextureLayer.opacity = 0
         fillTextureLayer.strokeColor = UIColor.clear.cgColor
 
         let shouldUseAccent = style == .scorecard && (isRun || bases.home)
@@ -158,10 +182,11 @@ class DiamondView: UIView {
             }
             
             if isRun || bases.home {
-                fillLayer.fillColor = accentColor.withAlphaComponent(0.08).cgColor
-                fillTextureLayer.strokeColor = accentColor.withAlphaComponent(0.12).cgColor
+                fillLayer.fillColor = accentColor.withAlphaComponent(0.06).cgColor
             }
         }
+
+        updateTextureLayer(color: accentColor, isScoringPlay: shouldUseAccent)
 
         // Draw Base Indicators (The Boxes) - Consistent in both styles
         // Inset them so they sit inside the diamond lines
@@ -240,6 +265,21 @@ class DiamondView: UIView {
                 drawAnnotation(annotation, points: p, color: accentColor)
             }
         }
+    }
+
+    private func updateTextureLayer(color: UIColor, isScoringPlay: Bool) {
+        guard bounds.width > 2, bounds.height > 2 else {
+            fillTextureLayer.strokeColor = UIColor.clear.cgColor
+            fillTextureLayer.opacity = 0
+            return
+        }
+        guard isScoringPlay else {
+            fillTextureLayer.strokeColor = UIColor.clear.cgColor
+            fillTextureLayer.opacity = 0
+            return
+        }
+        fillTextureLayer.strokeColor = color.withAlphaComponent(isScoringPlay ? 0.32 : 0.12).cgColor
+        fillTextureLayer.opacity = 1
     }
     
     // MARK: - Annotation Placement System

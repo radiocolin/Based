@@ -6,6 +6,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
     private var event: AtBatEvent
     private let batterName: String
     private let pitcherName: String
+    private let accentColor: UIColor?
     
     // UI Elements
     private let containerView = UIView()
@@ -31,10 +32,11 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
     private let headerFont = "PermanentMarker-Regular"
     private let bodyFont = "PatrickHand-Regular"
     
-    init(event: AtBatEvent, batterName: String, pitcherName: String) {
+    init(event: AtBatEvent, batterName: String, pitcherName: String, accentColor: UIColor? = nil) {
         self.event = event
         self.batterName = batterName
         self.pitcherName = pitcherName
+        self.accentColor = accentColor
         super.init(nibName: nil, bundle: nil)
     }
     
@@ -55,7 +57,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         if let pitches = event.pitches {
             pitchTrackView.configure(with: pitches)
         }
-        atBatGraphicView.configure(with: event)
+        atBatGraphicView.configure(with: event, accentColor: accentColor)
         pitchesTableView.reloadData()
         
         view.setNeedsLayout()
@@ -120,7 +122,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         view.addSubview(pitchTrackView)
         
         atBatGraphicView.translatesAutoresizingMaskIntoConstraints = false
-        atBatGraphicView.configure(with: event)
+        atBatGraphicView.configure(with: event, accentColor: accentColor)
         view.addSubview(atBatGraphicView)
         
         // Description

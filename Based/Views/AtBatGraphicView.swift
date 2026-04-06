@@ -7,6 +7,7 @@ class AtBatGraphicView: UIView {
     private let ballsLabel = UILabel()
     private let strikesLabel = UILabel()
     private let outsLabel = UILabel()
+    private var accentColor: UIColor?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -59,12 +60,16 @@ class AtBatGraphicView: UIView {
             outsLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4)
         ])
     }
-    
-    func configure(with event: AtBatEvent) {
+
+    func configure(with event: AtBatEvent, accentColor: UIColor? = nil) {
+        self.accentColor = accentColor
         let isLive = event.result == "LIVE"
+        let didScore = event.result == "HR" || event.bases.home
+        let scoringColor = didScore ? (accentColor ?? AppColors.pencil) : AppColors.pencil
         
         if isLive {
             resultLabel.attributedText = nil
+            resultLabel.textColor = AppColors.pencil
         } else {
             // Use attributed string to reduce line spacing
             let paragraphStyle = NSMutableParagraphStyle()
@@ -73,7 +78,8 @@ class AtBatGraphicView: UIView {
             
             let attributes: [NSAttributedString.Key: Any] = [
                 .paragraphStyle: paragraphStyle,
-                .font: resultLabel.font ?? .systemFont(ofSize: 36)
+                .font: resultLabel.font ?? .systemFont(ofSize: 36),
+                .foregroundColor: scoringColor
             ]
             let isCalledK = event.result == "Ʞ"
             let displayResult = isCalledK ? "K" : event.result
@@ -82,9 +88,17 @@ class AtBatGraphicView: UIView {
         }
         
         ballsLabel.text = "\(event.balls)B"
+        ballsLabel.textColor = scoringColor
         strikesLabel.text = "\(event.strikes)S"
+        strikesLabel.textColor = scoringColor
         outsLabel.text = event.outs > 0 ? "\(event.outs)" : ""
+        outsLabel.textColor = scoringColor
 
-        diamondView.configure(with: event.bases, style: isLive ? .liveStatus : .scorecard, isRun: event.result == "HR", accentColor: event.result == "HR" || event.bases.home ? AppColors.pencil : nil)
+        diamondView.configure(
+            with: event.bases,
+            style: isLive ? .liveStatus : .scorecard,
+            isRun: event.result == "HR",
+            accentColor: accentColor ?? AppColors.pencil
+        )
     }
 }
