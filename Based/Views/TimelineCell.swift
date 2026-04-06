@@ -5,12 +5,18 @@ class TimelineCell: UITableViewCell {
     
     private let pitchTrackView = PitchTrackView()
     private let diamondView = DiamondView()
+    private let resultLabel = UILabel()
+    private let ballsLabel = UILabel()
+    private let strikesLabel = UILabel()
+    private let outsLabel = UILabel()
+    
     private let infoStack = UIStackView()
     private let batterLabel = UILabel()
     private let pitcherLabel = UILabel()
     private let descriptionLabel = UILabel()
     
     private let leftContainer = UIStackView()
+    private let diamondContainer = UIView()
     
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -26,16 +32,41 @@ class TimelineCell: UITableViewCell {
         selectionStyle = .none
         
         leftContainer.axis = .vertical
-        leftContainer.spacing = 8
+        leftContainer.spacing = 12
         leftContainer.alignment = .center
         leftContainer.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(leftContainer)
         
         pitchTrackView.translatesAutoresizingMaskIntoConstraints = false
+        diamondContainer.translatesAutoresizingMaskIntoConstraints = false
         diamondView.translatesAutoresizingMaskIntoConstraints = false
         
         leftContainer.addArrangedSubview(pitchTrackView)
-        leftContainer.addArrangedSubview(diamondView)
+        leftContainer.addArrangedSubview(diamondContainer)
+        diamondContainer.addSubview(diamondView)
+        
+        // Diamond Labels
+        let pencilColor = AppColors.pencil
+        let dataFont = "PermanentMarker-Regular"
+        let legibilityFont = "PatrickHand-Regular"
+        
+        resultLabel.font = UIFont(name: dataFont, size: 20) ?? .systemFont(ofSize: 20, weight: .bold)
+        resultLabel.textColor = pencilColor
+        resultLabel.textAlignment = .center
+        resultLabel.numberOfLines = 0
+        resultLabel.adjustsFontSizeToFitWidth = true
+        resultLabel.minimumScaleFactor = 0.5
+        
+        [ballsLabel, strikesLabel, outsLabel].forEach {
+            $0.font = UIFont(name: legibilityFont, size: 12) ?? .systemFont(ofSize: 12)
+            $0.textColor = pencilColor
+            $0.textAlignment = .center
+        }
+        
+        [resultLabel, ballsLabel, strikesLabel, outsLabel].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+            diamondContainer.addSubview($0)
+        }
         
         infoStack.axis = .vertical
         infoStack.spacing = 2
@@ -65,8 +96,26 @@ class TimelineCell: UITableViewCell {
             pitchTrackView.widthAnchor.constraint(equalToConstant: 70),
             pitchTrackView.heightAnchor.constraint(equalToConstant: 80),
             
-            diamondView.widthAnchor.constraint(equalToConstant: 80),
-            diamondView.heightAnchor.constraint(equalToConstant: 80),
+            diamondContainer.widthAnchor.constraint(equalToConstant: 80),
+            diamondContainer.heightAnchor.constraint(equalToConstant: 80),
+            
+            diamondView.centerXAnchor.constraint(equalTo: diamondContainer.centerXAnchor),
+            diamondView.centerYAnchor.constraint(equalTo: diamondContainer.centerYAnchor),
+            diamondView.widthAnchor.constraint(equalTo: diamondContainer.widthAnchor),
+            diamondView.heightAnchor.constraint(equalTo: diamondContainer.heightAnchor),
+            
+            resultLabel.centerXAnchor.constraint(equalTo: diamondView.centerXAnchor),
+            resultLabel.centerYAnchor.constraint(equalTo: diamondView.centerYAnchor),
+            resultLabel.widthAnchor.constraint(equalTo: diamondView.widthAnchor, multiplier: 0.6),
+            
+            ballsLabel.topAnchor.constraint(equalTo: diamondContainer.topAnchor, constant: 4),
+            ballsLabel.leadingAnchor.constraint(equalTo: diamondContainer.leadingAnchor, constant: 4),
+            
+            strikesLabel.topAnchor.constraint(equalTo: diamondContainer.topAnchor, constant: 4),
+            strikesLabel.trailingAnchor.constraint(equalTo: diamondContainer.trailingAnchor, constant: -4),
+            
+            outsLabel.bottomAnchor.constraint(equalTo: diamondContainer.bottomAnchor, constant: -4),
+            outsLabel.trailingAnchor.constraint(equalTo: diamondContainer.trailingAnchor, constant: -4),
             
             infoStack.leadingAnchor.constraint(equalTo: leftContainer.trailingAnchor, constant: 16),
             infoStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -12),
@@ -78,6 +127,15 @@ class TimelineCell: UITableViewCell {
     func configure(with event: AtBatEvent) {
         pitchTrackView.configure(with: event.pitches ?? [])
         diamondView.configure(with: event.bases, style: .scorecard, isRun: event.result == "HR")
+        
+        let isCalledK = event.result == "Ʞ"
+        let displayResult = isCalledK ? "K" : event.result
+        resultLabel.text = displayResult
+        resultLabel.transform = isCalledK ? CGAffineTransform(scaleX: -1, y: 1) : .identity
+        
+        ballsLabel.text = "\(event.balls)B"
+        strikesLabel.text = "\(event.strikes)S"
+        outsLabel.text = event.outs > 0 ? "\(event.outs)" : ""
         
         batterLabel.text = event.batterName.uppercased()
         pitcherLabel.text = "vs \(event.pitcherName)"
