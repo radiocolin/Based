@@ -1,11 +1,19 @@
-Overview:
-Based is a hand-drawn style MLB scorecard app for iOS. It provides live scorecards, game schedules, and detailed at-bat breakdowns with a unique pencil-and-paper aesthetic.
+At-Bat Detail — Pitcher Fix
+- Open a completed game and tap any at-bat in the scorecard. Verify the pitcher name shown in the detail sheet matches the pitcher who actually faced that batter (not the current pitcher).
+- Check this across multiple innings, especially after a pitching change.
 
-What to Test:
-- Game Navigation: Browse games by date in the schedule view and ensure your favorite teams are pinned correctly.
-- Scorecard Accuracy: View live or completed games to check if the scorecard layout matches the actual game events (batter lineups, at-bat results, and inning-by-inning scoring).
-- At-Bat Detail: Tap into specific at-bats to view pitch-by-pitch tracking visualizations and verify they reflect the live game data accurately.
-- Player Profiles: Tap on any player name to view their bio and season/career batting stats.
-- Customization: Test the pencil color theme customization (Tint Service) by choosing from presets or using the custom color picker.
-- Data Loading: Observe how the app handles live updates from the MLB Stats API during active games.
-- Visuals: Check for any layout issues with the hand-drawn UI elements (rendered with UIBezierPath) across different device sizes.
+Timeline View (NEW) — Footer Info
+- Switch to timeline mode (tap the timeline icon in the nav bar). This is a new chronological play-by-play view of the game.
+- Scroll to the bottom — you should now see pitcher stats for both teams (IP/H/R/ER/BB/K), umpires (HP, 1B, 2B, 3B), and game info (First Pitch, Duration, Attendance, Venue).
+- Compare these with what's shown at the bottom of the scorecard view — they should match.
+
+Weather in Game Info
+- On both the scorecard and timeline views, check the Game Info section at the bottom for Weather (temp, condition) and Wind.
+- This should appear for live games and completed games that have weather data.
+- Note: weather may not appear for all games (depends on API data availability).
+
+View Mode Persistence
+- Switch to timeline mode, then go back to the schedule and open the same or a different game — it should open in timeline mode.
+- Switch back to scorecard mode, leave and re-enter a game — it should open in scorecard mode.
+- Kill and relaunch the app — your last chosen view mode should be remembered.
+

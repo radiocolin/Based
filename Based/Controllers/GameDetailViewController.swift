@@ -59,6 +59,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private var currentLinescore: Linescore?
     private var currentScorecard: ScorecardData?
     private var currentLivePitches: [PitchEvent] = []
+    private var currentGameData: GameData?
     private var currentUmpires: [ScorecardUmpire] = []
     private var currentGameInfo: [GameInfoItem] = []
     private var currentPitchers: [ScorecardPitcher] = []
@@ -66,7 +67,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private var lastActiveAtBatKey: String?
     private let gamePk: Int
     private var isGameLive = false
-    private var isTimelineMode = false
+    private var isTimelineMode = UserDefaults.standard.bool(forKey: "preferTimelineMode")
 
     private var teamSegmentedTopConstraint: NSLayoutConstraint?
     private var scrollBottomConstraint: NSLayoutConstraint?
@@ -108,6 +109,16 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             if let scorecard = self.currentScorecard {
                 self.scorecardView.configure(with: scorecard)
             }
+        }
+        
+        // Apply saved view mode without animation
+        if isTimelineMode {
+            updateUIForMode()
+            teamSegmentedControl.isHidden = true
+            segmentedOverlay.isHidden = true
+            stickyHeaderContainer.isHidden = true
+            mainScrollView.isHidden = true
+            timelineView.isHidden = false
         }
         
         GameService.shared.delegate = self
@@ -167,6 +178,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
     @objc private func toggleTimelineMode() {
         isTimelineMode.toggle()
+        UserDefaults.standard.set(isTimelineMode, forKey: "preferTimelineMode")
         
         self.setupNavigationBar()
 
@@ -178,6 +190,25 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             segmentedOverlay.isHidden = false
             stickyHeaderContainer.isHidden = false
             mainScrollView.isHidden = false
+        }
+
+        // Swap live panel placement
+        if isGameLive {
+            if isTimelineMode {
+                // Moving to timeline: hide bottom panel, show embedded
+                currentStateView.isHidden = true
+                timelineView.setLiveState(visible: true)
+                timelineBottomConstraint?.isActive = false
+                timelineBottomConstraint = timelineView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+                timelineBottomConstraint?.isActive = true
+            } else {
+                // Moving to scorecard: show bottom panel, hide embedded
+                timelineView.setLiveState(visible: false)
+                currentStateView.isHidden = false
+                scrollBottomConstraint?.isActive = false
+                scrollBottomConstraint = mainScrollView.bottomAnchor.constraint(equalTo: currentStateView.topAnchor)
+                scrollBottomConstraint?.isActive = true
+            }
         }
 
         UIView.animate(withDuration: 0.4, delay: 0, usingSpringWithDamping: 0.9, initialSpringVelocity: 0, options: .curveEaseInOut) {
@@ -513,12 +544,16 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
     private func updateUI(with linescore: Linescore, pitches: [PitchEvent], gameData: GameData? = nil) {
         self.currentLinescore = linescore
+        if let gameData = gameData { self.currentGameData = gameData }
         let game = currentGames.first(where: { $0.gamePk == gamePk })
         let awayName = game?.teams.away.team.name ?? "Away"
         let homeName = game?.teams.home.team.name ?? "Home"
         
         gameHeaderView.configure(with: linescore, awayNameOverride: awayName, homeNameOverride: homeName)
         currentStateView.configure(with: linescore, pitches: pitches, gameData: gameData)
+        timelineView.configureLiveState(linescore: linescore, pitches: pitches, gameData: gameData)
+        updateGameInfo()
+        updateTimelineFooter()
         updatePlaceholderVisibility()
         
         let state = linescore.inningState?.lowercased() ?? ""
@@ -542,20 +577,25 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
         let isDuringBreak = state == "mid" || state == "end"
         
+        // In timeline mode, use embedded live panel instead of bottom panel
+        let showBottomPanel = isLive && !isTimelineMode
+        let showEmbeddedLive = isLive && isTimelineMode
+        
         // Always ensure scroll view bottom matches live panel state
-        let needsUpdate = currentStateView.isHidden == isLive
+        let needsUpdate = currentStateView.isHidden == showBottomPanel
         let applyLayout = {
-            self.currentStateView.isHidden = !isLive
+            self.currentStateView.isHidden = !showBottomPanel
             
             self.scrollBottomConstraint?.isActive = false
             self.scrollBottomConstraint = self.mainScrollView.bottomAnchor.constraint(
-                equalTo: isLive ? self.currentStateView.topAnchor : self.view.bottomAnchor
+                equalTo: showBottomPanel ? self.currentStateView.topAnchor : self.view.bottomAnchor
             )
             self.scrollBottomConstraint?.isActive = true
             
+            // Timeline always goes to bottom of view (embedded panel is inside it)
             self.timelineBottomConstraint?.isActive = false
             self.timelineBottomConstraint = self.timelineView.bottomAnchor.constraint(
-                equalTo: isLive ? self.currentStateView.topAnchor : self.view.bottomAnchor
+                equalTo: self.view.bottomAnchor
             )
             self.timelineBottomConstraint?.isActive = true
             
@@ -569,6 +609,9 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         } else {
             applyLayout()
         }
+        
+        // Update timeline's embedded live panel
+        timelineView.setLiveState(visible: showEmbeddedLive && !isDuringBreak)
         
         scorecardView.setIsLive(isLive && !isDuringBreak)
         
@@ -602,6 +645,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         updatePitcherList()
         updateUmpireList()
         updateGameInfo()
+        updateTimelineFooter()
         updatePlaceholderVisibility()
         
         let inning = scorecard.currentInning ?? 1
@@ -871,11 +915,15 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         }
     }
 
+    private var currentWeather: Weather?
+    
     private func updateGameInfo() {
         guard let scorecard = currentScorecard else { return }
         
-        if scorecard.gameInfo == currentGameInfo { return }
+        let weather = currentLinescore?.weather ?? currentGameData?.weather
+        if scorecard.gameInfo == currentGameInfo && weather == currentWeather { return }
         self.currentGameInfo = scorecard.gameInfo
+        self.currentWeather = weather
         
         // Filter to game info fields we want below the scorecard
         let displayLabels = ["First pitch", "T", "Att", "Venue"]
@@ -916,11 +964,37 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             attributedText.append(NSAttributedString(string: "\(value)\n", attributes: valueAttrs))
         }
         
+        // Weather from linescore or game data
+        if let weather = currentLinescore?.weather ?? currentGameData?.weather {
+            var weatherParts: [String] = []
+            if let temp = weather.temp { weatherParts.append("\(temp)°F") }
+            if let condition = weather.condition { weatherParts.append(condition) }
+            if !weatherParts.isEmpty {
+                attributedText.append(NSAttributedString(string: "Weather: ", attributes: labelAttrs))
+                attributedText.append(NSAttributedString(string: "\(weatherParts.joined(separator: ", "))\n", attributes: valueAttrs))
+            }
+            if let wind = weather.wind {
+                attributedText.append(NSAttributedString(string: "Wind: ", attributes: labelAttrs))
+                attributedText.append(NSAttributedString(string: "\(wind)\n", attributes: valueAttrs))
+            }
+        }
+        
         if let dateItem = dateItem {
             attributedText.append(NSAttributedString(string: dateItem.label, attributes: valueAttrs))
         }
         
         gameInfoLabel.attributedText = attributedText
+    }
+
+    private func updateTimelineFooter() {
+        guard let scorecard = currentScorecard else { return }
+        timelineView.configureFooter(
+            pitchers: scorecard.pitchers,
+            umpires: scorecard.umpires,
+            gameInfo: scorecard.gameInfo,
+            weather: currentLinescore?.weather ?? currentGameData?.weather,
+            teams: scorecard.teams
+        )
     }
 
     // MARK: - TimelineViewDelegate
@@ -931,6 +1005,14 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             sheet.prefersGrabberVisible = true
         }
         present(vc, animated: true)
+    }
+    
+    func didTapTimelineLiveAtBat() {
+        showLiveAtBatDetail()
+    }
+    
+    func didLongPressTimelineLiveAtBat() {
+        syncWithActiveAtBat()
     }
 
     // MARK: - ScorecardViewDelegate
