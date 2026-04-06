@@ -9,6 +9,7 @@ class ScorecardCell: UICollectionViewCell {
     private let ballsLabel = UILabel()
     private let strikesLabel = UILabel()
     private let outsLabel = UILabel()
+    private var accentColor: UIColor = AppColors.pencil
     
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -76,9 +77,13 @@ class ScorecardCell: UICollectionViewCell {
         guard let event = event, event.result != "LIVE" else {
             resultLabel.text = ""
             resultLabel.attributedText = nil
+            resultLabel.textColor = AppColors.pencil
             ballsLabel.text = ""
+            ballsLabel.textColor = AppColors.pencil
             strikesLabel.text = ""
+            strikesLabel.textColor = AppColors.pencil
             outsLabel.text = ""
+            outsLabel.textColor = AppColors.pencil
             // Pass empty bases to clear diamond
             diamondView.configure(with: BasesReached(first: false, second: false, third: false, home: false, outAtFirst: false, outAtSecond: false, outAtThird: false, outAtHome: false, annotations: nil), style: .scorecard)
             diamondView.alpha = 0.3 // Make it faint when empty
@@ -86,6 +91,12 @@ class ScorecardCell: UICollectionViewCell {
         }
         
         diamondView.alpha = 1.0
+        let shouldAccentEvent = event.result == "HR" || event.bases.home
+        let eventAccentColor = shouldAccentEvent ? accentColor : AppColors.pencil
+        resultLabel.textColor = eventAccentColor
+        ballsLabel.textColor = eventAccentColor
+        strikesLabel.textColor = eventAccentColor
+        outsLabel.textColor = eventAccentColor
         
         // Use attributed string to reduce line spacing
         let paragraphStyle = NSMutableParagraphStyle()
@@ -94,7 +105,8 @@ class ScorecardCell: UICollectionViewCell {
         
         let attributes: [NSAttributedString.Key: Any] = [
             .paragraphStyle: paragraphStyle,
-            .font: resultLabel.font ?? .systemFont(ofSize: 18)
+            .font: resultLabel.font ?? .systemFont(ofSize: 18),
+            .foregroundColor: eventAccentColor
         ]
         let isCalledK = event.result == "Ʞ"
         let displayResult = isCalledK ? "K" : event.result
@@ -105,16 +117,29 @@ class ScorecardCell: UICollectionViewCell {
         strikesLabel.text = "\(event.strikes)S"
         outsLabel.text = event.outs > 0 ? "\(event.outs)" : ""
         
-        diamondView.configure(with: event.bases, style: .scorecard, isRun: event.result == "HR")
+        diamondView.configure(
+            with: event.bases,
+            style: .scorecard,
+            isRun: event.result == "HR",
+            accentColor: accentColor
+        )
+    }
+
+    func setAccentColor(_ color: UIColor) {
+        accentColor = color
     }
     
     override func prepareForReuse() {
         super.prepareForReuse()
         resultLabel.transform = .identity
         resultLabel.text = ""
+        resultLabel.textColor = AppColors.pencil
         ballsLabel.text = ""
+        ballsLabel.textColor = AppColors.pencil
         strikesLabel.text = ""
+        strikesLabel.textColor = AppColors.pencil
         outsLabel.text = ""
+        outsLabel.textColor = AppColors.pencil
         diamondView.configure(with: BasesReached(first: false, second: false, third: false, home: false, outAtFirst: false, outAtSecond: false, outAtThird: false, outAtHome: false, annotations: nil), style: .scorecard, isRun: false)
         diamondView.alpha = 1.0
         contentView.layer.borderWidth = 0.5

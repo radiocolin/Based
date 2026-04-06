@@ -348,6 +348,13 @@ class ScorecardView: UIView {
         guard let data = scorecardData else { return PlayerGameStats(atBats: 0, hits: 0, runs: 0, rbi: 0, walks: 0, strikeouts: 0) }
         return data.calculatePlayerStats(for: batterId, isHome: isHomeTeam)
     }
+
+    private var teamAccentColor: UIColor {
+        guard let data = scorecardData else { return AppColors.pencil }
+        let teamName = isHomeTeam ? data.teams.home.name : data.teams.away.name
+        guard let teamName else { return AppColors.pencil }
+        return TeamColorProvider.color(for: teamName)
+    }
 }
 
 extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate, UICollectionViewDelegateFlowLayout {
@@ -413,6 +420,7 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate, U
             if let statType = columnLayout.statInfo(forColumn: col) {
                 let cell = collectionView.dequeueReusableCell(withReuseIdentifier: LabelCell.reuseIdentifier, for: indexPath) as! LabelCell
                 cell.label.font = UIFont(name: "PermanentMarker-Regular", size: 16) ?? .systemFont(ofSize: 16)
+                cell.label.textColor = AppColors.pencil
                 
                 if isTotalsRow {
                     var totalValue = 0
@@ -428,16 +436,32 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate, U
                     }
                     cell.label.text = "\(totalValue)"
                     cell.label.font = UIFont(name: "PermanentMarker-Regular", size: 18) ?? .systemFont(ofSize: 18, weight: .bold)
+                    if statType == "R", totalValue > 0 {
+                        cell.label.textColor = teamAccentColor
+                    }
                     cell.backgroundColor = AppColors.header
                 } else {
                     let batter = lineup[rowIndex]
                     let stats = calculatePlayerStats(for: batter.id)
+                    let value: Int
                     switch statType {
-                    case "AB": cell.label.text = "\(stats.atBats)"
-                    case "R": cell.label.text = "\(stats.runs)"
-                    case "H": cell.label.text = "\(stats.hits)"
-                    case "RBI": cell.label.text = "\(stats.rbi)"
-                    default: cell.label.text = "-"
+                    case "AB":
+                        value = stats.atBats
+                        cell.label.text = "\(value)"
+                    case "R":
+                        value = stats.runs
+                        cell.label.text = "\(value)"
+                        if value > 0 {
+                            cell.label.textColor = teamAccentColor
+                        }
+                    case "H":
+                        value = stats.hits
+                        cell.label.text = "\(value)"
+                    case "RBI":
+                        value = stats.rbi
+                        cell.label.text = "\(value)"
+                    default:
+                        cell.label.text = "-"
                     }
                     cell.backgroundColor = rowBackgroundColor
                 }
@@ -447,14 +471,15 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate, U
             // Handle Inning Columns
             if isTotalsRow {
                 let cell = collectionView.dequeueReusableCell(withReuseIdentifier: LabelCell.reuseIdentifier, for: indexPath) as! LabelCell
+                cell.label.textColor = AppColors.pencil
                 if let (inningNum, _) = columnLayout.inningInfo(forColumn: col) {
                     let inningObj = data.innings.first { $0.num == inningNum }
                     let events = isHomeTeam ? (inningObj?.home ?? []) : (inningObj?.away ?? [])
                     let runs = events.reduce(0) { $0 + $1.rbi } // This is a rough estimate of runs in inning, MLB API usually provides runs per inning in linescore
-                    // Actually, let's use the actual runs from linescore if available? 
-                    // For now, let's just leave it empty or show inning total if we can calculate it accurately.
-                    // Linescore is better for inning totals.
-                    cell.label.text = "" 
+                    cell.label.text = runs > 0 ? "\(runs)" : ""
+                    if runs > 0 {
+                        cell.label.textColor = teamAccentColor
+                    }
                 } else {
                     cell.label.text = ""
                 }
@@ -463,6 +488,7 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate, U
             }
             
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: ScorecardCell.reuseIdentifier, for: indexPath) as! ScorecardCell
+            cell.setAccentColor(teamAccentColor)
             let batter = lineup[rowIndex]
             
             guard let (inningNum, subIndex) = columnLayout.inningInfo(forColumn: col) else {

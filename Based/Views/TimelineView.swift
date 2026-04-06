@@ -4,6 +4,7 @@ protocol TimelineViewDelegate: AnyObject {
     func didSelectTimelineAtBat(_ event: AtBatEvent)
     func didTapTimelineLiveAtBat()
     func didLongPressTimelineLiveAtBat()
+    func didSelectTimelinePitcher(_ pitcher: ScorecardPitcher)
 }
 
 struct InningGroup {
@@ -35,6 +36,7 @@ class TimelineView: UIView {
     private var umpires: [ScorecardUmpire] = []
     private var gameInfoItems: [GameInfoItem] = []
     private var weather: Weather?
+    private var footerPitchersByID: [Int: ScorecardPitcher] = [:]
     
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -190,6 +192,7 @@ class TimelineView: UIView {
         self.weather = weather
         self.awayTeamName = teams.away.name ?? "Away"
         self.homeTeamName = teams.home.name ?? "Home"
+        self.footerPitchersByID = Dictionary(uniqueKeysWithValues: (pitchers.away + pitchers.home).map { ($0.id, $0) })
         rebuildFooter()
     }
     
@@ -294,6 +297,10 @@ class TimelineView: UIView {
                 nameLabel.text = pitcher.fullName
                 nameLabel.font = UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14)
                 nameLabel.textColor = AppColors.pencil
+                nameLabel.isUserInteractionEnabled = true
+                nameLabel.tag = pitcher.id
+                let tap = UITapGestureRecognizer(target: self, action: #selector(handlePitcherTap(_:)))
+                nameLabel.addGestureRecognizer(tap)
                 row.addArrangedSubview(nameLabel)
                 
                 for val in [pitcher.ip, "\(pitcher.h)", "\(pitcher.r)", "\(pitcher.er)", "\(pitcher.bb)", "\(pitcher.k)"] {
@@ -319,6 +326,12 @@ class TimelineView: UIView {
         addTeamPitchers(homePitchers, teamName: homeTeamName)
         
         return container
+    }
+
+    @objc private func handlePitcherTap(_ gesture: UITapGestureRecognizer) {
+        guard let view = gesture.view else { return }
+        guard let pitcher = footerPitchersByID[view.tag] else { return }
+        delegate?.didSelectTimelinePitcher(pitcher)
     }
     
     private func buildUmpireLabel() -> UILabel {
@@ -415,7 +428,9 @@ extension TimelineView: UITableViewDelegate, UITableViewDataSource {
         guard let cell = tableView.dequeueReusableCell(withIdentifier: TimelineCell.identifier, for: indexPath) as? TimelineCell else {
             return UITableViewCell()
         }
-        cell.configure(with: groups[indexPath.section].events[indexPath.row])
+        let group = groups[indexPath.section]
+        let teamName = group.isTop ? awayTeamName : homeTeamName
+        cell.configure(with: group.events[indexPath.row], accentColor: TeamColorProvider.color(for: teamName))
         return cell
     }
     

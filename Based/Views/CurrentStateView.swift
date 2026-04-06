@@ -281,7 +281,7 @@ class CurrentStateView: UIView {
             outAtHome: false,
             annotations: nil
         )
-        diamondView.configure(with: bases, style: .liveStatus)
+        diamondView.configure(with: bases, style: .liveStatus, isRun: false)
         
         if isBreak {
             pitchTrackView.configure(with: [])

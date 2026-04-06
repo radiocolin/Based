@@ -54,7 +54,7 @@ extension MLBAPIClient {
     func fetchPlayer(id: Int) async throws -> PlayerInfo {
         let response = try await fetch(
             PlayerInfoResponse.self,
-            endpoint: "/api/v1/people/\(id)?hydrate=stats(group=[batting],type=[season,career])"
+            endpoint: "/api/v1/people/\(id)?hydrate=stats(group=[hitting,pitching],type=[season,career])"
         )
         guard let player = response.people?.first else {
             throw NSError(domain: "MLBAPIClient", code: 404, userInfo: [NSLocalizedDescriptionKey: "Player not found"])

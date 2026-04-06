@@ -209,7 +209,7 @@ extension ScorecardData {
                     atBats += 1
                     if ["1B", "2B", "3B", "HR"].contains(result) { hits += 1 }
                 }
-                if result == "HR" { runs += 1 }
+                if event.bases.home { runs += 1 }
                 rbi += event.rbi
                 if result == "K" || result == "Ʞ" { strikeouts += 1 }
             }

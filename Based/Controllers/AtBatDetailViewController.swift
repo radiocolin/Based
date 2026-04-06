@@ -18,6 +18,9 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
     private let descriptionLabel = UILabel()
     private let pitchesTableView = UITableView()
     private let pitchTrackView = PitchTrackView()
+
+    var onBatterTap: (() -> Void)?
+    var onPitcherTap: (() -> Void)?
     
     // Graphics
     private let linesLayer = CAShapeLayer()
@@ -90,6 +93,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         batterLabel.textColor = pencilColor
         batterLabel.textAlignment = .center
         batterLabel.numberOfLines = 0
+        batterLabel.isUserInteractionEnabled = true
         
         resultLabel.text = event.result == "Ʞ" ? "K" : event.result
         resultLabel.transform = event.result == "Ʞ" ? CGAffineTransform(scaleX: -1, y: 1) : .identity
@@ -105,6 +109,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         subHeaderLabel.textColor = pencilColor.withAlphaComponent(0.7)
         subHeaderLabel.textAlignment = .center
         subHeaderLabel.translatesAutoresizingMaskIntoConstraints = false
+        subHeaderLabel.isUserInteractionEnabled = true
         view.addSubview(subHeaderLabel)
         
         // Top Container Views
@@ -172,6 +177,20 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         ])
         
         view.layer.addSublayer(linesLayer)
+
+        let batterTap = UITapGestureRecognizer(target: self, action: #selector(handleBatterTap))
+        batterLabel.addGestureRecognizer(batterTap)
+
+        let pitcherTap = UITapGestureRecognizer(target: self, action: #selector(handlePitcherTap))
+        subHeaderLabel.addGestureRecognizer(pitcherTap)
+    }
+
+    @objc private func handleBatterTap() {
+        onBatterTap?()
+    }
+
+    @objc private func handlePitcherTap() {
+        onPitcherTap?()
     }
     
     private func drawPencilLines() {

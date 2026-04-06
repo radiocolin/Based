@@ -783,6 +783,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         let pitcherName = linescore.defense?.pitcher?.fullName ?? "Pitcher"
         
         let vc = AtBatDetailViewController(event: liveEvent, batterName: batterName, pitcherName: pitcherName)
+        configureAtBatDetailCallbacks(vc, event: liveEvent, batterName: batterName, pitcherName: pitcherName)
         if let sheet = vc.sheetPresentationController {
             sheet.detents = [.medium(), .large()]
             sheet.prefersGrabberVisible = true
@@ -909,6 +910,10 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             nameLabel.text = pitcher.fullName
             nameLabel.font = UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14)
             nameLabel.textColor = AppColors.pencil
+            nameLabel.isUserInteractionEnabled = true
+            nameLabel.tag = pitcher.id
+            let tap = UITapGestureRecognizer(target: self, action: #selector(handlePitcherNameTap(_:)))
+            nameLabel.addGestureRecognizer(tap)
             row.addArrangedSubview(nameLabel)
             
             let stats = [pitcher.ip, "\(pitcher.h)", "\(pitcher.r)", "\(pitcher.er)", "\(pitcher.bb)", "\(pitcher.k)"]
@@ -1011,6 +1016,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     // MARK: - TimelineViewDelegate
     func didSelectTimelineAtBat(_ event: AtBatEvent) {
         let vc = AtBatDetailViewController(event: event, batterName: event.batterName, pitcherName: event.pitcherName)
+        configureAtBatDetailCallbacks(vc, event: event, batterName: event.batterName, pitcherName: event.pitcherName)
         if let sheet = vc.sheetPresentationController {
             sheet.detents = [.medium(), .large()]
             sheet.prefersGrabberVisible = true
@@ -1026,9 +1032,14 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         syncWithActiveAtBat()
     }
 
+    func didSelectTimelinePitcher(_ pitcher: ScorecardPitcher) {
+        presentPitcherDetail(for: pitcher)
+    }
+
     // MARK: - ScorecardViewDelegate
     func didSelectAtBat(_ event: AtBatEvent, batter: ScorecardBatter, pitcherName: String) {
         let vc = AtBatDetailViewController(event: event, batterName: batter.fullName, pitcherName: event.pitcherName)
+        configureAtBatDetailCallbacks(vc, event: event, batterName: batter.fullName, pitcherName: event.pitcherName)
         if let sheet = vc.sheetPresentationController {
             sheet.detents = [.medium(), .large()]
             sheet.prefersGrabberVisible = true
@@ -1037,12 +1048,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     func didSelectPlayer(_ batter: ScorecardBatter) {
-        let vc = PlayerDetailViewController(batter: batter, gameStats: calculatePlayerStats(for: batter))
-        if let sheet = vc.sheetPresentationController {
-            sheet.detents = [.medium()]
-            sheet.prefersGrabberVisible = true
-        }
-        present(vc, animated: true)
+        presentBatterDetail(for: batter)
     }
 
     func didSelectActiveAtBat() {
@@ -1109,6 +1115,79 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
                 mainScrollView.setContentOffset(CGPoint(x: 0, y: min(targetY, maxVOffset)), animated: true)            }
         }
+    }
+
+    private func configureAtBatDetailCallbacks(_ vc: AtBatDetailViewController, event: AtBatEvent, batterName: String, pitcherName: String) {
+        vc.onBatterTap = { [weak self, weak vc] in
+            guard let self, let vc else { return }
+            let batter = self.scorecardBatter(for: event.batterId, fallbackName: batterName)
+            let detailVC = PlayerDetailViewController(batter: batter, gameStats: self.calculatePlayerStats(for: batter))
+            self.configurePlayerDetailSheet(detailVC)
+            vc.present(detailVC, animated: true)
+        }
+        vc.onPitcherTap = { [weak self, weak vc] in
+            guard let self, let vc else { return }
+            let pitcher = self.scorecardPitcher(for: event.pitcherId, fallbackName: pitcherName)
+            let detailVC = PlayerDetailViewController(pitcher: pitcher)
+            self.configurePlayerDetailSheet(detailVC)
+            vc.present(detailVC, animated: true)
+        }
+    }
+
+    private func presentBatterDetail(for batter: ScorecardBatter) {
+        let vc = PlayerDetailViewController(batter: batter, gameStats: calculatePlayerStats(for: batter))
+        presentPlayerDetailSheet(vc)
+    }
+
+    private func presentPitcherDetail(for pitcher: ScorecardPitcher) {
+        let vc = PlayerDetailViewController(pitcher: pitcher)
+        presentPlayerDetailSheet(vc)
+    }
+
+    private func presentPlayerDetailSheet(_ vc: UIViewController) {
+        configurePlayerDetailSheet(vc)
+        present(vc, animated: true)
+    }
+
+    private func configurePlayerDetailSheet(_ vc: UIViewController) {
+        if let sheet = vc.sheetPresentationController {
+            sheet.detents = [.medium()]
+            sheet.prefersGrabberVisible = true
+        }
+    }
+
+    private func scorecardBatter(for id: Int, fallbackName: String) -> ScorecardBatter {
+        if let scorecard = currentScorecard {
+            if let batter = (scorecard.lineups.home + scorecard.lineups.away).first(where: { $0.id == id }) {
+                return batter
+            }
+        }
+        let parts = fallbackName.split(separator: " ")
+        let abbreviation = parts.last.map(String.init) ?? fallbackName
+        return ScorecardBatter(
+            id: id,
+            fullName: fallbackName,
+            abbreviation: abbreviation,
+            position: "",
+            jerseyNumber: nil,
+            inningEntered: nil,
+            inningExited: nil
+        )
+    }
+
+    private func scorecardPitcher(for id: Int, fallbackName: String) -> ScorecardPitcher {
+        if let scorecard = currentScorecard {
+            if let pitcher = (scorecard.pitchers.home + scorecard.pitchers.away).first(where: { $0.id == id }) {
+                return pitcher
+            }
+        }
+        return ScorecardPitcher(id: id, fullName: fallbackName, stats: "", ip: "0.0", h: 0, r: 0, er: 0, bb: 0, k: 0)
+    }
+
+    @objc private func handlePitcherNameTap(_ gesture: UITapGestureRecognizer) {
+        guard let view = gesture.view else { return }
+        guard let pitcher = currentPitchers.first(where: { $0.id == view.tag }) else { return }
+        presentPitcherDetail(for: pitcher)
     }
 
     private func calculatePlayerStats(for batter: ScorecardBatter) -> PlayerGameStats {

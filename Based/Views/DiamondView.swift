@@ -38,6 +38,7 @@ class DiamondView: UIView {
     private var bases: BasesReached?
     private var isRun: Bool = false
     private var style: Style = .scorecard
+    private var accentColorOverride: UIColor?
     
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -111,10 +112,11 @@ class DiamondView: UIView {
         ).cgPath
     }
     
-    func configure(with bases: BasesReached, style: Style = .scorecard, isRun: Bool = false) {
+    func configure(with bases: BasesReached, style: Style = .scorecard, isRun: Bool = false, accentColor: UIColor? = nil) {
         self.bases = bases
         self.style = style
         self.isRun = isRun
+        self.accentColorOverride = accentColor
         setNeedsLayout()
     }
     
@@ -124,6 +126,9 @@ class DiamondView: UIView {
         basesLayer.sublayers?.forEach { $0.removeFromSuperlayer() }
         fillLayer.fillColor = UIColor.clear.cgColor
         fillTextureLayer.strokeColor = UIColor.clear.cgColor
+
+        let shouldUseAccent = style == .scorecard && (isRun || bases.home)
+        let accentColor = shouldUseAccent ? (accentColorOverride ?? AppColors.pencil) : AppColors.pencil
         
         let path = UIBezierPath()
         
@@ -153,8 +158,8 @@ class DiamondView: UIView {
             }
             
             if isRun || bases.home {
-                fillLayer.fillColor = AppColors.pencil.withAlphaComponent(0.08).cgColor
-                fillTextureLayer.strokeColor = AppColors.pencil.withAlphaComponent(0.12).cgColor
+                fillLayer.fillColor = accentColor.withAlphaComponent(0.08).cgColor
+                fillTextureLayer.strokeColor = accentColor.withAlphaComponent(0.12).cgColor
             }
         }
 
@@ -198,10 +203,10 @@ class DiamondView: UIView {
             let bLayer = CAShapeLayer()
             bLayer.path = bPath.cgPath
             bLayer.lineWidth = baseStrokeWidth
-            bLayer.strokeColor = pencilColor.withAlphaComponent(0.4).cgColor
+            bLayer.strokeColor = accentColor.withAlphaComponent(0.4).cgColor
             
             if occupied {
-                bLayer.fillColor = pencilColor.cgColor
+                bLayer.fillColor = accentColor.cgColor
             } else {
                 bLayer.fillColor = AppColors.baseEmpty.cgColor
             }
@@ -223,7 +228,7 @@ class DiamondView: UIView {
         
         let lineLayer = CAShapeLayer()
         lineLayer.path = path.cgPath
-        lineLayer.strokeColor = AppColors.lineStroke.cgColor
+        lineLayer.strokeColor = accentColor.withAlphaComponent(0.8).cgColor
         lineLayer.lineWidth = progressLineWidth
         lineLayer.lineCap = .round
         lineLayer.lineJoin = .round
@@ -270,7 +275,7 @@ class DiamondView: UIView {
         let diamondSize = min(bounds.width, bounds.height) * 0.8
         let fontSize = max(8, min(16, diamondSize * 0.18))
         let font = UIFont(name: "PatrickHand-Regular", size: fontSize) ?? .systemFont(ofSize: fontSize, weight: .medium)
-        let color = pencilColor.withAlphaComponent(0.85)
+        let color = (accentColorOverride ?? pencilColor).withAlphaComponent(0.85)
         let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
         let textSize = (annotation.label as NSString).size(withAttributes: attrs)
 

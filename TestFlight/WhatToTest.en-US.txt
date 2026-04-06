@@ -1,3 +1,27 @@
+-Player Detail (NEW) — Hitters and Pitchers
+- Open a game and tap a batter name from the scorecard, an at-bat detail sheet, or a pitcher name from the pitcher lists / at-bat detail sheet.
+- Verify the player sheet opens for both hitters and pitchers.
+- For hitters, confirm season stats now populate (AVG / HR / RBI / SB / OPS).
+- For pitchers, confirm season stats now populate with pitching numbers (ERA / IP / W / L / K).
+- Verify today's game stats are appropriate for the player type: hitters should show batting game stats, pitchers should show IP / H / R / ER / BB / K.
+
+Pitcher Taps (NEW)
+- In the scorecard view, tap a pitcher name in the PITCHERS section and verify it opens that pitcher’s detail sheet.
+- In timeline mode, scroll to the footer and tap a pitcher name in either team’s pitcher table — it should open the same pitcher detail sheet.
+
+Color Work (NEW) — Scoreboard / Scorecard / Diamond
+- In the top scoreboard, any inning with runs greater than 0 should appear in that team’s color.
+- In the R/H/E section, the R value should appear in the team’s color when it is greater than 0.
+- In the scorecard totals row, inning run sums and the R column should also appear in the team’s color when greater than 0.
+- In scorecard cells, completed scoring paths should use the team color for the pencil / shading treatment.
+- Home runs should still appear with the full colored/shaded diamond treatment.
+
+Scorecard Runs + Runner Highlighting (NEW)
+- Open a completed game where runners score on later plays.
+- Verify the player's R total increments when that runner eventually scores, not just on home runs.
+- Verify the scorecard diamond uses team-color shading only when the runner’s tracked path actually reaches home.
+- Verify RBI plays do not incorrectly color the batter's own cell unless that batter also reaches home.
+
 -Improved the pitch tracker in smaller views
 
 At-Bat Detail — Pitcher Fix
@@ -18,4 +42,3 @@ View Mode Persistence
 - Switch to timeline mode, then go back to the schedule and open the same or a different game — it should open in timeline mode.
 - Switch back to scorecard mode, leave and re-enter a game — it should open in scorecard mode.
 - Kill and relaunch the app — your last chosen view mode should be remembered.
-

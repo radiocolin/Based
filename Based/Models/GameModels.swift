@@ -111,11 +111,11 @@ struct Player: Codable, Sendable, Equatable {
 
 // MARK: - Player Info (from /api/v1/people endpoint)
 
-struct PlayerInfoResponse: Codable, Sendable {
+struct PlayerInfoResponse: Decodable, Sendable {
     let people: [PlayerInfo]?
 }
 
-struct PlayerInfo: Codable, Sendable {
+struct PlayerInfo: Decodable, Sendable {
     let id: Int?
     let fullName: String?
     let firstName: String?
@@ -151,23 +151,52 @@ struct TeamInfo: Codable, Sendable {
     let name: String?
 }
 
-struct StatGroup: Codable, Sendable {
+struct StatGroup: Decodable, Sendable {
     let type: StatType?
     let group: StatGroupType?
     let splits: [StatSplit]?
 }
 
-struct StatType: Codable, Sendable {
+struct StatType: Decodable, Sendable {
     let displayName: String?
 }
 
-struct StatGroupType: Codable, Sendable {
+struct StatGroupType: Decodable, Sendable {
     let displayName: String?
 }
 
-struct StatSplit: Codable, Sendable {
+struct StatSplit: Decodable, Sendable {
     let season: String?
-    let stat: BattingStats?
+    let stat: SeasonStatLine?
+}
+
+struct SeasonStatLine: Codable, Sendable {
+    let gamesPlayed: Int?
+    let atBats: Int?
+    let runs: Int?
+    let hits: Int?
+    let doubles: Int?
+    let triples: Int?
+    let homeRuns: Int?
+    let rbi: Int?
+    let stolenBases: Int?
+    let caughtStealing: Int?
+    let baseOnBalls: Int?
+    let strikeOuts: Int?
+    let avg: String?
+    let obp: String?
+    let slg: String?
+    let ops: String?
+    let gamesStarted: Int?
+    let groundOuts: Int?
+    let airOuts: Int?
+    let era: String?
+    let inningsPitched: String?
+    let wins: Int?
+    let losses: Int?
+    let saves: Int?
+    let holds: Int?
+    let blownSaves: Int?
 }
 
 struct BattingStats: Codable, Sendable {

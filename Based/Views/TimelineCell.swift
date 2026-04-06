@@ -17,6 +17,7 @@ class TimelineCell: UITableViewCell {
     
     private let leftContainer = UIStackView()
     private let diamondContainer = UIView()
+    private var accentColor: UIColor = AppColors.pencil
     
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -125,18 +126,31 @@ class TimelineCell: UITableViewCell {
         ])
     }
     
-    func configure(with event: AtBatEvent) {
+    func configure(with event: AtBatEvent, accentColor: UIColor? = nil) {
+        self.accentColor = accentColor ?? AppColors.pencil
+        let shouldAccentEvent = event.result == "HR" || event.bases.home
+        let eventAccentColor = shouldAccentEvent ? self.accentColor : AppColors.pencil
+
         pitchTrackView.configure(with: event.pitches ?? [])
-        diamondView.configure(with: event.bases, style: .scorecard, isRun: event.result == "HR")
+        diamondView.configure(
+            with: event.bases,
+            style: .scorecard,
+            isRun: event.result == "HR",
+            accentColor: self.accentColor
+        )
         
         let isCalledK = event.result == "Ʞ"
         let displayResult = isCalledK ? "K" : event.result
         resultLabel.text = displayResult
+        resultLabel.textColor = eventAccentColor
         resultLabel.transform = isCalledK ? CGAffineTransform(scaleX: -1, y: 1) : .identity
         
         ballsLabel.text = "\(event.balls)B"
+        ballsLabel.textColor = eventAccentColor
         strikesLabel.text = "\(event.strikes)S"
+        strikesLabel.textColor = eventAccentColor
         outsLabel.text = event.outs > 0 ? "\(event.outs)" : ""
+        outsLabel.textColor = eventAccentColor
         
         batterLabel.text = event.batterName.uppercased()
         pitcherLabel.text = "vs \(event.pitcherName)"

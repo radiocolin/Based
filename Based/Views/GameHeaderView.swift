@@ -256,29 +256,51 @@ class GameHeaderView: UIView {
     func configure(with linescore: Linescore, awayNameOverride: String? = nil, homeNameOverride: String? = nil) {
         let awayActual = awayNameOverride ?? linescore.teams?.away?.team?.name ?? "AWAY"
         let homeActual = homeNameOverride ?? linescore.teams?.home?.team?.name ?? "HOME"
+        let awayColor = TeamColorProvider.color(for: awayActual)
+        let homeColor = TeamColorProvider.color(for: homeActual)
         
         awayName.text = abbreviation(for: awayActual)
         homeName.text = abbreviation(for: homeActual)
         
-        awayName.textColor = TeamColorProvider.color(for: awayActual)
-        homeName.textColor = TeamColorProvider.color(for: homeActual)
+        awayName.textColor = awayColor
+        homeName.textColor = homeColor
         
-        awayR.text = "\(linescore.teams?.away?.runs ?? 0)"
+        let awayRuns = linescore.teams?.away?.runs ?? 0
+        let homeRuns = linescore.teams?.home?.runs ?? 0
+
+        awayR.text = "\(awayRuns)"
         awayH.text = "\(linescore.teams?.away?.hits ?? 0)"
         awayE.text = "\(linescore.teams?.away?.errors ?? 0)"
-        homeR.text = "\(linescore.teams?.home?.runs ?? 0)"
+        homeR.text = "\(homeRuns)"
         homeH.text = "\(linescore.teams?.home?.hits ?? 0)"
         homeE.text = "\(linescore.teams?.home?.errors ?? 0)"
+
+        awayR.textColor = awayRuns > 0 ? awayColor : pencilColor
+        awayH.textColor = pencilColor
+        awayE.textColor = pencilColor
+        homeR.textColor = homeRuns > 0 ? homeColor : pencilColor
+        homeH.textColor = pencilColor
+        homeE.textColor = pencilColor
         
-        for label in awayInningLabels { label.text = "" }
-        for label in homeInningLabels { label.text = "" }
+        for label in awayInningLabels {
+            label.text = ""
+            label.textColor = pencilColor
+        }
+        for label in homeInningLabels {
+            label.text = ""
+            label.textColor = pencilColor
+        }
         if let innings = linescore.innings {
             for inning in innings {
                 if let num = inning.num {
                     let index = num - 1
                     if index >= 0 && index < 9 {
-                        awayInningLabels[index].text = "\(inning.away?.runs ?? 0)"
-                        homeInningLabels[index].text = "\(inning.home?.runs ?? 0)"
+                        let awayInningRuns = inning.away?.runs ?? 0
+                        let homeInningRuns = inning.home?.runs ?? 0
+                        awayInningLabels[index].text = "\(awayInningRuns)"
+                        awayInningLabels[index].textColor = awayInningRuns > 0 ? awayColor : pencilColor
+                        homeInningLabels[index].text = "\(homeInningRuns)"
+                        homeInningLabels[index].textColor = homeInningRuns > 0 ? homeColor : pencilColor
                     }
                 }
             }

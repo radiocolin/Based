@@ -85,6 +85,6 @@ class AtBatGraphicView: UIView {
         strikesLabel.text = "\(event.strikes)S"
         outsLabel.text = event.outs > 0 ? "\(event.outs)" : ""
 
-        diamondView.configure(with: event.bases, style: isLive ? .liveStatus : .scorecard, isRun: event.result == "HR")
+        diamondView.configure(with: event.bases, style: isLive ? .liveStatus : .scorecard, isRun: event.result == "HR", accentColor: event.result == "HR" || event.bases.home ? AppColors.pencil : nil)
     }
 }

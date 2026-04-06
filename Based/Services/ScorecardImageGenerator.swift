@@ -198,9 +198,6 @@ final class ScorecardImageGenerator {
         }
         
         let headerAttrs: [NSAttributedString.Key: Any] = [.font: headerFont, .foregroundColor: config.pencilColor.withAlphaComponent(0.5)]
-        let scoreAttrs: [NSAttributedString.Key: Any] = [.font: inningRFont, .foregroundColor: config.pencilColor]
-        let totalAttrs: [NSAttributedString.Key: Any] = [.font: scoreFont, .foregroundColor: config.pencilColor]
-        
         // Row 0 — Header: inning numbers + R H E
         let headerRowRect = { (col: Int) -> CGRect in
             CGRect(x: tableX + teamColWidth + CGFloat(col) * inningColWidth, y: tableY, width: inningColWidth, height: rowHeight)
@@ -218,12 +215,22 @@ final class ScorecardImageGenerator {
         drawCentered(awayAbbr, in: CGRect(x: tableX, y: awayRowY, width: teamColWidth, height: rowHeight), attrs: [.font: abbrFont, .foregroundColor: teamColorA])
         for i in 0..<inningCount {
             if let inning = linescore?.innings?.first(where: { $0.num == i + 1 }) {
-                drawCentered("\(inning.away?.runs ?? 0)", in: CGRect(x: tableX + teamColWidth + CGFloat(i) * inningColWidth, y: awayRowY, width: inningColWidth, height: rowHeight), attrs: scoreAttrs)
+                let runs = inning.away?.runs ?? 0
+                let attrs: [NSAttributedString.Key: Any] = [
+                    .font: inningRFont,
+                    .foregroundColor: runs > 0 ? teamColorA : config.pencilColor
+                ]
+                drawCentered("\(runs)", in: CGRect(x: tableX + teamColWidth + CGFloat(i) * inningColWidth, y: awayRowY, width: inningColWidth, height: rowHeight), attrs: attrs)
             }
         }
-        let awayRHE = ["\(linescore?.teams?.away?.runs ?? 0)", "\(linescore?.teams?.away?.hits ?? 0)", "\(linescore?.teams?.away?.errors ?? 0)"]
+        let awayRuns = linescore?.teams?.away?.runs ?? 0
+        let awayRHE = ["\(awayRuns)", "\(linescore?.teams?.away?.hits ?? 0)", "\(linescore?.teams?.away?.errors ?? 0)"]
         for (i, val) in awayRHE.enumerated() {
-            drawCentered(val, in: CGRect(x: rheStartX + CGFloat(i) * statColWidth, y: awayRowY, width: statColWidth, height: rowHeight), attrs: totalAttrs)
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: scoreFont,
+                .foregroundColor: i == 0 && awayRuns > 0 ? teamColorA : config.pencilColor
+            ]
+            drawCentered(val, in: CGRect(x: rheStartX + CGFloat(i) * statColWidth, y: awayRowY, width: statColWidth, height: rowHeight), attrs: attrs)
         }
         
         // Row 2 — Home team
@@ -231,12 +238,22 @@ final class ScorecardImageGenerator {
         drawCentered(homeAbbr, in: CGRect(x: tableX, y: homeRowY, width: teamColWidth, height: rowHeight), attrs: [.font: abbrFont, .foregroundColor: teamColorH])
         for i in 0..<inningCount {
             if let inning = linescore?.innings?.first(where: { $0.num == i + 1 }) {
-                drawCentered("\(inning.home?.runs ?? 0)", in: CGRect(x: tableX + teamColWidth + CGFloat(i) * inningColWidth, y: homeRowY, width: inningColWidth, height: rowHeight), attrs: scoreAttrs)
+                let runs = inning.home?.runs ?? 0
+                let attrs: [NSAttributedString.Key: Any] = [
+                    .font: inningRFont,
+                    .foregroundColor: runs > 0 ? teamColorH : config.pencilColor
+                ]
+                drawCentered("\(runs)", in: CGRect(x: tableX + teamColWidth + CGFloat(i) * inningColWidth, y: homeRowY, width: inningColWidth, height: rowHeight), attrs: attrs)
             }
         }
-        let homeRHE = ["\(linescore?.teams?.home?.runs ?? 0)", "\(linescore?.teams?.home?.hits ?? 0)", "\(linescore?.teams?.home?.errors ?? 0)"]
+        let homeRuns = linescore?.teams?.home?.runs ?? 0
+        let homeRHE = ["\(homeRuns)", "\(linescore?.teams?.home?.hits ?? 0)", "\(linescore?.teams?.home?.errors ?? 0)"]
         for (i, val) in homeRHE.enumerated() {
-            drawCentered(val, in: CGRect(x: rheStartX + CGFloat(i) * statColWidth, y: homeRowY, width: statColWidth, height: rowHeight), attrs: totalAttrs)
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: scoreFont,
+                .foregroundColor: i == 0 && homeRuns > 0 ? teamColorH : config.pencilColor
+            ]
+            drawCentered(val, in: CGRect(x: rheStartX + CGFloat(i) * statColWidth, y: homeRowY, width: statColWidth, height: rowHeight), attrs: attrs)
         }
     }
     
