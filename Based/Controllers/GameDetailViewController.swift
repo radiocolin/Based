@@ -1,6 +1,6 @@
 import UIKit
 
-class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpdateDelegate {
+class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpdateDelegate, TimelineViewDelegate {
     
     // UI Components
     private let teamSegmentedControl = UISegmentedControl(items: ["Away", "Home"])
@@ -25,6 +25,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private let mainScrollView = UIScrollView()
     private let mainStackView = UIStackView()
     private let scorecardView = ScorecardView()
+    private let timelineView = TimelineView()
     private let pitcherContainer: UIStackView = {
         let stack = UIStackView()
         stack.axis = .vertical
@@ -65,9 +66,11 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private var lastActiveAtBatKey: String?
     private let gamePk: Int
     private var isGameLive = false
+    private var isTimelineMode = false
 
     private var teamSegmentedTopConstraint: NSLayoutConstraint?
     private var scrollBottomConstraint: NSLayoutConstraint?
+    private var timelineBottomConstraint: NSLayoutConstraint?
     private var dismissedAdvisories: Set<String> = []
     private var segmentJustChanged = false
 
@@ -140,7 +143,11 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         navigationItem.leftBarButtonItem = backItem
         
         let shareItem = UIBarButtonItem(image: UIImage(systemName: "square.and.arrow.up"), style: .plain, target: self, action: #selector(shareScorecard))
-        navigationItem.rightBarButtonItem = shareItem
+        
+        let timelineSymbol = isTimelineMode ? "rectangle.grid.3x2" : "calendar.day.timeline.left"
+        let timelineItem = UIBarButtonItem(image: UIImage(systemName: timelineSymbol), style: .plain, target: self, action: #selector(toggleTimelineMode))
+        
+        navigationItem.rightBarButtonItems = [shareItem, timelineItem]
         
         let appearance = UINavigationBarAppearance()
         appearance.configureWithOpaqueBackground()
@@ -156,6 +163,26 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     
     @objc private func backTapped() {
         navigationController?.popViewController(animated: true)
+    }
+
+    @objc private func toggleTimelineMode() {
+        isTimelineMode.toggle()
+        
+        UIView.transition(with: view, duration: 0.3, options: .transitionCrossDissolve) {
+            self.setupNavigationBar()
+            self.updateUIForMode()
+        }
+    }
+
+    private func updateUIForMode() {
+        teamSegmentedControl.isHidden = isTimelineMode
+        segmentedOverlay.isHidden = isTimelineMode
+        stickyHeaderContainer.isHidden = isTimelineMode
+        mainScrollView.isHidden = isTimelineMode
+        timelineView.isHidden = !isTimelineMode
+        
+        // Adjust constraints
+        teamSegmentedTopConstraint?.constant = isTimelineMode ? -48 : 8 // Move up out of way
     }
 
     @objc private func shareScorecard() {
@@ -254,10 +281,13 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         advisoryCloseBtn.translatesAutoresizingMaskIntoConstraints = false
         advisoryBanner.addSubview(advisoryCloseBtn)
         
-        [teamSegmentedControl, segmentedOverlay, gameHeaderView, stickyHeaderContainer, mainScrollView, currentStateView, advisoryBanner].forEach {
+        [teamSegmentedControl, segmentedOverlay, gameHeaderView, stickyHeaderContainer, mainScrollView, timelineView, currentStateView, advisoryBanner].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview($0)
         }
+        
+        timelineView.isHidden = true
+        timelineView.delegate = self
         
         // Sticky Header Setup
         stickyHeaderContainer.backgroundColor = AppColors.paper
@@ -398,6 +428,11 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             mainScrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             mainScrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             
+            // Timeline
+            timelineView.topAnchor.constraint(equalTo: gameHeaderView.bottomAnchor, constant: 8),
+            timelineView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            timelineView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            
             mainStackView.topAnchor.constraint(equalTo: mainScrollView.contentLayoutGuide.topAnchor),
             mainStackView.leadingAnchor.constraint(equalTo: mainScrollView.contentLayoutGuide.leadingAnchor, constant: 16),
             mainStackView.trailingAnchor.constraint(equalTo: mainScrollView.contentLayoutGuide.trailingAnchor, constant: -16),
@@ -414,6 +449,10 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         currentStateView.isHidden = true
         scrollBottomConstraint = mainScrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         scrollBottomConstraint?.isActive = true
+        
+        timelineBottomConstraint = timelineView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        timelineBottomConstraint?.isActive = true
+        
         stickyNameWidthConstraint = topLeftLabel.widthAnchor.constraint(equalToConstant: 90)
         stickyNameWidthConstraint?.isActive = true
     }
@@ -485,11 +524,19 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         let needsUpdate = currentStateView.isHidden == isLive
         let applyLayout = {
             self.currentStateView.isHidden = !isLive
+            
             self.scrollBottomConstraint?.isActive = false
             self.scrollBottomConstraint = self.mainScrollView.bottomAnchor.constraint(
                 equalTo: isLive ? self.currentStateView.topAnchor : self.view.bottomAnchor
             )
             self.scrollBottomConstraint?.isActive = true
+            
+            self.timelineBottomConstraint?.isActive = false
+            self.timelineBottomConstraint = self.timelineView.bottomAnchor.constraint(
+                equalTo: isLive ? self.currentStateView.topAnchor : self.view.bottomAnchor
+            )
+            self.timelineBottomConstraint?.isActive = true
+            
             self.view.layoutIfNeeded()
         }
         
@@ -528,6 +575,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         }
         
         scorecardView.configure(with: scorecard)
+        timelineView.configure(with: scorecard.timeline)
         updateStickyHeaders()
         updatePitcherList()
         updateUmpireList()
@@ -680,6 +728,11 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         
         return AtBatEvent(
             batterId: linescore.offense?.batter?.id ?? 0,
+            batterName: linescore.offense?.batter?.fullName ?? "Batter",
+            pitcherId: linescore.defense?.pitcher?.id ?? 0,
+            pitcherName: linescore.defense?.pitcher?.fullName ?? "Pitcher",
+            inning: linescore.currentInning ?? 1,
+            isTop: linescore.inningHalf?.lowercased() == "top",
             result: "LIVE",
             description: "Current at bat",
             balls: finalBalls,
@@ -846,6 +899,17 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         }
         
         gameInfoLabel.attributedText = attributedText
+    }
+
+    // MARK: - TimelineViewDelegate
+    func didSelectTimelineAtBat(_ event: AtBatEvent) {
+        let actualPitcher = currentLinescore?.defense?.pitcher?.fullName ?? event.pitcherName
+        let vc = AtBatDetailViewController(event: event, batterName: event.batterName, pitcherName: actualPitcher)
+        if let sheet = vc.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+        }
+        present(vc, animated: true)
     }
 
     // MARK: - ScorecardViewDelegate

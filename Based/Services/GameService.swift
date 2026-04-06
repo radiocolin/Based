@@ -303,6 +303,14 @@ class GameService {
             
             scorecardInnings.append(ScorecardInning(num: i, ordinal: "\(i)", home: homeEvents, away: awayEvents))
         }
+
+        // Timeline is all at-bat plays sorted newest-to-oldest
+        let timeline = allPlays.filter { play in
+            let type = play.result?.type ?? ""
+            return type == "atBat" && play.result?.event != nil
+        }.enumerated().map { (idx, play) in
+            transformPlayToEvent(play, allPlays: allPlays, playIndex: allPlays.firstIndex(where: { $0.about?.atBatIndex == play.about?.atBatIndex }) ?? 0)
+        }.reversed()
         
         // Extract game info from boxscore info array
         let gameInfo: [GameInfoItem] = (boxscore.info ?? []).compactMap { note in
@@ -315,6 +323,7 @@ class GameService {
             lineups: Lineups(home: homeLineup, away: awayLineup),
             pitchers: ScorecardPitchers(home: homePitchers, away: awayPitchers),
             innings: scorecardInnings,
+            timeline: Array(timeline),
             advisories: Array(advisories.prefix(3)),
             umpires: umpires,
             gameInfo: gameInfo,
@@ -342,6 +351,9 @@ class GameService {
         }
         
         let batterId = play.matchup?.batter?.id ?? 0
+        let batterName = play.matchup?.batter?.fullName ?? "Unknown"
+        let pitcherId = play.matchup?.pitcher?.id ?? 0
+        let pitcherName = play.matchup?.pitcher?.fullName ?? "Unknown"
         let inning = play.about?.inning ?? 1
         let isTop = play.about?.isTopInning ?? true
         
@@ -469,7 +481,32 @@ class GameService {
             outFirst = false
         }
         
-        return AtBatEvent(batterId: batterId, result: scorecardNotation(for: play, batterId: batterId), description: play.result?.description ?? "", balls: play.count?.balls ?? 0, strikes: play.count?.strikes ?? 0, outs: play.count?.outs ?? 0, rbi: play.result?.rbi ?? 0, bases: BasesReached(first: reachFirst, second: reachSecond, third: reachThird, home: reachHome, outAtFirst: outFirst, outAtSecond: outSecond, outAtThird: outThird, outAtHome: outHome, annotations: annotations.isEmpty ? nil : annotations), pitches: pitches)
+        return AtBatEvent(
+            batterId: batterId,
+            batterName: batterName,
+            pitcherId: pitcherId,
+            pitcherName: pitcherName,
+            inning: inning,
+            isTop: isTop,
+            result: scorecardNotation(for: play, batterId: batterId),
+            description: play.result?.description ?? "",
+            balls: play.count?.balls ?? 0,
+            strikes: play.count?.strikes ?? 0,
+            outs: play.count?.outs ?? 0,
+            rbi: play.result?.rbi ?? 0,
+            bases: BasesReached(
+                first: reachFirst,
+                second: reachSecond,
+                third: reachThird,
+                home: reachHome,
+                outAtFirst: outFirst,
+                outAtSecond: outSecond,
+                outAtThird: outThird,
+                outAtHome: outHome,
+                annotations: annotations.isEmpty ? nil : annotations
+            ),
+            pitches: pitches
+        )
     }
 
     private func scorecardNotation(for play: Play, batterId: Int? = nil) -> String {

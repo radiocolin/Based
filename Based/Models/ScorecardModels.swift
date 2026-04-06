@@ -6,6 +6,7 @@ struct ScorecardData: Codable, Sendable, Equatable {
     let lineups: Lineups
     let pitchers: ScorecardPitchers
     let innings: [ScorecardInning]
+    let timeline: [AtBatEvent]
     let advisories: [String]
     let umpires: [ScorecardUmpire]
     let gameInfo: [GameInfoItem]
@@ -70,6 +71,11 @@ struct ScorecardInning: Codable, Sendable, Equatable {
 
 struct AtBatEvent: Codable, Sendable, Equatable {
     let batterId: Int
+    let batterName: String
+    let pitcherId: Int
+    let pitcherName: String
+    let inning: Int
+    let isTop: Bool
     let result: String // e.g., "1B", "K", "HR", "F8"
     let description: String
     let balls: Int
