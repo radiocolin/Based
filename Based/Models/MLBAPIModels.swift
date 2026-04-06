@@ -155,6 +155,7 @@ struct LiveFeedResponse: Codable, Sendable {
 }
 
 struct GameData: Codable, Sendable {
+    let status: GameStatus?
     let moundVisits: MoundVisits?
     let absChallenges: ABSChallenges?
     let weather: Weather?

@@ -566,11 +566,13 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             isLive = false
         }
         
-        // Override with authoritative game status from schedule data
-        let gameStatus = game?.status.detailedState ?? ""
-        let statusCode = game?.status.statusCode ?? ""
-        if gameStatus == "Final" || gameStatus == "Game Over" || gameStatus == "Completed Early" || statusCode == "F" || statusCode == "O" || gameStatus == "Scheduled" || gameStatus == "Pre-Game" {
-            isLive = false
+        // Override with authoritative game status from live feed (fresh each poll)
+        if let freshStatus = currentGameData?.status {
+            let gameStatus = freshStatus.detailedState
+            let statusCode = freshStatus.statusCode ?? ""
+            if gameStatus == "Final" || gameStatus == "Game Over" || gameStatus == "Completed Early" || statusCode == "F" || statusCode == "O" || gameStatus == "Scheduled" || gameStatus == "Pre-Game" {
+                isLive = false
+            }
         }
         
         let wasLive = self.isGameLive
