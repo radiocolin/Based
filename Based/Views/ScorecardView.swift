@@ -531,7 +531,8 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate, U
             let events = isHomeTeam ? inningObj?.home : inningObj?.away
             let batterEvents = events?.filter { $0.batterId == batter.id } ?? []
             if subIndex < batterEvents.count {
-                delegate?.didSelectAtBat(batterEvents[subIndex], batter: batter, pitcherName: "Pitcher")
+                let event = batterEvents[subIndex]
+                delegate?.didSelectAtBat(event, batter: batter, pitcherName: event.pitcherName)
             }
         }
     }

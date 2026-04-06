@@ -925,8 +925,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
     // MARK: - TimelineViewDelegate
     func didSelectTimelineAtBat(_ event: AtBatEvent) {
-        let actualPitcher = currentLinescore?.defense?.pitcher?.fullName ?? event.pitcherName
-        let vc = AtBatDetailViewController(event: event, batterName: event.batterName, pitcherName: actualPitcher)
+        let vc = AtBatDetailViewController(event: event, batterName: event.batterName, pitcherName: event.pitcherName)
         if let sheet = vc.sheetPresentationController {
             sheet.detents = [.medium(), .large()]
             sheet.prefersGrabberVisible = true
@@ -936,8 +935,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
     // MARK: - ScorecardViewDelegate
     func didSelectAtBat(_ event: AtBatEvent, batter: ScorecardBatter, pitcherName: String) {
-        let actualPitcher = currentLinescore?.defense?.pitcher?.fullName ?? pitcherName
-        let vc = AtBatDetailViewController(event: event, batterName: batter.fullName, pitcherName: actualPitcher)
+        let vc = AtBatDetailViewController(event: event, batterName: batter.fullName, pitcherName: event.pitcherName)
         if let sheet = vc.sheetPresentationController {
             sheet.detents = [.medium(), .large()]
             sheet.prefersGrabberVisible = true

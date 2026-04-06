@@ -88,7 +88,7 @@ class GameService {
         }
         
         if shouldFetchScorecard {
-            let scorecard = try await fetchScorecard()
+            let scorecard = try await fetchScorecard(linescore: linescore)
             await MainActor.run {
                 self.lastScorecard = scorecard
                 self.delegate?.didUpdateScorecard(scorecard)
@@ -124,7 +124,7 @@ class GameService {
         return try await MLBAPIClient.shared.fetchLinescore(gamePk: gamePk)
     }
 
-    func fetchScorecard() async throws -> ScorecardData {
+    func fetchScorecard(linescore: Linescore? = nil) async throws -> ScorecardData {
         guard let gamePk = currentGamePk else {
             throw NSError(domain: "GameService", code: 400, userInfo: [NSLocalizedDescriptionKey: "No game selected"])
         }
@@ -132,10 +132,10 @@ class GameService {
         let pbp = try await MLBAPIClient.shared.fetchPlayByPlay(gamePk: gamePk)
         let box = try await MLBAPIClient.shared.fetchBoxscore(gamePk: gamePk)
         
-        return transformToScorecardData(playByPlay: pbp, boxscore: box)
+        return transformToScorecardData(playByPlay: pbp, boxscore: box, linescore: linescore)
     }
 
-    private func transformToScorecardData(playByPlay: PlayByPlayResponse, boxscore: BoxscoreResponse) -> ScorecardData {
+    private func transformToScorecardData(playByPlay: PlayByPlayResponse, boxscore: BoxscoreResponse, linescore: Linescore? = nil) -> ScorecardData {
         func findPlayer(in team: BoxscoreTeam?, id: Int) -> BoxscorePlayer? {
             guard let team = team, let players = team.players else { return nil }
             return players["ID\(id)"] ?? players["\(id)"]
