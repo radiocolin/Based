@@ -42,10 +42,10 @@ class ScorecardView: UIView {
     
     // Constants
     private var nameWidth: CGFloat = 90
-    private let inningWidth: CGFloat = 60
-    private let statWidth: CGFloat = 40
+    private let inningWidth: CGFloat = 56
+    private let statWidth: CGFloat = 38
     private let headerHeight: CGFloat = 32
-    private let rowHeight: CGFloat = 70
+    private let rowHeight: CGFloat = 64
     
     override init(frame: CGRect) {
         super.init(frame: frame)

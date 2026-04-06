@@ -51,24 +51,24 @@ class ScorecardCell: UICollectionViewCell {
         resultLabel.adjustsFontSizeToFitWidth = true
         resultLabel.minimumScaleFactor = 0.5
         
-        // Constraints
+        // Constraints — inset the diamond slightly so corner labels have breathing room
         NSLayoutConstraint.activate([
-            diamondView.topAnchor.constraint(equalTo: contentView.topAnchor),
-            diamondView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            diamondView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            diamondView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            diamondView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4),
+            diamondView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 2),
+            diamondView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -2),
+            diamondView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -4),
             
-            resultLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            resultLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            resultLabel.centerXAnchor.constraint(equalTo: diamondView.centerXAnchor),
+            resultLabel.centerYAnchor.constraint(equalTo: diamondView.centerYAnchor),
             
-            ballsLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4),
-            ballsLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 4),
+            ballsLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 2),
+            ballsLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 2),
             
-            strikesLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4),
-            strikesLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -4),
+            strikesLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 2),
+            strikesLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -2),
             
-            outsLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -4),
-            outsLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -4)
+            outsLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -2),
+            outsLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -2)
         ])
     }
     

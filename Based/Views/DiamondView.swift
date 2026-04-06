@@ -14,7 +14,25 @@ class DiamondView: UIView {
     private let fillMaskLayer = CAShapeLayer()
     
     private var pencilColor: UIColor { AppColors.pencil }
-    private let baseSize: CGFloat = 8
+    
+    /// Base box size scales with the drawn diamond so proportions stay consistent
+    /// across the small scorecard cells, the live-status panel, and the large detail graphic.
+    private var baseSize: CGFloat {
+        let diamondSize = min(bounds.width, bounds.height) * 0.8
+        return max(5, diamondSize * 0.11)
+    }
+    
+    /// Progress-line width scales with diamond size.
+    private var progressLineWidth: CGFloat {
+        let diamondSize = min(bounds.width, bounds.height) * 0.8
+        return max(1.5, min(4, diamondSize * 0.035))
+    }
+    
+    /// Base-box stroke width scales with diamond size.
+    private var baseStrokeWidth: CGFloat {
+        let diamondSize = min(bounds.width, bounds.height) * 0.8
+        return max(0.5, min(1.5, diamondSize * 0.015))
+    }
     
     private var diamondPoints: (home: CGPoint, first: CGPoint, second: CGPoint, third: CGPoint)?
     private var bases: BasesReached?
@@ -45,7 +63,7 @@ class DiamondView: UIView {
 
         fillTextureLayer.fillColor = UIColor.clear.cgColor
         fillTextureLayer.strokeColor = UIColor.clear.cgColor
-        fillTextureLayer.lineWidth = 0.8
+        fillTextureLayer.lineWidth = 1.0
         fillTextureLayer.lineCap = .round
         fillTextureLayer.lineJoin = .round
         fillTextureLayer.mask = fillMaskLayer
@@ -54,6 +72,7 @@ class DiamondView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         mainDiamondLayer.fillColor = AppColors.diamondFill.cgColor
+        fillTextureLayer.lineWidth = baseStrokeWidth
         drawMainDiamond()
         updateActiveBases()
     }
@@ -111,7 +130,8 @@ class DiamondView: UIView {
                 path.append(UIBezierPath.pencilLine(from: from, to: mid))
                 let dx = to.x - from.x, dy = to.y - from.y
                 let len = hypot(dx, dy)
-                let px = -dy / len * 6, py = dx / len * 6
+                let slashSize = max(4, min(bounds.width, bounds.height) * 0.8 * 0.09)
+                let px = -dy / len * slashSize, py = dx / len * slashSize
                 path.append(UIBezierPath.pencilLine(from: CGPoint(x: mid.x - px, y: mid.y - py), to: CGPoint(x: mid.x + px, y: mid.y + py)))
             } else {
                 path.append(UIBezierPath.pencilLine(from: from, to: to))
@@ -172,7 +192,7 @@ class DiamondView: UIView {
             
             let bLayer = CAShapeLayer()
             bLayer.path = bPath.cgPath
-            bLayer.lineWidth = 0.8
+            bLayer.lineWidth = baseStrokeWidth
             bLayer.strokeColor = pencilColor.withAlphaComponent(0.4).cgColor
             
             if occupied {
@@ -199,7 +219,7 @@ class DiamondView: UIView {
         let lineLayer = CAShapeLayer()
         lineLayer.path = path.cgPath
         lineLayer.strokeColor = AppColors.lineStroke.cgColor
-        lineLayer.lineWidth = 2.5
+        lineLayer.lineWidth = progressLineWidth
         lineLayer.lineCap = .round
         lineLayer.lineJoin = .round
         basesLayer.addSublayer(lineLayer)
@@ -212,63 +232,89 @@ class DiamondView: UIView {
         }
     }
     
-    /// Draws a text annotation (E6, SB, CS) near the appropriate base on the diamond.
-    /// Font scales with diamond size so labels are legible in both small scorecard cells
-    /// and the larger AtBatDetailViewController graphic.
-    /// Positions avoid the existing corner labels (balls=top-left, strikes=top-right, outs=bottom-right).
+    // MARK: - Annotation Placement System
+    //
+    // Every annotation uses: reference point + cardinal offset + text alignment.
+    // All gaps derive from `baseSize` / `fontSize` which scale with the diamond,
+    // so proportions are identical at every rendering size.
+    //
+    // Three rules, three directions:
+    //
+    //   Type          Reference        Offset        Alignment        Why
+    //   ───────────── ──────────────── ───────────── ──────────────── ──────────────────────
+    //   E/SB at 1B    1B vertex        DOWN          center-X         Clears TR (strikes)
+    //   E/SB at 3B    3B vertex        DOWN          center-X         Clears TL (balls)
+    //   E/SB at 2B    2B vertex        LEFT          right-align      Clears TR (strikes)
+    //   E/SB at Home  Home vertex      LEFT          right-align      Clears BR (outs)
+    //   CS            slash midpoint   AWAY from ctr  center-X         Clears slash mark + result
+    //
+    // Reserved zones the system avoids:
+    //   TL corner = balls count,  TR corner = strikes count,
+    //   BR corner = outs count,   center = result text.
+    //
+    //     ┌──────────────────────────┐
+    //     │ [B]  ↑CS ◇ 2B  ↑CS [S]  │  CS on upper paths → UP
+    //     │        ╱←ann╲           │
+    //     │  3B  ◇   ╳    ◇  1B    │
+    //     │    ↓ann         ↓ann    │
+    //     │        ╲←ann╱      [O]  │
+    //     │   ↓CS    ◇ Home  ↓CS    │  CS on lower paths → DOWN
+    //     └──────────────────────────┘
+
     private func drawAnnotation(_ annotation: BaseAnnotation, points p: (home: CGPoint, first: CGPoint, second: CGPoint, third: CGPoint)) {
-        // Scale font with diamond size (8pt at ~48px diamond, ~14pt at ~144px)
         let diamondSize = min(bounds.width, bounds.height) * 0.8
         let fontSize = max(8, min(16, diamondSize * 0.18))
         let font = UIFont(name: "PatrickHand-Regular", size: fontSize) ?? .systemFont(ofSize: fontSize, weight: .medium)
         let color = pencilColor.withAlphaComponent(0.85)
         let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
         let textSize = (annotation.label as NSString).size(withAttributes: attrs)
-        let offset = max(1, diamondSize * 0.02)
-        
-        // Determine the reference point
-        let refPoint: CGPoint
+
+        let anchor: CGPoint
+        let alignX: CGFloat   // 0 = left edge at anchor, 0.5 = centered, 1 = right edge
+        let alignY: CGFloat   // 0 = top edge at anchor, 0.5 = centered, 1 = bottom edge
+
         if annotation.kind == .caughtStealing {
-            // Position slightly past the midpoint toward the target base (60% along the path)
-            // so the label sits just beyond the perpendicular slash mark
+            // CS: reference = slash midpoint, offset = away from diamond center on Y axis.
+            // Upper basepaths (mid above center) → label goes UP.
+            // Lower basepaths (mid below center) → label goes DOWN.
             let (fromPt, toPt) = basePath(to: annotation.base, points: p)
-            let t: CGFloat = 0.65
-            refPoint = CGPoint(x: fromPt.x + (toPt.x - fromPt.x) * t,
-                               y: fromPt.y + (toPt.y - fromPt.y) * t)
+            let midX = (fromPt.x + toPt.x) / 2
+            let midY = (fromPt.y + toPt.y) / 2
+            let cy = bounds.midY
+            let slashExtent = max(4, diamondSize * 0.09)
+            let verticalGap = slashExtent + fontSize * 0.6
+            if midY < cy {
+                // Upper basepath — push UP toward top edge
+                anchor = CGPoint(x: midX, y: midY - verticalGap)
+                alignX = 0.5; alignY = 1.0
+            } else {
+                // Lower basepath — push DOWN toward bottom edge
+                anchor = CGPoint(x: midX, y: midY + verticalGap)
+                alignX = 0.5; alignY = 0
+            }
         } else {
-            refPoint = baseVertex(annotation.base, points: p)
-        }
-        
-        var x: CGFloat
-        var y: CGFloat
-        
-        if annotation.kind == .caughtStealing {
-            // Center directly on the base path
-            x = refPoint.x - textSize.width / 2
-            y = refPoint.y - textSize.height / 2
-        } else {
-            // Position to avoid corner labels:
-            //   Top-left = balls, Top-right = strikes, Bottom-right = outs
+            let gap = baseSize
+            let vertex = baseVertex(annotation.base, points: p)
             switch annotation.base {
-            case 1: // First base (right vertex) — below, centered
-                x = refPoint.x - textSize.width / 2
-                y = refPoint.y + offset
-            case 2: // Second base (top vertex) — to the LEFT (away from strikes corner)
-                x = refPoint.x - textSize.width - offset
-                y = refPoint.y - textSize.height / 2
-            case 3: // Third base (left vertex) — below (toward free bottom-left corner)
-                x = refPoint.x - textSize.width / 2
-                y = refPoint.y + offset
-            default: // Home (bottom vertex) — to the LEFT (away from outs corner)
-                x = refPoint.x - textSize.width - offset
-                y = refPoint.y - textSize.height / 2
+            case 1, 3:
+                // Side vertices — DOWN, horizontally centered
+                anchor = CGPoint(x: vertex.x, y: vertex.y + gap)
+                alignX = 0.5; alignY = 0
+            default:
+                // Pole vertices (2B, Home) — LEFT, vertically centered
+                anchor = CGPoint(x: vertex.x - gap, y: vertex.y)
+                alignX = 1.0; alignY = 0.5
             }
         }
-        
-        // Clamp within cell bounds
+
+        // Derive frame from anchor + alignment
+        var x = anchor.x - textSize.width * alignX
+        var y = anchor.y - textSize.height * alignY
+
+        // Clamp within view bounds
         x = max(1, min(x, bounds.width - textSize.width - 1))
         y = max(1, min(y, bounds.height - textSize.height - 1))
-        
+
         let textLayer = CATextLayer()
         textLayer.string = NSAttributedString(string: annotation.label, attributes: attrs)
         textLayer.frame = CGRect(x: x, y: y, width: textSize.width + 2, height: textSize.height)

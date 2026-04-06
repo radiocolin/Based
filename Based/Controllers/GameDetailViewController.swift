@@ -74,8 +74,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private var stickyNameWidthConstraint: NSLayoutConstraint?
 
     // Constants
-    private let inningWidth: CGFloat = 60
-    private let statWidth: CGFloat = 40
+    private let inningWidth: CGFloat = 56
+    private let statWidth: CGFloat = 38
     private let headerHeight: CGFloat = 32
 
     init(gamePk: Int, games: [ScheduleGame]) {
@@ -907,8 +907,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             let layout = scorecardView.currentColumnLayout
             guard let inningLayout = layout.layout(forInning: inningNum) else { return }
             let colIndex = inningLayout.startColumn + inningLayout.subColumnCount - 1
-            let cellWidth: CGFloat = 60
-            let rowHeight: CGFloat = 70
+            let cellWidth: CGFloat = 56
+            let rowHeight: CGFloat = 64
             
             // Wait for layout to settle, then scroll
             Task { @MainActor in
