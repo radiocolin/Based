@@ -46,13 +46,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
     
     func update(event: AtBatEvent) {
         self.event = event
-        
-        // Update UI components
-        let isLive = event.result == "LIVE"
-        let isCalledK = event.result == "Ʞ"
-        resultLabel.text = isLive ? "LIVE" : (isCalledK ? "K" : event.result)
-        resultLabel.transform = isCalledK ? CGAffineTransform(scaleX: -1, y: 1) : .identity
-        descriptionLabel.text = isLive ? "Current at bat" : event.description
+        applyEventPresentation()
         
         if let pitches = event.pitches {
             pitchTrackView.configure(with: pitches)
@@ -66,13 +60,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
-        
-        // Initial setup for LIVE state if needed
-        let isLive = event.result == "LIVE"
-        let isCalledK = event.result == "Ʞ"
-        resultLabel.text = isLive ? "LIVE" : (isCalledK ? "K" : event.result)
-        resultLabel.transform = isCalledK ? CGAffineTransform(scaleX: -1, y: 1) : .identity
-        descriptionLabel.text = isLive ? "Current at bat" : event.description
+        applyEventPresentation()
     }
     
     override func viewDidLayoutSubviews() {
@@ -97,8 +85,6 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         batterLabel.numberOfLines = 0
         batterLabel.isUserInteractionEnabled = true
         
-        resultLabel.text = event.result == "Ʞ" ? "K" : event.result
-        resultLabel.transform = event.result == "Ʞ" ? CGAffineTransform(scaleX: -1, y: 1) : .identity
         resultLabel.font = UIFont(name: "PermanentMarker-Regular", size: 32) ?? .systemFont(ofSize: 32, weight: .bold)
         resultLabel.textColor = pencilColor
         
@@ -126,7 +112,6 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         view.addSubview(atBatGraphicView)
         
         // Description
-        descriptionLabel.text = event.description
         descriptionLabel.font = UIFont(name: bodyFont, size: 18) ?? .systemFont(ofSize: 18)
         descriptionLabel.textColor = pencilColor.withAlphaComponent(0.8)
         descriptionLabel.textAlignment = .left
@@ -185,6 +170,13 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
 
         let pitcherTap = UITapGestureRecognizer(target: self, action: #selector(handlePitcherTap))
         subHeaderLabel.addGestureRecognizer(pitcherTap)
+    }
+
+    private func applyEventPresentation() {
+        let presentation = AtBatPresentation(event: event, teamAccentColor: accentColor)
+        resultLabel.text = presentation.displayResult
+        resultLabel.transform = presentation.resultTransform
+        descriptionLabel.text = presentation.displayDescription
     }
 
     @objc private func handleBatterTap() {

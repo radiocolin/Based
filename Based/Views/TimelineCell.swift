@@ -128,29 +128,26 @@ class TimelineCell: UITableViewCell {
     
     func configure(with event: AtBatEvent, accentColor: UIColor? = nil) {
         self.accentColor = accentColor ?? AppColors.pencil
-        let shouldAccentEvent = event.result == "HR" || event.bases.home
-        let eventAccentColor = shouldAccentEvent ? self.accentColor : AppColors.pencil
+        let presentation = AtBatPresentation(event: event, teamAccentColor: self.accentColor)
 
         pitchTrackView.configure(with: event.pitches ?? [])
         diamondView.configure(
             with: event.bases,
-            style: .scorecard,
+            style: presentation.diamondStyle,
             isRun: event.result == "HR",
-            accentColor: self.accentColor
+            accentColor: presentation.diamondAccentColor
         )
         
-        let isCalledK = event.result == "Ʞ"
-        let displayResult = isCalledK ? "K" : event.result
-        resultLabel.text = displayResult
-        resultLabel.textColor = eventAccentColor
-        resultLabel.transform = isCalledK ? CGAffineTransform(scaleX: -1, y: 1) : .identity
+        resultLabel.text = presentation.displayResult
+        resultLabel.textColor = presentation.primaryColor
+        resultLabel.transform = presentation.resultTransform
         
-        ballsLabel.text = "\(event.balls)B"
-        ballsLabel.textColor = eventAccentColor
-        strikesLabel.text = "\(event.strikes)S"
-        strikesLabel.textColor = eventAccentColor
-        outsLabel.text = event.outs > 0 ? "\(event.outs)" : ""
-        outsLabel.textColor = eventAccentColor
+        ballsLabel.text = presentation.ballsText
+        ballsLabel.textColor = presentation.primaryColor
+        strikesLabel.text = presentation.strikesText
+        strikesLabel.textColor = presentation.primaryColor
+        outsLabel.text = presentation.outsText
+        outsLabel.textColor = presentation.primaryColor
         
         batterLabel.text = event.batterName.uppercased()
         pitcherLabel.text = "vs \(event.pitcherName)"

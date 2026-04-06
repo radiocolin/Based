@@ -63,42 +63,30 @@ class AtBatGraphicView: UIView {
 
     func configure(with event: AtBatEvent, accentColor: UIColor? = nil) {
         self.accentColor = accentColor
-        let isLive = event.result == "LIVE"
-        let didScore = event.result == "HR" || event.bases.home
-        let scoringColor = didScore ? (accentColor ?? AppColors.pencil) : AppColors.pencil
+        let presentation = AtBatPresentation(event: event, teamAccentColor: accentColor)
         
-        if isLive {
+        if presentation.isLive {
             resultLabel.attributedText = nil
             resultLabel.textColor = AppColors.pencil
         } else {
-            // Use attributed string to reduce line spacing
-            let paragraphStyle = NSMutableParagraphStyle()
-            paragraphStyle.lineHeightMultiple = 0.75
-            paragraphStyle.alignment = .center
-            
-            let attributes: [NSAttributedString.Key: Any] = [
-                .paragraphStyle: paragraphStyle,
-                .font: resultLabel.font ?? .systemFont(ofSize: 36),
-                .foregroundColor: scoringColor
-            ]
-            let isCalledK = event.result == "Ʞ"
-            let displayResult = isCalledK ? "K" : event.result
-            resultLabel.attributedText = NSAttributedString(string: displayResult, attributes: attributes)
-            resultLabel.transform = isCalledK ? CGAffineTransform(scaleX: -1, y: 1) : .identity
+            resultLabel.attributedText = presentation.resultAttributedString(
+                font: resultLabel.font ?? .systemFont(ofSize: 36)
+            )
+            resultLabel.transform = presentation.resultTransform
         }
         
-        ballsLabel.text = "\(event.balls)B"
-        ballsLabel.textColor = scoringColor
-        strikesLabel.text = "\(event.strikes)S"
-        strikesLabel.textColor = scoringColor
-        outsLabel.text = event.outs > 0 ? "\(event.outs)" : ""
-        outsLabel.textColor = scoringColor
+        ballsLabel.text = presentation.ballsText
+        ballsLabel.textColor = presentation.primaryColor
+        strikesLabel.text = presentation.strikesText
+        strikesLabel.textColor = presentation.primaryColor
+        outsLabel.text = presentation.outsText
+        outsLabel.textColor = presentation.primaryColor
 
         diamondView.configure(
             with: event.bases,
-            style: isLive ? .liveStatus : .scorecard,
+            style: presentation.diamondStyle,
             isRun: event.result == "HR",
-            accentColor: accentColor ?? AppColors.pencil
+            accentColor: presentation.diamondAccentColor
         )
     }
 }

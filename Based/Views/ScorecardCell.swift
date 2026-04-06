@@ -91,37 +91,25 @@ class ScorecardCell: UICollectionViewCell {
         }
         
         diamondView.alpha = 1.0
-        let shouldAccentEvent = event.result == "HR" || event.bases.home
-        let eventAccentColor = shouldAccentEvent ? accentColor : AppColors.pencil
-        resultLabel.textColor = eventAccentColor
-        ballsLabel.textColor = eventAccentColor
-        strikesLabel.textColor = eventAccentColor
-        outsLabel.textColor = eventAccentColor
+        let presentation = AtBatPresentation(event: event, teamAccentColor: accentColor)
+        resultLabel.textColor = presentation.primaryColor
+        ballsLabel.textColor = presentation.primaryColor
+        strikesLabel.textColor = presentation.primaryColor
+        outsLabel.textColor = presentation.primaryColor
+        resultLabel.attributedText = presentation.resultAttributedString(
+            font: resultLabel.font ?? .systemFont(ofSize: 18)
+        )
+        resultLabel.transform = presentation.resultTransform
         
-        // Use attributed string to reduce line spacing
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineHeightMultiple = 0.75
-        paragraphStyle.alignment = .center
-        
-        let attributes: [NSAttributedString.Key: Any] = [
-            .paragraphStyle: paragraphStyle,
-            .font: resultLabel.font ?? .systemFont(ofSize: 18),
-            .foregroundColor: eventAccentColor
-        ]
-        let isCalledK = event.result == "Ʞ"
-        let displayResult = isCalledK ? "K" : event.result
-        resultLabel.attributedText = NSAttributedString(string: displayResult, attributes: attributes)
-        resultLabel.transform = isCalledK ? CGAffineTransform(scaleX: -1, y: 1) : .identity
-        
-        ballsLabel.text = "\(event.balls)B"
-        strikesLabel.text = "\(event.strikes)S"
-        outsLabel.text = event.outs > 0 ? "\(event.outs)" : ""
+        ballsLabel.text = presentation.ballsText
+        strikesLabel.text = presentation.strikesText
+        outsLabel.text = presentation.outsText
         
         diamondView.configure(
             with: event.bases,
-            style: .scorecard,
+            style: presentation.diamondStyle,
             isRun: event.result == "HR",
-            accentColor: accentColor
+            accentColor: presentation.diamondAccentColor
         )
     }
 

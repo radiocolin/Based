@@ -642,7 +642,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         }
         
         scorecardView.configure(with: scorecard)
-        timelineView.configure(with: scorecard.timeline)
+        timelineView.configure(with: scorecard.timeline, teams: scorecard.teams)
         updateStickyHeaders()
         updatePitcherList()
         updateUmpireList()
@@ -1201,9 +1201,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
     private func teamAccentColor(isTopInning: Bool) -> UIColor? {
         guard let scorecard = currentScorecard else { return nil }
-        let teamName = isTopInning ? scorecard.teams.away.name : scorecard.teams.home.name
-        guard let teamName else { return nil }
-        return TeamColorProvider.color(for: teamName)
+        return scorecard.teamAccentColor(isTopInning: isTopInning)
     }
 
     @objc private func handlePitcherNameTap(_ gesture: UITapGestureRecognizer) {

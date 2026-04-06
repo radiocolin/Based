@@ -18,6 +18,37 @@ class GameService {
     private var lastLinescore: Linescore?
     private var lastScorecard: ScorecardData?
     private var lastFetchTime: Date?
+
+    private func isStatusOnlyPlay(_ play: Play) -> Bool {
+        let type = play.result?.type ?? ""
+        let event = play.result?.event?.lowercased() ?? ""
+
+        return type == "action" ||
+            event.contains("advisory") ||
+            event.contains("status change") ||
+            event.contains("pitching change") ||
+            event.contains("substitution") ||
+            event.contains("defensive sub") ||
+            event.contains("coaching change") ||
+            event.contains("injury") ||
+            event.contains("mound visit") ||
+            event.contains("ballpark visit") ||
+            event.contains("replay") ||
+            event.contains("challenge") ||
+            event.contains("delay") ||
+            event.contains("timeout") ||
+            event.contains("turn")
+    }
+
+    private func shouldIncludePlayInScorecard(_ play: Play, includeLive: Bool) -> Bool {
+        let type = play.result?.type ?? ""
+        let hasEvent = play.result?.event != nil
+        let isComplete = play.about?.isComplete == true
+        let isLive = play.about?.isComplete == false
+
+        guard type == "atBat", !isStatusOnlyPlay(play), hasEvent else { return false }
+        return isComplete || (includeLive && isLive)
+    }
     
     func startPolling(gamePk: Int) {
         stopPolling()
@@ -268,31 +299,7 @@ class GameService {
             let inningPlays = allPlays.filter { $0.about?.inning == i }
             
             // Only include actual at-bats for the scorecard grid
-            let atBatPlays = inningPlays.filter { play in
-                let type = play.result?.type ?? ""
-                let event = play.result?.event?.lowercased() ?? ""
-                
-                // Exclude non-at-bat events that should not be in the grid
-                let isAction = type == "action" || 
-                               event.contains("advisory") || 
-                               event.contains("status change") || 
-                               event.contains("pitching change") ||
-                               event.contains("substitution") ||
-                               event.contains("defensive sub") ||
-                               event.contains("coaching change") ||
-                               event.contains("injury") ||
-                               event.contains("mound visit") ||
-                               event.contains("ballpark visit") ||
-                               event.contains("replay") ||
-                               event.contains("challenge") ||
-                               event.contains("delay") ||
-                               event.contains("timeout") ||
-                               event.contains("turn")
-                
-                let isFinished = play.result?.event != nil
-                let isLive = play.about?.isComplete == false
-                return type == "atBat" && !isAction && (isFinished || isLive)
-            }
+            let atBatPlays = inningPlays.filter { shouldIncludePlayInScorecard($0, includeLive: true) }
             
             let awayEvents = atBatPlays.filter { $0.about?.isTopInning == true }.enumerated().map { (idx, play) in
                 transformPlayToEvent(play, allPlays: allPlays, playIndex: allPlays.firstIndex(where: { $0.about?.atBatIndex == play.about?.atBatIndex }) ?? 0)
@@ -305,10 +312,7 @@ class GameService {
         }
 
         // Timeline is all at-bat plays sorted newest-to-oldest
-        let timeline = allPlays.filter { play in
-            let type = play.result?.type ?? ""
-            return type == "atBat" && play.result?.event != nil
-        }.enumerated().map { (idx, play) in
+        let timeline = allPlays.filter { shouldIncludePlayInScorecard($0, includeLive: false) }.enumerated().map { (idx, play) in
             transformPlayToEvent(play, allPlays: allPlays, playIndex: allPlays.firstIndex(where: { $0.about?.atBatIndex == play.about?.atBatIndex }) ?? 0)
         }.reversed()
         

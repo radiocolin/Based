@@ -351,9 +351,7 @@ class ScorecardView: UIView {
 
     private var teamAccentColor: UIColor {
         guard let data = scorecardData else { return AppColors.pencil }
-        let teamName = isHomeTeam ? data.teams.home.name : data.teams.away.name
-        guard let teamName else { return AppColors.pencil }
-        return TeamColorProvider.color(for: teamName)
+        return data.teamAccentColor(isHomeTeam: isHomeTeam)
     }
 }
 

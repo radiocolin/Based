@@ -7,21 +7,13 @@ protocol TimelineViewDelegate: AnyObject {
     func didSelectTimelinePitcher(_ pitcher: ScorecardPitcher)
 }
 
-struct InningGroup {
-    let inning: Int
-    let isTop: Bool
-    let events: [AtBatEvent]
-    
-    var title: String {
-        let side = isTop ? "TOP" : "BOTTOM"
-        return "\(side) \(inning)"
-    }
-}
-
+@MainActor
 class TimelineView: UIView {
     weak var delegate: TimelineViewDelegate?
     private let tableView = UITableView(frame: .zero, style: .plain)
     private var groups: [InningGroup] = []
+    private var awayAccentColor: UIColor = AppColors.pencil
+    private var homeAccentColor: UIColor = AppColors.pencil
     
     // Embedded live panel
     private let liveStateView = CurrentStateView()
@@ -69,33 +61,15 @@ class TimelineView: UIView {
         ])
     }
     
-    func configure(with timeline: [AtBatEvent]) {
-        // Group by inning and half-inning
-        var grouped: [InningGroup] = []
-        var currentInning: Int?
-        var currentIsTop: Bool?
-        var currentEvents: [AtBatEvent] = []
-        
-        // Input timeline is already newest-to-oldest.
-        // We iterate and group as long as inning/half-inning matches.
-        for event in timeline {
-            if event.inning != currentInning || event.isTop != currentIsTop {
-                if let inn = currentInning, let top = currentIsTop {
-                    grouped.append(InningGroup(inning: inn, isTop: top, events: currentEvents))
-                }
-                currentInning = event.inning
-                currentIsTop = event.isTop
-                currentEvents = [event]
-            } else {
-                currentEvents.append(event)
-            }
+    func configure(with timeline: [AtBatEvent], teams: ScorecardTeams? = nil) {
+        if let teams {
+            awayAccentColor = teams.away.name.map(TeamColorProvider.color(for:)) ?? AppColors.pencil
+            homeAccentColor = teams.home.name.map(TeamColorProvider.color(for:)) ?? AppColors.pencil
+        } else {
+            awayAccentColor = TeamColorProvider.color(for: awayTeamName)
+            homeAccentColor = TeamColorProvider.color(for: homeTeamName)
         }
-        
-        if let inn = currentInning, let top = currentIsTop {
-            grouped.append(InningGroup(inning: inn, isTop: top, events: currentEvents))
-        }
-        
-        self.groups = grouped
+        self.groups = InningGroup.build(from: timeline)
         tableView.reloadData()
     }
     
@@ -429,8 +403,8 @@ extension TimelineView: UITableViewDelegate, UITableViewDataSource {
             return UITableViewCell()
         }
         let group = groups[indexPath.section]
-        let teamName = group.isTop ? awayTeamName : homeTeamName
-        cell.configure(with: group.events[indexPath.row], accentColor: TeamColorProvider.color(for: teamName))
+        let accentColor = group.isTop ? awayAccentColor : homeAccentColor
+        cell.configure(with: group.events[indexPath.row], accentColor: accentColor)
         return cell
     }
     
