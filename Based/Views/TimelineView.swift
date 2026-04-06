@@ -111,6 +111,7 @@ class TimelineView: UIView {
         container.addSubview(titleBg)
         container.sendSubviewToBack(titleBg)
         
+        liveStateView.showsTopSeparator = false
         liveStateView.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(liveStateView)
         

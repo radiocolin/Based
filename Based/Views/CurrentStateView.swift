@@ -27,6 +27,9 @@ class CurrentStateView: UIView {
     
     var tapAction: (() -> Void)?
     var longPressAction: (() -> Void)?
+    var showsTopSeparator: Bool = true {
+        didSet { topSeparatorLayer.isHidden = !showsTopSeparator }
+    }
     
     // Constants
     private let paperColor = AppColors.paper
@@ -83,7 +86,6 @@ class CurrentStateView: UIView {
         
         // Right Column - Inning header with shading
         inningContainer.backgroundColor = pencilColor.withAlphaComponent(0.08)
-        inningContainer.layer.cornerRadius = 4
 
         inningLabel.font = UIFont(name: bodyFont, size: 14) ?? .systemFont(ofSize: 14, weight: .bold)
         inningLabel.textColor = pencilColor.withAlphaComponent(0.9)
@@ -151,7 +153,7 @@ class CurrentStateView: UIView {
             // Col 3: Stats (Right - improved layout)
             // Inning header with shading
             inningContainer.topAnchor.constraint(equalTo: contentContainer.topAnchor),
-            inningContainer.leadingAnchor.constraint(equalTo: pitchTrackView.trailingAnchor, constant: 8),
+            inningContainer.leadingAnchor.constraint(equalTo: pitchTrackView.trailingAnchor, constant: 4),
             inningContainer.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
 
             inningLabel.topAnchor.constraint(equalTo: inningContainer.topAnchor, constant: 6),
