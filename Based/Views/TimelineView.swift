@@ -173,27 +173,18 @@ class TimelineView: UIView {
     
     private func rebuildFooter() {
         let footer = UIView()
+        footer.frame = CGRect(x: 0, y: 0, width: tableView.bounds.width, height: 1)
         let stack = UIStackView()
         stack.axis = .vertical
         stack.spacing = 16
         stack.translatesAutoresizingMaskIntoConstraints = false
         footer.addSubview(stack)
         
-        let leadingConstraint = stack.leadingAnchor.constraint(greaterThanOrEqualTo: footer.leadingAnchor, constant: 16)
-        let trailingConstraint = stack.trailingAnchor.constraint(lessThanOrEqualTo: footer.trailingAnchor, constant: -16)
-        let topConstraint = stack.topAnchor.constraint(greaterThanOrEqualTo: footer.topAnchor, constant: 20)
-        let bottomConstraint = stack.bottomAnchor.constraint(lessThanOrEqualTo: footer.bottomAnchor, constant: -24)
-
-        [leadingConstraint, trailingConstraint, topConstraint, bottomConstraint].forEach {
-            $0.priority = .defaultHigh
-        }
-
         NSLayoutConstraint.activate([
-            stack.centerXAnchor.constraint(equalTo: footer.centerXAnchor),
-            topConstraint,
-            leadingConstraint,
-            trailingConstraint,
-            bottomConstraint
+            stack.topAnchor.constraint(equalTo: footer.topAnchor, constant: 20),
+            stack.leadingAnchor.constraint(equalTo: footer.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: footer.trailingAnchor, constant: -16),
+            stack.bottomAnchor.constraint(equalTo: footer.bottomAnchor, constant: -24)
         ])
         
         // Pitchers
