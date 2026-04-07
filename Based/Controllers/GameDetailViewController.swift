@@ -139,7 +139,9 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        GameService.shared.stopPolling()
+        if isMovingFromParent || isBeingDismissed {
+            GameService.shared.stopPolling()
+        }
     }
 
 
