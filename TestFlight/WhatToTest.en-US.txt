@@ -1,44 +1,29 @@
--Player Detail (NEW) — Hitters and Pitchers
-- Open a game and tap a batter name from the scorecard, an at-bat detail sheet, or a pitcher name from the pitcher lists / at-bat detail sheet.
-- Verify the player sheet opens for both hitters and pitchers.
-- For hitters, confirm season stats now populate (AVG / HR / RBI / SB / OPS).
-- For pitchers, confirm season stats now populate with pitching numbers (ERA / IP / W / L / K).
-- Verify today's game stats are appropriate for the player type: hitters should show batting game stats, pitchers should show IP / H / R / ER / BB / K.
+Latest Since Last Notes Update
 
-Pitcher Taps (NEW)
-- In the scorecard view, tap a pitcher name in the PITCHERS section and verify it opens that pitcher’s detail sheet.
-- In timeline mode, scroll to the footer and tap a pitcher name in either team’s pitcher table — it should open the same pitcher detail sheet.
+Live / Pregame / Final
+- Open a live, pregame, and final game.
+- Verify game detail does not stay "live" once the feed reports Scheduled, Pre-Game, Final, Game Over, or Completed Early.
 
-Color Work (NEW) — Scoreboard / Scorecard / Diamond
-- In the top scoreboard, any inning with runs greater than 0 should appear in that team’s color.
-- In the R/H/E section, the R value should appear in the team’s color when it is greater than 0.
-- In the scorecard totals row, inning run sums and the R column should also appear in the team’s color when greater than 0.
-- In scorecard cells, completed scoring paths should use the team color for the pencil / shading treatment.
-- Home runs should still appear with the full colored/shaded diamond treatment.
+Scoreboard Cleanup
+- Pregame: inning boxes and R/H/E should stay blank until data exists.
+- Live/final: inning lines still populate, and runs are team-colored only when greater than 0.
 
-Scorecard Runs + Runner Highlighting (NEW)
-- Open a completed game where runners score on later plays.
-- Verify the player's R total increments when that runner eventually scores, not just on home runs.
-- Verify the scorecard diamond uses team-color shading only when the runner’s tracked path actually reaches home.
-- Verify RBI plays do not incorrectly color the batter's own cell unless that batter also reaches home.
+At-Bat Presentation
+- Open the same at-bat from scorecard, timeline, and live state.
+- Result, description, count, and diamond styling should match across all entry points.
+- Scoring plays and HRs should carry batting-team color through scorecard, timeline, and at-bat detail.
+- Called strikeouts should still render as a backward K.
 
--Improved the pitch tracker in smaller views
+Timeline / Scorecard Filtering
+- Non-at-bat events like delays, substitutions, mound visits, replay/challenge notices, and advisories should not appear as batting events.
+- Ground-ball double plays should show a chained fielding label when available (example: 4-6-3 GIDP).
 
-At-Bat Detail — Pitcher Fix
-- Open a completed game and tap any at-bat in the scorecard. Verify the pitcher name shown in the detail sheet matches the pitcher who actually faced that batter (not the current pitcher).
-- Check this across multiple innings, especially after a pitching change.
+Team Color Readability
+- Check darker teams like White Sox, Pirates, Padres, Mariners, Yankees, Astros, and Rockies in light and dark mode.
+- Team-colored runs and scoring marks should remain readable.
 
-Timeline View (NEW) — Footer Info
-- Switch to timeline mode (tap the timeline icon in the nav bar). This is a new chronological play-by-play view of the game.
-- Scroll to the bottom — you should now see pitcher stats for both teams (IP/H/R/ER/BB/K), umpires (HP, 1B, 2B, 3B), and game info (First Pitch, Duration, Attendance, Venue).
-- Compare these with what's shown at the bottom of the scorecard view — they should match.
-
-Weather in Game Info
-- On both the scorecard and timeline views, check the Game Info section at the bottom for Weather (temp, condition) and Wind.
-- This should appear for live games and completed games that have weather data.
-- Note: weather may not appear for all games (depends on API data availability).
-
-View Mode Persistence
-- Switch to timeline mode, then go back to the schedule and open the same or a different game — it should open in timeline mode.
-- Switch back to scorecard mode, leave and re-enter a game — it should open in scorecard mode.
-- Kill and relaunch the app — your last chosen view mode should be remembered.
+Regression Checks
+- Player detail still opens from batter and pitcher taps, with correct hitter/pitcher stats.
+- Historical at-bat detail should still show the correct pitcher.
+- Timeline footer should still show pitchers, umpires, game info, and weather when available.
+- View mode persistence should still remember scorecard vs timeline across reopening and relaunch.

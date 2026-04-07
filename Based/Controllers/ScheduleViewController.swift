@@ -286,25 +286,133 @@ class ScheduleViewController: UIViewController {
         nextButton.alpha = nextButton.isEnabled ? 1.0 : 0.3
     }
 
+    private enum ScheduleStatusPriority: Int {
+        case live = 0
+        case delayedOrSuspended = 1
+        case scheduled = 2
+        case final = 3
+    }
+
+    private enum LiveProgressHalf: Int {
+        case end = 0
+        case bottom = 1
+        case middle = 2
+        case top = 3
+        case unknown = 4
+    }
+
+    private func sortedGames(_ games: [ScheduleGame]) -> [ScheduleGame] {
+        games.sorted { lhs, rhs in
+            let lhsFavorite = isFavoriteGame(lhs)
+            let rhsFavorite = isFavoriteGame(rhs)
+            if lhsFavorite != rhsFavorite { return lhsFavorite && !rhsFavorite }
+
+            let lhsStart = scheduleDate(from: lhs.gameDate)
+            let rhsStart = scheduleDate(from: rhs.gameDate)
+            if lhsStart != rhsStart { return lhsStart < rhsStart }
+
+            let lhsStatus = statusPriority(for: lhs)
+            let rhsStatus = statusPriority(for: rhs)
+            if lhsStatus != rhsStatus { return lhsStatus.rawValue < rhsStatus.rawValue }
+
+            if lhsStatus == .live {
+                let lhsProgress = liveProgress(for: lhs)
+                let rhsProgress = liveProgress(for: rhs)
+                if lhsProgress.inning != rhsProgress.inning { return lhsProgress.inning > rhsProgress.inning }
+                if lhsProgress.half != rhsProgress.half { return lhsProgress.half.rawValue < rhsProgress.half.rawValue }
+            }
+
+            let lhsHome = lhs.teams.home.team.name ?? ""
+            let rhsHome = rhs.teams.home.team.name ?? ""
+            let nameOrder = lhsHome.localizedCaseInsensitiveCompare(rhsHome)
+            if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
+
+            return lhs.gamePk < rhs.gamePk
+        }
+    }
+
+    private func isFavoriteGame(_ game: ScheduleGame) -> Bool {
+        FavoritesService.shared.isFavorite(teamId: game.teams.away.team.id ?? 0) ||
+        FavoritesService.shared.isFavorite(teamId: game.teams.home.team.id ?? 0)
+    }
+
+    private func scheduleDate(from isoDate: String) -> Date {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: isoDate) {
+            return date
+        }
+
+        let fallbackFormatter = ISO8601DateFormatter()
+        fallbackFormatter.formatOptions = [.withInternetDateTime]
+        return fallbackFormatter.date(from: isoDate) ?? .distantFuture
+    }
+
+    private func statusPriority(for game: ScheduleGame) -> ScheduleStatusPriority {
+        let detailedState = game.status.detailedState.lowercased()
+        let statusCode = game.status.statusCode?.lowercased() ?? ""
+
+        if isLiveState(detailedState) {
+            return .live
+        }
+
+        if detailedState.contains("delay") || detailedState.contains("suspend") || detailedState.contains("postpon") {
+            return .delayedOrSuspended
+        }
+
+        if detailedState == "final" ||
+            detailedState == "game over" ||
+            detailedState == "completed early" ||
+            statusCode == "f" ||
+            statusCode == "o" {
+            return .final
+        }
+
+        return .scheduled
+    }
+
+    private func isLiveState(_ detailedState: String) -> Bool {
+        detailedState == "in progress" ||
+        detailedState.hasPrefix("top ") ||
+        detailedState.hasPrefix("bottom ") ||
+        detailedState.hasPrefix("middle ") ||
+        detailedState.hasPrefix("mid ") ||
+        detailedState.hasPrefix("end ")
+    }
+
+    private func liveProgress(for game: ScheduleGame) -> (inning: Int, half: LiveProgressHalf) {
+        let detailedState = game.status.detailedState.lowercased()
+        let inning = inningNumber(from: detailedState)
+        let half: LiveProgressHalf
+
+        if detailedState.hasPrefix("end ") {
+            half = .end
+        } else if detailedState.hasPrefix("bottom ") {
+            half = .bottom
+        } else if detailedState.hasPrefix("middle ") || detailedState.hasPrefix("mid ") {
+            half = .middle
+        } else if detailedState.hasPrefix("top ") {
+            half = .top
+        } else {
+            half = .unknown
+        }
+
+        return (inning, half)
+    }
+
+    private func inningNumber(from detailedState: String) -> Int {
+        let digits = detailedState.compactMap(\.wholeNumberValue)
+        guard !digits.isEmpty else { return 0 }
+        return digits.reduce(0) { ($0 * 10) + $1 }
+    }
+
     private func loadSchedule(for date: Date) {
         currentDate = date
         updateDateLabel()
 
         Task {
             do {
-                var games = try await GameService.shared.fetchSchedule(for: date)
-
-                // Sort favorites to the top
-                games.sort { g1, g2 in
-                    let g1Fav = FavoritesService.shared.isFavorite(teamId: g1.teams.away.team.id ?? 0) || 
-                               FavoritesService.shared.isFavorite(teamId: g1.teams.home.team.id ?? 0)
-                    let g2Fav = FavoritesService.shared.isFavorite(teamId: g2.teams.away.team.id ?? 0) || 
-                               FavoritesService.shared.isFavorite(teamId: g2.teams.home.team.id ?? 0)
-
-                    if g1Fav && !g2Fav { return true }
-                    if !g1Fav && g2Fav { return false }
-                    return false // Maintain original order if both or neither are favorites
-                }
+                let games = sortedGames(try await GameService.shared.fetchSchedule(for: date))
                 self.currentGames = games
                 await MainActor.run {
                     self.noGamesLabel.isHidden = !games.isEmpty
@@ -555,10 +663,21 @@ class ScheduleFooterView: UICollectionReusableView {
         stackView.addArrangedSubview(tintRow)
         stackView.addArrangedSubview(madeInStack)
 
+        let leadingConstraint = stackView.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 16)
+        let trailingConstraint = stackView.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -16)
+        let topConstraint = stackView.topAnchor.constraint(greaterThanOrEqualTo: topAnchor, constant: 16)
+        let bottomConstraint = stackView.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -32)
+
+        [leadingConstraint, trailingConstraint, topConstraint, bottomConstraint].forEach {
+            $0.priority = .defaultHigh
+        }
+
         NSLayoutConstraint.activate([
             stackView.centerXAnchor.constraint(equalTo: centerXAnchor),
-            stackView.topAnchor.constraint(equalTo: topAnchor, constant: 16),
-            stackView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -32),
+            topConstraint,
+            bottomConstraint,
+            leadingConstraint,
+            trailingConstraint,
             heartImageView.heightAnchor.constraint(equalToConstant: 14),
             heartImageView.widthAnchor.constraint(equalToConstant: 16)
         ])

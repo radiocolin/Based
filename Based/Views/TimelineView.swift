@@ -179,11 +179,21 @@ class TimelineView: UIView {
         stack.translatesAutoresizingMaskIntoConstraints = false
         footer.addSubview(stack)
         
+        let leadingConstraint = stack.leadingAnchor.constraint(greaterThanOrEqualTo: footer.leadingAnchor, constant: 16)
+        let trailingConstraint = stack.trailingAnchor.constraint(lessThanOrEqualTo: footer.trailingAnchor, constant: -16)
+        let topConstraint = stack.topAnchor.constraint(greaterThanOrEqualTo: footer.topAnchor, constant: 20)
+        let bottomConstraint = stack.bottomAnchor.constraint(lessThanOrEqualTo: footer.bottomAnchor, constant: -24)
+
+        [leadingConstraint, trailingConstraint, topConstraint, bottomConstraint].forEach {
+            $0.priority = .defaultHigh
+        }
+
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: footer.topAnchor, constant: 20),
-            stack.leadingAnchor.constraint(equalTo: footer.leadingAnchor, constant: 16),
-            stack.trailingAnchor.constraint(equalTo: footer.trailingAnchor, constant: -16),
-            stack.bottomAnchor.constraint(equalTo: footer.bottomAnchor, constant: -24)
+            stack.centerXAnchor.constraint(equalTo: footer.centerXAnchor),
+            topConstraint,
+            leadingConstraint,
+            trailingConstraint,
+            bottomConstraint
         ])
         
         // Pitchers
