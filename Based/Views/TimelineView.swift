@@ -89,8 +89,8 @@ class TimelineView: UIView {
         }
     }
     
-    func configureLiveState(linescore: Linescore, pitches: [PitchEvent]?, gameData: GameData?) {
-        liveStateView.configure(with: linescore, pitches: pitches, gameData: gameData)
+    func configureLiveState(linescore: Linescore, pitches: [PitchEvent]?, gameData: GameData?, hasActiveAtBat: Bool = true) {
+        liveStateView.configure(with: linescore, pitches: pitches, gameData: gameData, hasActiveAtBat: hasActiveAtBat)
     }
     
     private func buildLiveHeader() {
@@ -173,7 +173,9 @@ class TimelineView: UIView {
     
     private func rebuildFooter() {
         let footer = UIView()
-        footer.frame = CGRect(x: 0, y: 0, width: tableView.bounds.width, height: 1)
+        // Give Auto Layout a realistic temporary height while we measure the footer.
+        // A height of 1 triggers unsatisfiable top/bottom constraints during sizing.
+        footer.frame = CGRect(x: 0, y: 0, width: tableView.bounds.width, height: 1000)
         let stack = UIStackView()
         stack.axis = .vertical
         stack.spacing = 16

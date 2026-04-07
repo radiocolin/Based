@@ -56,9 +56,9 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     
     // Data
     private var currentGames: [ScheduleGame] = []
+    private var currentSnapshot: LiveGameSnapshot?
     private var currentLinescore: Linescore?
     private var currentScorecard: ScorecardData?
-    private var currentLivePitches: [PitchEvent] = []
     private var currentGameData: GameData?
     private var currentUmpires: [ScorecardUmpire] = []
     private var currentGameInfo: [GameInfoItem] = []
@@ -295,18 +295,23 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     
     // MARK: - GameUpdateDelegate
     
-    func didUpdateLinescore(_ linescore: Linescore, pitches: [PitchEvent], gameData: GameData?) {
-        if linescore == currentLinescore && pitches == currentLivePitches { return }
-        self.currentLivePitches = pitches
-        if liveDetailVC != nil {
-            updateLiveDetailSheet(with: linescore, pitches: pitches)
+    func didUpdateSnapshot(_ snapshot: LiveGameSnapshot) {
+        currentSnapshot = snapshot
+        currentLinescore = snapshot.linescore
+        currentGameData = snapshot.gameData
+
+        if let scorecard = snapshot.scorecard, scorecard != currentScorecard {
+            updateScorecard(with: scorecard)
         }
-        updateUI(with: linescore, pitches: pitches, gameData: gameData)
-    }
-    
-    func didUpdateScorecard(_ scorecard: ScorecardData) {
-        if scorecard == currentScorecard { return }
-        updateScorecard(with: scorecard)
+
+        if let currentAtBat = snapshot.currentAtBat {
+            updateLiveDetailSheet(with: currentAtBat)
+        } else if let liveVC = liveDetailVC {
+            liveVC.dismiss(animated: true)
+            liveDetailVC = nil
+        }
+
+        updateUI(with: snapshot)
     }
     
     func didUpdateGameStatus(_ status: String) {
@@ -544,42 +549,28 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         }
     }
 
-    private func updateUI(with linescore: Linescore, pitches: [PitchEvent], gameData: GameData? = nil) {
-        self.currentLinescore = linescore
-        if let gameData = gameData { self.currentGameData = gameData }
+    private func updateUI(with snapshot: LiveGameSnapshot) {
+        let linescore = snapshot.linescore
+        let gameData = snapshot.gameData
         let game = currentGames.first(where: { $0.gamePk == gamePk })
         let awayName = game?.teams.away.team.name ?? "Away"
         let homeName = game?.teams.home.team.name ?? "Home"
-        
-        gameHeaderView.configure(with: linescore, awayNameOverride: awayName, homeNameOverride: homeName)
-        currentStateView.configure(with: linescore, pitches: pitches, gameData: gameData)
-        timelineView.configureLiveState(linescore: linescore, pitches: pitches, gameData: gameData)
-        updateGameInfo()
-        updateTimelineFooter()
-        updatePlaceholderVisibility()
-        
-        let state = linescore.inningState?.lowercased() ?? ""
-        let liveStates = ["top", "bottom", "mid", "end", "in progress", "live"]
-        var isLive = liveStates.contains(where: { state.contains($0) })
-        
-        if state.contains("final") || state.contains("scheduled") || state.contains("pre-game") || state.contains("warmup") {
-            isLive = false
-        }
-        
-        // Override with authoritative game status from live feed (fresh each poll)
-        if let freshStatus = currentGameData?.status {
-            let gameStatus = freshStatus.detailedState
-            let statusCode = freshStatus.statusCode ?? ""
-            if gameStatus == "Final" || gameStatus == "Game Over" || gameStatus == "Completed Early" || statusCode == "F" || statusCode == "O" || gameStatus == "Scheduled" || gameStatus == "Pre-Game" {
-                isLive = false
-            }
-        }
-        
+
+        let isLive = snapshot.isGameLive
         let wasLive = self.isGameLive
         self.isGameLive = isLive
         updateTeamSegmentedControlTitles()
 
-        let isDuringBreak = state == "mid" || state == "end"
+        let isDuringBreak = snapshot.phase == .betweenHalfInnings
+        let hasCurrentAtBat = snapshot.phase == .activeAtBat
+        let livePitches = snapshot.currentAtBat?.pitches
+
+        gameHeaderView.configure(with: linescore, awayNameOverride: awayName, homeNameOverride: homeName)
+        currentStateView.configure(with: linescore, pitches: livePitches, gameData: gameData, hasActiveAtBat: hasCurrentAtBat)
+        timelineView.configureLiveState(linescore: linescore, pitches: livePitches, gameData: gameData, hasActiveAtBat: hasCurrentAtBat)
+        updateGameInfo()
+        updateTimelineFooter()
+        updatePlaceholderVisibility()
         
         // In timeline mode, use embedded live panel instead of bottom panel
         let showBottomPanel = isLive && !isTimelineMode
@@ -617,10 +608,10 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         // Update timeline's embedded live panel
         timelineView.setLiveState(visible: showEmbeddedLive && !isDuringBreak)
         
-        scorecardView.setIsLive(isLive && !isDuringBreak)
+        scorecardView.setIsLive(hasCurrentAtBat)
         
         // Auto-sync on first live detection
-        if !wasLive && isLive {
+        if !wasLive && isLive && hasCurrentAtBat {
             syncWithActiveAtBat()
         }
     }
@@ -778,11 +769,9 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     private func showLiveAtBatDetail() {
-        guard let linescore = currentLinescore else { return }
-        
-        let liveEvent = constructLiveAtBatEvent(linescore: linescore, pitches: currentLivePitches)
-        let batterName = linescore.offense?.batter?.fullName ?? "Batter"
-        let pitcherName = linescore.defense?.pitcher?.fullName ?? "Pitcher"
+        guard let liveEvent = currentSnapshot?.currentAtBat else { return }
+        let batterName = liveEvent.batterName
+        let pitcherName = liveEvent.pitcherName
         
         let vc = AtBatDetailViewController(
             event: liveEvent,
@@ -800,49 +789,9 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         present(vc, animated: true)
     }
 
-    private func constructLiveAtBatEvent(linescore: Linescore, pitches: [PitchEvent]) -> AtBatEvent {
-        // Derive balls/strikes from the actual pitches we have if it's more consistent with the list shown
-        let derivedBalls = pitches.filter { $0.isBall }.count
-        let derivedStrikes = pitches.filter { $0.isStrike }.count
-        
-        // Use the higher of the two (linescore is usually more live, but pitches array is what we show)
-        // If we only show 1 pitch, but the linescore says 2 strikes, it looks broken.
-        // We'll trust the pitches list for the detail sheet to avoid this discrepancy.
-        let finalBalls = pitches.isEmpty ? (linescore.balls ?? 0) : derivedBalls
-        let finalStrikes = pitches.isEmpty ? (linescore.strikes ?? 0) : derivedStrikes
-        
-        return AtBatEvent(
-            batterId: linescore.offense?.batter?.id ?? 0,
-            batterName: linescore.offense?.batter?.fullName ?? "Batter",
-            pitcherId: linescore.defense?.pitcher?.id ?? 0,
-            pitcherName: linescore.defense?.pitcher?.fullName ?? "Pitcher",
-            inning: linescore.currentInning ?? 1,
-            isTop: linescore.inningHalf?.lowercased() == "top",
-            result: "LIVE",
-            description: "Current at bat",
-            balls: finalBalls,
-            strikes: finalStrikes,
-            outs: linescore.outs ?? 0,
-            rbi: 0,
-            bases: BasesReached(
-                first: linescore.offense?.first != nil,
-                second: linescore.offense?.second != nil,
-                third: linescore.offense?.third != nil,
-                home: false,
-                outAtFirst: false,
-                outAtSecond: false,
-                outAtThird: false,
-                outAtHome: false,
-                annotations: nil
-            ),
-            pitches: pitches
-        )
-    }
-
-    private func updateLiveDetailSheet(with linescore: Linescore, pitches: [PitchEvent]) {
+    private func updateLiveDetailSheet(with liveEvent: AtBatEvent) {
         guard let liveVC = liveDetailVC else { return }
-        let updatedEvent = constructLiveAtBatEvent(linescore: linescore, pitches: pitches)
-        liveVC.update(event: updatedEvent)
+        liveVC.update(event: liveEvent)
     }
 
     private func updateUmpireList() {

@@ -1,9 +1,33 @@
 import Foundation
 
 protocol GameUpdateDelegate: AnyObject {
-    func didUpdateLinescore(_ linescore: Linescore, pitches: [PitchEvent], gameData: GameData?)
-    func didUpdateScorecard(_ scorecard: ScorecardData)
+    func didUpdateSnapshot(_ snapshot: LiveGameSnapshot)
     func didUpdateGameStatus(_ status: String)
+}
+
+enum LiveGamePhase: Equatable {
+    case pregame
+    case activeAtBat
+    case betweenBatters
+    case betweenHalfInnings
+    case final
+}
+
+struct LiveGameSnapshot {
+    let linescore: Linescore
+    let scorecard: ScorecardData?
+    let gameData: GameData?
+    let phase: LiveGamePhase
+    let currentAtBat: AtBatEvent?
+
+    var isGameLive: Bool {
+        switch phase {
+        case .activeAtBat, .betweenBatters, .betweenHalfInnings:
+            return true
+        case .pregame, .final:
+            return false
+        }
+    }
 }
 
 class GameService {
@@ -51,6 +75,56 @@ class GameService {
         if isComplete { return hasEvent }
         if includeLive && isLive { return hasEvent || hasLivePitches }
         return false
+    }
+
+    private func livePhase(for linescore: Linescore, gameData: GameData?) -> LiveGamePhase {
+        let state = linescore.inningState?.lowercased() ?? ""
+
+        if state.contains("final") {
+            return .final
+        }
+
+        if state.contains("scheduled") || state.contains("pre-game") || state.contains("warmup") {
+            return .pregame
+        }
+
+        if let status = gameData?.status {
+            let detailedState = status.detailedState.lowercased()
+            let statusCode = status.statusCode?.lowercased() ?? ""
+            if detailedState == "final" || detailedState == "game over" || detailedState == "completed early" || statusCode == "f" || statusCode == "o" {
+                return .final
+            }
+            if detailedState == "scheduled" || detailedState == "pre-game" {
+                return .pregame
+            }
+        }
+
+        if state == "mid" || state == "end" {
+            return .betweenHalfInnings
+        }
+
+        return .betweenBatters
+    }
+
+    private func makeSnapshot(linescore: Linescore, scorecard: ScorecardData?, gameData: GameData?) -> LiveGameSnapshot {
+        let basePhase = livePhase(for: linescore, gameData: gameData)
+        let currentAtBat = scorecard?.liveCurrentAtBat
+        let phase: LiveGamePhase
+
+        switch basePhase {
+        case .pregame, .final, .betweenHalfInnings:
+            phase = basePhase
+        case .betweenBatters, .activeAtBat:
+            phase = currentAtBat == nil ? .betweenBatters : .activeAtBat
+        }
+
+        return LiveGameSnapshot(
+            linescore: linescore,
+            scorecard: scorecard,
+            gameData: gameData,
+            phase: phase,
+            currentAtBat: currentAtBat
+        )
     }
     
     func startPolling(gamePk: Int) {
@@ -114,7 +188,8 @@ class GameService {
                linescore.teams?.home?.runs != lastLinescore?.teams?.home?.runs || 
                linescore.teams?.away?.runs != lastLinescore?.teams?.away?.runs ||
                linescore.currentInning != lastLinescore?.currentInning || 
-               linescore.inningHalf != lastLinescore?.inningHalf {
+               linescore.inningHalf != lastLinescore?.inningHalf ||
+               linescore.offense?.batter?.id != lastLinescore?.offense?.batter?.id {
                 shouldFetchScorecard = true
             }
         } else {
@@ -125,29 +200,13 @@ class GameService {
             let scorecard = try await fetchScorecard(linescore: linescore)
             await MainActor.run {
                 self.lastScorecard = scorecard
-                self.delegate?.didUpdateScorecard(scorecard)
             }
         }
         
         await MainActor.run {
             self.lastLinescore = linescore
-            
-            // Extract current at-bat pitches from the scorecard
-            var currentPitches: [PitchEvent] = []
-            if let scorecard = lastScorecard {
-                let inningNum = linescore.currentInning ?? 1
-                let isTop = linescore.inningHalf?.lowercased() == "top"
-                let batterId = linescore.offense?.batter?.id
-                
-                if let inning = scorecard.innings.first(where: { $0.num == inningNum }) {
-                    let events = isTop ? inning.away : inning.home
-                    if let currentAtBat = events.last(where: { $0.batterId == batterId }) {
-                        currentPitches = currentAtBat.pitches ?? []
-                    }
-                }
-            }
-            
-            self.delegate?.didUpdateLinescore(linescore, pitches: currentPitches, gameData: liveFeed?.gameData)
+            let snapshot = self.makeSnapshot(linescore: linescore, scorecard: self.lastScorecard, gameData: liveFeed?.gameData)
+            self.delegate?.didUpdateSnapshot(snapshot)
         }
     }
 
@@ -314,6 +373,16 @@ class GameService {
             scorecardInnings.append(ScorecardInning(num: i, ordinal: "\(i)", home: homeEvents, away: awayEvents))
         }
 
+        let liveCurrentAtBat: AtBatEvent?
+        if let currentPlay = playByPlay.currentPlay,
+           currentPlay.about?.isComplete == false,
+           shouldIncludePlayInScorecard(currentPlay, includeLive: true) {
+            let currentIndex = allPlays.firstIndex(where: { $0.about?.atBatIndex == currentPlay.about?.atBatIndex }) ?? max(allPlays.count - 1, 0)
+            liveCurrentAtBat = transformPlayToEvent(currentPlay, allPlays: allPlays, playIndex: currentIndex)
+        } else {
+            liveCurrentAtBat = nil
+        }
+
         // Timeline is all at-bat plays sorted newest-to-oldest
         let timeline = allPlays.filter { shouldIncludePlayInScorecard($0, includeLive: false) }.enumerated().map { (idx, play) in
             transformPlayToEvent(play, allPlays: allPlays, playIndex: allPlays.firstIndex(where: { $0.about?.atBatIndex == play.about?.atBatIndex }) ?? 0)
@@ -331,6 +400,7 @@ class GameService {
             pitchers: ScorecardPitchers(home: homePitchers, away: awayPitchers),
             innings: scorecardInnings,
             timeline: Array(timeline),
+            liveCurrentAtBat: liveCurrentAtBat,
             advisories: Array(advisories.prefix(3)),
             umpires: umpires,
             gameInfo: gameInfo,

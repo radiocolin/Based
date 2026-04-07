@@ -216,7 +216,12 @@ class CurrentStateView: UIView {
         linesLayer.fillColor = UIColor.clear.cgColor
     }
     
-    func configure(with linescore: Linescore, pitches: [PitchEvent]? = nil, gameData: GameData? = nil) {
+    func configure(
+        with linescore: Linescore,
+        pitches: [PitchEvent]? = nil,
+        gameData: GameData? = nil,
+        hasActiveAtBat: Bool = true
+    ) {
         let state = linescore.inningState?.lowercased() ?? "---"
         let isBreak = state == "mid" || state == "end"
         
@@ -234,6 +239,11 @@ class CurrentStateView: UIView {
             pitchCountLabel.text = ""
             teamStatusLabel.text = ""
             weatherLabel.text = ""
+        } else if !hasActiveAtBat {
+            batterLabel.text = "AWAITING NEXT BATTER"
+            pitcherLabel.text = ""
+            countLabel.text = ""
+            pitchCountLabel.text = ""
         } else {
             batterLabel.text = linescore.offense?.batter?.fullName?.uppercased() ?? "---"
             pitcherLabel.text = "vs \(linescore.defense?.pitcher?.fullName ?? "---")"
@@ -245,6 +255,21 @@ class CurrentStateView: UIView {
                 pitchCountLabel.text = ""
             }
             
+            // Extract MVR and Challenges from gameData (live feed)
+            let isTop = linescore.isTopInning ?? true
+            var statusParts: [String] = []
+            
+            if let gameData = gameData {
+                let mvr = isTop ? (gameData.moundVisits?.home?.remaining ?? 0) : (gameData.moundVisits?.away?.remaining ?? 0)
+                let homeChl = gameData.absChallenges?.home?.remaining ?? 0
+                let awayChl = gameData.absChallenges?.away?.remaining ?? 0
+                statusParts.append("MVR: \(mvr)")
+                statusParts.append("CHL: H\(homeChl) A\(awayChl)")
+            }
+            
+        }
+
+        if !isBreak {
             // Extract MVR and Challenges from gameData (live feed)
             let isTop = linescore.isTopInning ?? true
             var statusParts: [String] = []
@@ -285,7 +310,7 @@ class CurrentStateView: UIView {
         )
         diamondView.configure(with: bases, style: .liveStatus, isRun: false)
         
-        if isBreak {
+        if isBreak || !hasActiveAtBat {
             pitchTrackView.configure(with: [])
         } else if let providedPitches = pitches, !providedPitches.isEmpty {
             pitchTrackView.configure(with: providedPitches)

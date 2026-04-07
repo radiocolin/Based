@@ -7,6 +7,7 @@ struct ScorecardData: Codable, Sendable, Equatable {
     let pitchers: ScorecardPitchers
     let innings: [ScorecardInning]
     let timeline: [AtBatEvent]
+    let liveCurrentAtBat: AtBatEvent?
     let advisories: [String]
     let umpires: [ScorecardUmpire]
     let gameInfo: [GameInfoItem]
