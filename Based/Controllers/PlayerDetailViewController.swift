@@ -149,7 +149,7 @@ class PlayerDetailViewController: UIViewController {
         bioLabel.numberOfLines = 0
         contentStack.addArrangedSubview(bioLabel)
 
-        gameTitleLabel.text = "TODAY'S GAME"
+        gameTitleLabel.text = "Today's Game"
         contentStack.addArrangedSubview(createSectionTitleLabel(from: gameTitleLabel))
 
         gameStatsContainer.translatesAutoresizingMaskIntoConstraints = false
@@ -177,8 +177,8 @@ class PlayerDetailViewController: UIViewController {
     }
 
     private func createSectionTitleLabel(from label: UILabel) -> UILabel {
-        label.font = UIFont(name: headerFont, size: 14) ?? .systemFont(ofSize: 14, weight: .bold)
-        label.textColor = pencilColor.withAlphaComponent(0.5)
+        label.font = UIFont(name: bodyFont, size: 16) ?? .systemFont(ofSize: 16)
+        label.textColor = pencilColor.withAlphaComponent(0.7)
         label.textAlignment = .center
         return label
     }
@@ -248,8 +248,8 @@ class PlayerDetailViewController: UIViewController {
 
             let labelLabel = UILabel()
             labelLabel.text = item.label
-            labelLabel.font = UIFont(name: bodyFont, size: 12) ?? .systemFont(ofSize: 12)
-            labelLabel.textColor = pencilColor.withAlphaComponent(0.6)
+            labelLabel.font = UIFont(name: bodyFont, size: 16) ?? .systemFont(ofSize: 16)
+            labelLabel.textColor = pencilColor.withAlphaComponent(0.7)
             labelLabel.textAlignment = .center
 
             itemStack.addArrangedSubview(valueLabel)
@@ -316,7 +316,7 @@ class PlayerDetailViewController: UIViewController {
                 showSeasonStatsError()
                 return
             }
-            let season = split.season.map { "\($0) SEASON" } ?? "SEASON"
+            let season = split.season.map { "\($0) season" } ?? "Season"
             setupSeasonStatsGrid(
                 items: [
                     ("AVG", stats.avg ?? "---"),
@@ -337,7 +337,7 @@ class PlayerDetailViewController: UIViewController {
                 showSeasonStatsError()
                 return
             }
-            let season = split.season.map { "\($0) SEASON" } ?? "SEASON"
+            let season = split.season.map { "\($0) season" } ?? "Season"
             setupSeasonStatsGrid(
                 items: [
                     ("ERA", stats.era ?? "---"),
@@ -359,7 +359,7 @@ class PlayerDetailViewController: UIViewController {
         let errorLabel = UILabel()
         errorLabel.text = "Stats unavailable"
         errorLabel.font = UIFont(name: bodyFont, size: 16) ?? .systemFont(ofSize: 16)
-        errorLabel.textColor = pencilColor.withAlphaComponent(0.5)
+        errorLabel.textColor = pencilColor.withAlphaComponent(0.7)
         errorLabel.textAlignment = .center
         errorLabel.translatesAutoresizingMaskIntoConstraints = false
         seasonStatsContainer.addSubview(errorLabel)

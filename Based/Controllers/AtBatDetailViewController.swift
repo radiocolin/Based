@@ -56,7 +56,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
             self.accentColor = accentColor
         }
         batterLabel.text = self.batterName.uppercased()
-        subHeaderLabel.text = "VS. \(self.pitcherName.uppercased())"
+        applyPitcherHeader()
         applyEventPresentation()
         
         if let pitches = event.pitches {
@@ -105,9 +105,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         titleStack.addArrangedSubview(resultLabel)
         
         // SubHeader (Pitcher Name)
-        subHeaderLabel.text = "VS. \(pitcherName.uppercased())"
-        subHeaderLabel.font = UIFont(name: bodyFont, size: 16) ?? .systemFont(ofSize: 16)
-        subHeaderLabel.textColor = pencilColor.withAlphaComponent(0.7)
+        applyPitcherHeader()
         subHeaderLabel.textAlignment = .center
         subHeaderLabel.translatesAutoresizingMaskIntoConstraints = false
         subHeaderLabel.isUserInteractionEnabled = true
@@ -192,6 +190,20 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         descriptionLabel.text = presentation.displayDescription
     }
 
+    private func applyPitcherHeader() {
+        let prefixAttributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont(name: bodyFont, size: 16) ?? .systemFont(ofSize: 16),
+            .foregroundColor: pencilColor.withAlphaComponent(0.7)
+        ]
+        let pitcherAttributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont(name: bodyFont, size: 16) ?? .systemFont(ofSize: 16),
+            .foregroundColor: pencilColor
+        ]
+        let text = NSMutableAttributedString(string: "vs. ", attributes: prefixAttributes)
+        text.append(NSAttributedString(string: pitcherName.capitalized, attributes: pitcherAttributes))
+        subHeaderLabel.attributedText = text
+    }
+
     @objc private func handleBatterTap() {
         onBatterTap?()
     }
@@ -244,7 +256,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         v.backgroundColor = paperColor
         let l = UILabel()
         l.text = "PITCH SEQUENCE"
-        l.font = UIFont(name: headerFont, size: 16)
+        l.font = UIFont(name: bodyFont, size: 16) ?? .systemFont(ofSize: 16)
         l.textColor = pencilColor
         l.frame = CGRect(x: 0, y: 0, width: 200, height: 30)
         v.addSubview(l)
@@ -281,6 +293,7 @@ class PitchCell: UITableViewCell {
         
         numLabel.font = UIFont(name: "PermanentMarker-Regular", size: 16)
         numLabel.textColor = .gray
+        descLabel.font = UIFont(name: "PermanentMarker-Regular", size: 18) ?? .systemFont(ofSize: 18)
         
         speedLabel.textAlignment = .right
         
@@ -306,7 +319,7 @@ class PitchCell: UITableViewCell {
     func configure(with pitch: PitchEvent) {
         numLabel.text = "\(pitch.pitchNumber)."
         descLabel.text = pitch.description
-        outcomeLabel.font = UIFont(name: "PatrickHand-Regular", size: 14)
+        outcomeLabel.font = UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14)
         outcomeLabel.textColor = .gray
         outcomeLabel.text = subtitleText(for: pitch)
         outcomeLabel.isHidden = outcomeLabel.text?.isEmpty ?? true
@@ -316,7 +329,7 @@ class PitchCell: UITableViewCell {
 
     private func subtitleText(for pitch: PitchEvent) -> String {
         if let balls = pitch.balls, let strikes = pitch.strikes {
-            return "COUNT \(balls)-\(strikes)"
+            return "Count \(balls)-\(strikes)"
         }
 
         let normalizedDescription = pitch.description.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()

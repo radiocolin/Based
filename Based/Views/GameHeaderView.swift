@@ -259,7 +259,7 @@ class GameHeaderView: UIView {
         linesLayer.lineJoin = .round
     }
     
-    func configure(with linescore: Linescore, awayNameOverride: String? = nil, homeNameOverride: String? = nil) {
+    func configure(with linescore: Linescore, awayNameOverride: String? = nil, homeNameOverride: String? = nil, isFinal: Bool = false) {
         let awayActual = awayNameOverride ?? linescore.teams?.away?.team?.name ?? "AWAY"
         let homeActual = homeNameOverride ?? linescore.teams?.home?.team?.name ?? "HOME"
         let awayColor = TeamColorProvider.color(for: awayActual)
@@ -325,6 +325,15 @@ class GameHeaderView: UIView {
                             homeInningLabels[index].text = "\(homeRuns)"
                             homeInningLabels[index].textColor = homeRuns > 0 ? homeColor : zeroColor
                         }
+                    }
+                }
+            }
+            // If game is final, mark any inning where away played but home didn't
+            if isFinal {
+                for i in 0..<9 {
+                    if awayInningLabels[i].text?.isEmpty == false && homeInningLabels[i].text?.isEmpty != false {
+                        homeInningLabels[i].text = "-"
+                        homeInningLabels[i].textColor = zeroColor
                     }
                 }
             }

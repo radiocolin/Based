@@ -187,7 +187,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         let shareItem = UIBarButtonItem(image: shareImg, style: .plain, target: self, action: #selector(shareScorecard))
         
         let timelineSymbol = isTimelineMode ? "square.grid.3x2" : "calendar.day.timeline.left"
-        let timelineImg = UIImage.pencilStyledIcon(named: timelineSymbol, color: pencilColor, size: iconSize, offset: CGPoint(x: 1.5, y: 0.0))
+        let timelineImg = UIImage.pencilStyledIcon(named: timelineSymbol, color: pencilColor, size: iconSize, offset: CGPoint(x: 1.5, y: 1.0))
         let timelineItem = UIBarButtonItem(image: timelineImg, style: .plain, target: self, action: #selector(toggleTimelineMode))
         
         navigationItem.rightBarButtonItems = [shareItem, timelineItem]
@@ -608,7 +608,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         let hasCurrentAtBat = snapshot.phase == .activeAtBat
         let livePitches = snapshot.currentAtBat?.pitches
 
-        gameHeaderView.configure(with: linescore, awayNameOverride: awayName, homeNameOverride: homeName)
+        let isFinal = snapshot.phase == .final
+        gameHeaderView.configure(with: linescore, awayNameOverride: awayName, homeNameOverride: homeName, isFinal: isFinal)
         currentStateView.configure(with: linescore, pitches: livePitches, gameData: gameData, hasActiveAtBat: hasCurrentAtBat)
         timelineView.configureLiveState(linescore: linescore, pitches: livePitches, gameData: gameData, hasActiveAtBat: hasCurrentAtBat)
         updateGameInfo()
@@ -857,19 +858,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         let umpires = scorecard.umpires
         if umpires == currentUmpires { return }
         self.currentUmpires = umpires
-        
-        let umpireStrings = umpires.map { "\($0.type): \($0.fullName)" }
-        
-        let attributedText = NSMutableAttributedString(string: "UMPIRES\n", attributes: [
-            .font: UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold),
-            .foregroundColor: AppColors.pencil
-        ])
-        attributedText.append(NSAttributedString(string: umpireStrings.joined(separator: "\n"), attributes: [
-            .font: UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14),
-            .foregroundColor: AppColors.pencil.withAlphaComponent(0.7)
-        ]))
-        
-        umpireLabel.attributedText = umpireStrings.isEmpty ? nil : attributedText
+
+        umpireLabel.attributedText = GameFooterContent.makeUmpireText(umpires)
     }
 
     private func updatePitcherList() {
@@ -881,67 +871,13 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         self.currentPitchers = pitchers
         
         pitcherContainer.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        
-        guard !pitchers.isEmpty else { return }
-        
-        let titleLabel = UILabel()
-        titleLabel.text = "PITCHERS"
-        titleLabel.font = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
-        titleLabel.textColor = AppColors.pencil
-        pitcherContainer.addArrangedSubview(titleLabel)
-        
-        // Header Row
-        let headerRow = UIStackView()
-        headerRow.axis = .horizontal
-        headerRow.spacing = 4
-        
-        let nameHeader = UILabel()
-        nameHeader.text = "NAME"
-        nameHeader.font = UIFont(name: "PatrickHand-Regular", size: 12) ?? .systemFont(ofSize: 12, weight: .bold)
-        nameHeader.textColor = AppColors.pencil.withAlphaComponent(0.6)
-        headerRow.addArrangedSubview(nameHeader)
-        
-        let statLabels = ["IP", "H", "R", "ER", "BB", "K"]
-        for label in statLabels {
-            let l = UILabel()
-            l.text = label
-            l.font = UIFont(name: "PatrickHand-Regular", size: 12) ?? .systemFont(ofSize: 12, weight: .bold)
-            l.textColor = AppColors.pencil.withAlphaComponent(0.6)
-            l.textAlignment = .center
-            l.widthAnchor.constraint(equalToConstant: 30).isActive = true
-            headerRow.addArrangedSubview(l)
-        }
-        pitcherContainer.addArrangedSubview(headerRow)
-        
-        // Pitcher Rows
-        for (idx, pitcher) in pitchers.enumerated() {
-            let row = UIStackView()
-            row.axis = .horizontal
-            row.spacing = 4
-            row.backgroundColor = idx % 2 == 1 ? AppColors.alternateRow.withAlphaComponent(0.5) : .clear
-            
-            let nameLabel = UILabel()
-            nameLabel.text = pitcher.fullName
-            nameLabel.font = UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14)
-            nameLabel.textColor = AppColors.pencil
-            nameLabel.isUserInteractionEnabled = true
-            nameLabel.tag = pitcher.id
-            let tap = UITapGestureRecognizer(target: self, action: #selector(handlePitcherNameTap(_:)))
-            nameLabel.addGestureRecognizer(tap)
-            row.addArrangedSubview(nameLabel)
-            
-            let stats = [pitcher.ip, "\(pitcher.h)", "\(pitcher.r)", "\(pitcher.er)", "\(pitcher.bb)", "\(pitcher.k)"]
-            for val in stats {
-                let l = UILabel()
-                l.text = val
-                l.font = UIFont(name: "PermanentMarker-Regular", size: 12) ?? .systemFont(ofSize: 12)
-                l.textColor = AppColors.pencil
-                l.textAlignment = .center
-                l.widthAnchor.constraint(equalToConstant: 30).isActive = true
-                row.addArrangedSubview(l)
-            }
-            
-            pitcherContainer.addArrangedSubview(row)
+
+        if let pitcherSection = GameFooterContent.makePitcherSection(
+            groups: [FooterPitcherGroup(title: "PITCHERS", pitchers: pitchers)],
+            target: self,
+            action: #selector(handlePitcherNameTap(_:))
+        ) {
+            pitcherContainer.addArrangedSubview(pitcherSection)
         }
     }
 
@@ -955,65 +891,10 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         self.currentGameInfo = scorecard.gameInfo
         self.currentWeather = weather
         
-        // Filter to game info fields we want below the scorecard
-        let displayLabels = ["First pitch", "T", "Att", "Venue"]
-        let infoItems = scorecard.gameInfo.filter { item in
-            displayLabels.contains(item.label) && item.value != nil
-        }
-        
-        // Also find a date entry (label with no value)
-        let dateItem = scorecard.gameInfo.first { $0.value == nil && !$0.label.isEmpty }
-        
-        guard !infoItems.isEmpty || dateItem != nil else {
-            gameInfoLabel.attributedText = nil
-            return
-        }
-        
-        let labelMap = ["First pitch": "First Pitch", "T": "Duration", "Att": "Attendance"]
-        
-        let attributedText = NSMutableAttributedString(string: "GAME INFO\n", attributes: [
-            .font: UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold),
-            .foregroundColor: AppColors.pencil
-        ])
-        
-        let labelAttrs: [NSAttributedString.Key: Any] = [
-            .font: UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14),
-            .foregroundColor: AppColors.pencil.withAlphaComponent(0.7)
-        ]
-        
-        let valueAttrs: [NSAttributedString.Key: Any] = [
-            .font: UIFont(name: "PermanentMarker-Regular", size: 12) ?? .systemFont(ofSize: 12),
-            .foregroundColor: AppColors.pencil.withAlphaComponent(0.7)
-        ]
-        
-        for item in infoItems {
-            let displayLabel = labelMap[item.label] ?? item.label
-            let value = (item.value ?? "").trimmingCharacters(in: CharacterSet(charactersIn: "."))
-            
-            attributedText.append(NSAttributedString(string: "\(displayLabel): ", attributes: labelAttrs))
-            attributedText.append(NSAttributedString(string: "\(value)\n", attributes: valueAttrs))
-        }
-        
-        // Weather from linescore or game data
-        if let weather = currentLinescore?.weather ?? currentGameData?.weather {
-            var weatherParts: [String] = []
-            if let temp = weather.temp { weatherParts.append("\(temp)°F") }
-            if let condition = weather.condition { weatherParts.append(condition) }
-            if !weatherParts.isEmpty {
-                attributedText.append(NSAttributedString(string: "Weather: ", attributes: labelAttrs))
-                attributedText.append(NSAttributedString(string: "\(weatherParts.joined(separator: ", "))\n", attributes: valueAttrs))
-            }
-            if let wind = weather.wind {
-                attributedText.append(NSAttributedString(string: "Wind: ", attributes: labelAttrs))
-                attributedText.append(NSAttributedString(string: "\(wind)\n", attributes: valueAttrs))
-            }
-        }
-        
-        if let dateItem = dateItem {
-            attributedText.append(NSAttributedString(string: dateItem.label, attributes: valueAttrs))
-        }
-        
-        gameInfoLabel.attributedText = attributedText
+        gameInfoLabel.attributedText = GameFooterContent.makeGameInfoText(
+            gameInfoItems: scorecard.gameInfo,
+            weather: weather
+        )
     }
 
     private func updateTimelineFooter() {

@@ -241,9 +241,15 @@ class TimelineView: UIView {
             bottomConstraint
         ])
         
-        // Pitchers
-        if !awayPitchers.isEmpty || !homePitchers.isEmpty {
-            stack.addArrangedSubview(buildPitcherSection())
+        if let pitcherSection = GameFooterContent.makePitcherSection(
+            groups: [
+                FooterPitcherGroup(title: "\(awayTeamName.uppercased()) PITCHERS", pitchers: awayPitchers),
+                FooterPitcherGroup(title: "\(homeTeamName.uppercased()) PITCHERS", pitchers: homePitchers)
+            ],
+            target: self,
+            action: #selector(handlePitcherTap(_:))
+        ) {
+            stack.addArrangedSubview(pitcherSection)
         }
         
         // Umpires & Game Info side by side
@@ -253,20 +259,24 @@ class TimelineView: UIView {
         infoRow.distribution = .fill
         infoRow.spacing = 12
         
-        if !umpires.isEmpty {
-            infoRow.addArrangedSubview(buildUmpireLabel())
+        if let umpireText = GameFooterContent.makeUmpireText(umpires) {
+            let umpireLabel = UILabel()
+            umpireLabel.numberOfLines = 0
+            umpireLabel.attributedText = umpireText
+            infoRow.addArrangedSubview(umpireLabel)
         }
         
-        let hasGameInfo = !gameInfoItems.isEmpty || weather != nil
-        if hasGameInfo {
-            let gameInfoView = buildGameInfoLabel()
+        if let gameInfoText = GameFooterContent.makeGameInfoText(gameInfoItems: gameInfoItems, weather: weather) {
+            let gameInfoView = UILabel()
+            gameInfoView.numberOfLines = 0
+            gameInfoView.attributedText = gameInfoText
             let widthConstraint = gameInfoView.widthAnchor.constraint(equalToConstant: 200)
             widthConstraint.priority = .defaultHigh // Allow it to shrink on small screens
             widthConstraint.isActive = true
             infoRow.addArrangedSubview(gameInfoView)
         }
         
-        if !umpires.isEmpty || hasGameInfo {
+        if !infoRow.arrangedSubviews.isEmpty {
             stack.addArrangedSubview(infoRow)
         }
         
@@ -289,167 +299,10 @@ class TimelineView: UIView {
         tableView.tableFooterView = footer
     }
     
-    private func buildPitcherSection() -> UIView {
-        let container = UIStackView()
-        container.axis = .vertical
-        container.spacing = 2
-        
-        func addTeamPitchers(_ pitchers: [ScorecardPitcher], teamName: String) {
-            guard !pitchers.isEmpty else { return }
-            
-            let titleLabel = UILabel()
-            titleLabel.text = "\(teamName.uppercased()) PITCHERS"
-            titleLabel.font = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
-            titleLabel.textColor = AppColors.pencil
-            container.addArrangedSubview(titleLabel)
-            
-            // Header Row
-            let headerRow = UIStackView()
-            headerRow.axis = .horizontal
-            headerRow.spacing = 4
-            
-            let nameHeader = UILabel()
-            nameHeader.text = "NAME"
-            nameHeader.font = UIFont(name: "PatrickHand-Regular", size: 12) ?? .systemFont(ofSize: 12, weight: .bold)
-            nameHeader.textColor = AppColors.pencil.withAlphaComponent(0.6)
-            headerRow.addArrangedSubview(nameHeader)
-            
-            for label in ["IP", "H", "R", "ER", "BB", "K"] {
-                let l = UILabel()
-                l.text = label
-                l.font = UIFont(name: "PatrickHand-Regular", size: 12) ?? .systemFont(ofSize: 12, weight: .bold)
-                l.textColor = AppColors.pencil.withAlphaComponent(0.6)
-                l.textAlignment = .center
-                l.widthAnchor.constraint(equalToConstant: 30).isActive = true
-                headerRow.addArrangedSubview(l)
-            }
-            container.addArrangedSubview(headerRow)
-            
-            for (idx, pitcher) in pitchers.enumerated() {
-                let row = UIStackView()
-                row.axis = .horizontal
-                row.spacing = 4
-                row.backgroundColor = idx % 2 == 1 ? AppColors.alternateRow.withAlphaComponent(0.5) : .clear
-                
-                let nameLabel = UILabel()
-                nameLabel.text = pitcher.fullName
-                nameLabel.font = UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14)
-                nameLabel.textColor = AppColors.pencil
-                nameLabel.isUserInteractionEnabled = true
-                nameLabel.tag = pitcher.id
-                let tap = UITapGestureRecognizer(target: self, action: #selector(handlePitcherTap(_:)))
-                nameLabel.addGestureRecognizer(tap)
-                row.addArrangedSubview(nameLabel)
-                
-                for val in [pitcher.ip, "\(pitcher.h)", "\(pitcher.r)", "\(pitcher.er)", "\(pitcher.bb)", "\(pitcher.k)"] {
-                    let l = UILabel()
-                    l.text = val
-                    l.font = UIFont(name: "PermanentMarker-Regular", size: 12) ?? .systemFont(ofSize: 12)
-                    l.textColor = AppColors.pencil
-                    l.textAlignment = .center
-                    l.widthAnchor.constraint(equalToConstant: 30).isActive = true
-                    row.addArrangedSubview(l)
-                }
-                
-                container.addArrangedSubview(row)
-            }
-        }
-        
-        addTeamPitchers(awayPitchers, teamName: awayTeamName)
-        if !awayPitchers.isEmpty && !homePitchers.isEmpty {
-            let spacer = UIView()
-            spacer.heightAnchor.constraint(equalToConstant: 8).isActive = true
-            container.addArrangedSubview(spacer)
-        }
-        addTeamPitchers(homePitchers, teamName: homeTeamName)
-        
-        return container
-    }
-
     @objc private func handlePitcherTap(_ gesture: UITapGestureRecognizer) {
         guard let view = gesture.view else { return }
         guard let pitcher = footerPitchersByID[view.tag] else { return }
         delegate?.didSelectTimelinePitcher(pitcher)
-    }
-    
-    private func buildUmpireLabel() -> UILabel {
-        let label = UILabel()
-        label.numberOfLines = 0
-        
-        let umpireStrings = umpires.map { "\($0.type): \($0.fullName)" }
-        
-        let attributedText = NSMutableAttributedString(string: "UMPIRES\n", attributes: [
-            .font: UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold),
-            .foregroundColor: AppColors.pencil
-        ])
-        attributedText.append(NSAttributedString(string: umpireStrings.joined(separator: "\n"), attributes: [
-            .font: UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14),
-            .foregroundColor: AppColors.pencil.withAlphaComponent(0.7)
-        ]))
-        
-        label.attributedText = attributedText
-        return label
-    }
-    
-    private func buildGameInfoLabel() -> UILabel {
-        let label = UILabel()
-        label.numberOfLines = 0
-        
-        let displayLabels = ["First pitch", "T", "Att", "Venue"]
-        let infoItems = gameInfoItems.filter { item in
-            displayLabels.contains(item.label) && item.value != nil
-        }
-        let dateItem = gameInfoItems.first { $0.value == nil && !$0.label.isEmpty }
-        
-        guard !infoItems.isEmpty || dateItem != nil || weather != nil else {
-            return label
-        }
-        
-        let labelMap = ["First pitch": "First Pitch", "T": "Duration", "Att": "Attendance"]
-        
-        let attributedText = NSMutableAttributedString(string: "GAME INFO\n", attributes: [
-            .font: UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold),
-            .foregroundColor: AppColors.pencil
-        ])
-        
-        let labelAttrs: [NSAttributedString.Key: Any] = [
-            .font: UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14),
-            .foregroundColor: AppColors.pencil.withAlphaComponent(0.7)
-        ]
-        
-        let valueAttrs: [NSAttributedString.Key: Any] = [
-            .font: UIFont(name: "PermanentMarker-Regular", size: 12) ?? .systemFont(ofSize: 12),
-            .foregroundColor: AppColors.pencil.withAlphaComponent(0.7)
-        ]
-        
-        for item in infoItems {
-            let displayLabel = labelMap[item.label] ?? item.label
-            let value = (item.value ?? "").trimmingCharacters(in: CharacterSet(charactersIn: "."))
-            attributedText.append(NSAttributedString(string: "\(displayLabel): ", attributes: labelAttrs))
-            attributedText.append(NSAttributedString(string: "\(value)\n", attributes: valueAttrs))
-        }
-        
-        // Weather
-        if let weather = weather {
-            var weatherParts: [String] = []
-            if let temp = weather.temp { weatherParts.append("\(temp)°F") }
-            if let condition = weather.condition { weatherParts.append(condition) }
-            if !weatherParts.isEmpty {
-                attributedText.append(NSAttributedString(string: "Weather: ", attributes: labelAttrs))
-                attributedText.append(NSAttributedString(string: "\(weatherParts.joined(separator: ", "))\n", attributes: valueAttrs))
-            }
-            if let wind = weather.wind {
-                attributedText.append(NSAttributedString(string: "Wind: ", attributes: labelAttrs))
-                attributedText.append(NSAttributedString(string: "\(wind)\n", attributes: valueAttrs))
-            }
-        }
-        
-        if let dateItem = dateItem {
-            attributedText.append(NSAttributedString(string: dateItem.label, attributes: valueAttrs))
-        }
-        
-        label.attributedText = attributedText
-        return label
     }
 }
 

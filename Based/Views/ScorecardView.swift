@@ -525,12 +525,13 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate, U
             // Handle Inning Columns
             if isTotalsRow {
                 let cell = collectionView.dequeueReusableCell(withReuseIdentifier: LabelCell.reuseIdentifier, for: indexPath) as! LabelCell
+                cell.label.font = UIFont(name: "PermanentMarker-Regular", size: 18) ?? .systemFont(ofSize: 18, weight: .bold)
                 cell.label.textColor = AppColors.pencil
                 if let (inningNum, subIndex) = columnLayout.inningInfo(forColumn: col) {
                     if subIndex == 0 {
                         let inningObj = data.innings.first { $0.num == inningNum }
                         let events = isHomeTeam ? (inningObj?.home ?? []) : (inningObj?.away ?? [])
-                        let runs = events.reduce(0) { $0 + $1.rbi }
+                        let runs = events.filter { $0.bases.home }.count
                         cell.label.text = runs > 0 ? "\(runs)" : ""
                         cell.label.textColor = (runs > 0) ? teamAccentColor : AppColors.pencil
                         cell.contentView.layer.borderWidth = 0.5

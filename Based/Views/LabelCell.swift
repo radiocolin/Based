@@ -45,6 +45,9 @@ class LabelCell: UICollectionViewCell {
         contentView.layer.borderWidth = 0.5
         label.text = nil
         label.attributedText = nil
+        label.font = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16)
+        label.textColor = AppColors.pencil
+        label.textAlignment = .center
     }
 
     override func layoutSubviews() {
