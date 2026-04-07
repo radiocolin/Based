@@ -558,7 +558,6 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         self.isGameLive = isLive
         updateTeamSegmentedControlTitles()
 
-        let isDuringBreak = snapshot.phase == .betweenHalfInnings
         let hasCurrentAtBat = snapshot.phase == .activeAtBat
         let livePitches = snapshot.currentAtBat?.pitches
 
@@ -603,7 +602,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         }
         
         // Update timeline's embedded live panel
-        timelineView.setLiveState(visible: showEmbeddedLive && !isDuringBreak)
+        timelineView.setLiveState(visible: showEmbeddedLive)
         
         scorecardView.setIsLive(hasCurrentAtBat)
         
