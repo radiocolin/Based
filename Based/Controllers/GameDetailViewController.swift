@@ -596,6 +596,16 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         }
     }
 
+    private func performWithoutAnimations(_ updates: () -> Void) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        UIView.performWithoutAnimation {
+            updates()
+            self.view.layoutIfNeeded()
+        }
+        CATransaction.commit()
+    }
+
     private func updateUI(with snapshot: LiveGameSnapshot, wasLive: Bool) {
         let linescore = snapshot.linescore
         let gameData = snapshot.gameData
@@ -680,15 +690,18 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
                 setDisplayedTeam(toBattingTeamForTopInning: isTop)
             }
         }
-        
-        scorecardView.configure(with: scorecard)
-        timelineView.configure(with: scorecard.timeline, teams: scorecard.teams)
-        updateStickyHeaders()
-        updatePitcherList()
-        updateUmpireList()
-        updateGameInfo()
-        updateTimelineFooter()
-        updatePlaceholderVisibility()
+
+        performWithoutAnimations {
+            self.scorecardView.configure(with: scorecard)
+            self.timelineView.configure(with: scorecard.timeline, teams: scorecard.teams)
+            self.updateStickyHeaders()
+            self.updatePitcherList()
+            self.updateUmpireList()
+            self.updateGameInfo()
+            self.updateTimelineFooter()
+            self.updatePlaceholderVisibility()
+            self.segmentedOverlay.layoutIfNeeded()
+        }
         
         let inning = scorecard.currentInning ?? 1
         let currentIsTop = scorecard.isTopInning ?? true
@@ -745,9 +758,13 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         
         let awayTitle = showAwayDot ? "● \(awayName)" : awayName
         let homeTitle = showHomeDot ? "● \(homeName)" : homeName
-        
-        teamSegmentedControl.setTitle(awayTitle, forSegmentAt: 0)
-        teamSegmentedControl.setTitle(homeTitle, forSegmentAt: 1)
+
+        performWithoutAnimations {
+            self.teamSegmentedControl.setTitle(awayTitle, forSegmentAt: 0)
+            self.teamSegmentedControl.setTitle(homeTitle, forSegmentAt: 1)
+            self.segmentedOverlay.setNeedsLayout()
+            self.segmentedOverlay.layoutIfNeeded()
+        }
     }
     
     @objc private func closeAdvisory() {
@@ -800,13 +817,12 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
     private func showPlaceholder(_ show: Bool) {
         if placeholderLabel.isHidden != !show {
-            UIView.animate(withDuration: 0.3) {
+            performWithoutAnimations {
                 self.placeholderLabel.isHidden = !show
                 self.scorecardView.isHidden = show
                 self.stickyHeaderContainer.isHidden = show
                 self.pitcherContainer.isHidden = show
                 self.infoColumnsStack.isHidden = show
-                self.view.layoutIfNeeded()
             }
         }
         
