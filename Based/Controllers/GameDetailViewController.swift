@@ -306,9 +306,6 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
         if let currentAtBat = snapshot.currentAtBat {
             updateLiveDetailSheet(with: currentAtBat)
-        } else if let liveVC = liveDetailVC {
-            liveVC.dismiss(animated: true)
-            liveDetailVC = nil
         }
 
         updateUI(with: snapshot)
@@ -770,6 +767,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
     private func showLiveAtBatDetail() {
         guard let liveEvent = currentSnapshot?.currentAtBat else { return }
+        if liveDetailVC != nil { return }
         let batterName = liveEvent.batterName
         let pitcherName = liveEvent.pitcherName
         
@@ -791,7 +789,18 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
     private func updateLiveDetailSheet(with liveEvent: AtBatEvent) {
         guard let liveVC = liveDetailVC else { return }
-        liveVC.update(event: liveEvent)
+        liveVC.update(
+            event: liveEvent,
+            batterName: liveEvent.batterName,
+            pitcherName: liveEvent.pitcherName,
+            accentColor: teamAccentColor(isTopInning: liveEvent.isTop)
+        )
+        configureAtBatDetailCallbacks(
+            liveVC,
+            event: liveEvent,
+            batterName: liveEvent.batterName,
+            pitcherName: liveEvent.pitcherName
+        )
     }
 
     private func updateUmpireList() {

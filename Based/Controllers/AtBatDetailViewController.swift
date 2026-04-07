@@ -4,9 +4,9 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
     
     // Data
     private var event: AtBatEvent
-    private let batterName: String
-    private let pitcherName: String
-    private let accentColor: UIColor?
+    private var batterName: String
+    private var pitcherName: String
+    private var accentColor: UIColor?
     
     // UI Elements
     private let containerView = UIView()
@@ -44,14 +44,27 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         fatalError("init(coder:) has not been implemented")
     }
     
-    func update(event: AtBatEvent) {
+    func update(event: AtBatEvent, batterName: String? = nil, pitcherName: String? = nil, accentColor: UIColor? = nil) {
         self.event = event
+        if let batterName {
+            self.batterName = batterName
+        }
+        if let pitcherName {
+            self.pitcherName = pitcherName
+        }
+        if let accentColor {
+            self.accentColor = accentColor
+        }
+        batterLabel.text = self.batterName.uppercased()
+        subHeaderLabel.text = "VS. \(self.pitcherName.uppercased())"
         applyEventPresentation()
         
         if let pitches = event.pitches {
             pitchTrackView.configure(with: pitches)
+        } else {
+            pitchTrackView.configure(with: [])
         }
-        atBatGraphicView.configure(with: event, accentColor: accentColor)
+        atBatGraphicView.configure(with: event, accentColor: self.accentColor)
         pitchesTableView.reloadData()
         
         view.setNeedsLayout()

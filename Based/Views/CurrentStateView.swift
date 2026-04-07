@@ -223,14 +223,27 @@ class CurrentStateView: UIView {
         hasActiveAtBat: Bool = true
     ) {
         let state = linescore.inningState?.lowercased() ?? "---"
-        let isBreak = state == "mid" || state == "end"
-        
         let outs = linescore.outs ?? 0
-        let outsText = outs == 1 ? "OUT" : "OUTS"
-        let ordinal = linescore.currentInningOrdinal?.uppercased() ?? "---"
         let side = linescore.inningHalf?.uppercased() ?? ""
+        let ordinal = linescore.currentInningOrdinal?.uppercased() ?? "---"
+        let isTransitionBreak = !hasActiveAtBat && outs >= 3
+        let isBreak = state == "mid" || state == "end" || isTransitionBreak
         
-        inningLabel.text = "\(side) \(ordinal) • \(outs) \(outsText)"
+        let outsText = outs == 1 ? "OUT" : "OUTS"
+
+        if isBreak {
+            let breakState: String
+            if state == "mid" || (isTransitionBreak && side == "TOP") {
+                breakState = "MID"
+            } else if state == "end" || (isTransitionBreak && side == "BOTTOM") {
+                breakState = "END"
+            } else {
+                breakState = side
+            }
+            inningLabel.text = "\(breakState) \(ordinal)"
+        } else {
+            inningLabel.text = "\(side) \(ordinal) • \(outs) \(outsText)"
+        }
         
         if isBreak {
             batterLabel.text = ""
@@ -298,9 +311,9 @@ class CurrentStateView: UIView {
         }
         
         let bases = BasesReached(
-            first: linescore.offense?.first != nil,
-            second: linescore.offense?.second != nil,
-            third: linescore.offense?.third != nil,
+            first: isBreak ? false : (linescore.offense?.first != nil),
+            second: isBreak ? false : (linescore.offense?.second != nil),
+            third: isBreak ? false : (linescore.offense?.third != nil),
             home: false,
             outAtFirst: false,
             outAtSecond: false,
