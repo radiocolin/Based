@@ -374,9 +374,11 @@ class GameService {
         }
 
         let liveCurrentAtBat: AtBatEvent?
+        let currentBatterId = linescore?.offense?.batter?.id
         if let currentPlay = playByPlay.currentPlay,
            currentPlay.about?.isComplete == false,
-           shouldIncludePlayInScorecard(currentPlay, includeLive: true) {
+           shouldIncludePlayInScorecard(currentPlay, includeLive: true),
+           currentBatterId == nil || currentPlay.matchup?.batter?.id == currentBatterId {
             let currentIndex = allPlays.firstIndex(where: { $0.about?.atBatIndex == currentPlay.about?.atBatIndex }) ?? max(allPlays.count - 1, 0)
             liveCurrentAtBat = transformPlayToEvent(currentPlay, allPlays: allPlays, playIndex: currentIndex)
         } else {
@@ -404,9 +406,9 @@ class GameService {
             advisories: Array(advisories.prefix(3)),
             umpires: umpires,
             gameInfo: gameInfo,
-            currentInning: playByPlay.currentPlay?.about?.inning,
-            isTopInning: playByPlay.currentPlay?.about?.isTopInning,
-            currentBatterId: playByPlay.currentPlay?.matchup?.batter?.id
+            currentInning: linescore?.currentInning ?? playByPlay.currentPlay?.about?.inning,
+            isTopInning: linescore?.isTopInning ?? playByPlay.currentPlay?.about?.isTopInning,
+            currentBatterId: linescore?.offense?.batter?.id ?? playByPlay.currentPlay?.matchup?.batter?.id
         )
     }
 
