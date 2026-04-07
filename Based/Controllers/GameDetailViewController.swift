@@ -1034,9 +1034,12 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         
         // Swap to the team at bat
         let isTop = scorecard.isTopInning ?? true
-        setDisplayedTeam(toBattingTeamForTopInning: isTop)
-        self.updatePitcherList()
-        self.updatePlaceholderVisibility()
+        let targetIndex = isTop ? 0 : 1
+        if teamSegmentedControl.selectedSegmentIndex != targetIndex {
+            setDisplayedTeam(toBattingTeamForTopInning: isTop)
+            self.updatePitcherList()
+            self.updatePlaceholderVisibility()
+        }
         
         self.scrollToActiveCell(scorecard: scorecard)
     }

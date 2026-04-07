@@ -69,8 +69,49 @@ class TimelineView: UIView {
             awayAccentColor = TeamColorProvider.color(for: awayTeamName)
             homeAccentColor = TeamColorProvider.color(for: homeTeamName)
         }
-        self.groups = InningGroup.build(from: timeline)
-        tableView.reloadData()
+        let newGroups = InningGroup.build(from: timeline)
+        let oldGroups = groups
+
+        guard oldGroups != newGroups else {
+            groups = newGroups
+            return
+        }
+
+        let sameSectionCount = oldGroups.count == newGroups.count
+        let sameStructure = sameSectionCount && zip(oldGroups, newGroups).allSatisfy { oldGroup, newGroup in
+            oldGroup.title == newGroup.title && oldGroup.events.count == newGroup.events.count
+        }
+
+        groups = newGroups
+
+        guard sameStructure else {
+            tableView.reloadData()
+            return
+        }
+
+        var rowsToReload: [IndexPath] = []
+        var sectionsToReload = IndexSet()
+
+        for (sectionIndex, pair) in zip(oldGroups.indices, zip(oldGroups, newGroups)) {
+            let (oldGroup, newGroup) = pair
+            if oldGroup.title != newGroup.title {
+                sectionsToReload.insert(sectionIndex)
+                continue
+            }
+
+            for rowIndex in oldGroup.events.indices where oldGroup.events[rowIndex] != newGroup.events[rowIndex] {
+                rowsToReload.append(IndexPath(row: rowIndex, section: sectionIndex))
+            }
+        }
+
+        UIView.performWithoutAnimation {
+            if !sectionsToReload.isEmpty {
+                tableView.reloadSections(sectionsToReload, with: .none)
+            }
+            if !rowsToReload.isEmpty {
+                tableView.reloadRows(at: rowsToReload, with: .none)
+            }
+        }
     }
     
     // MARK: - Embedded Live State

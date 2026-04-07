@@ -94,7 +94,7 @@ extension ScorecardData {
     }
 }
 
-struct InningGroup {
+struct InningGroup: Equatable {
     let inning: Int
     let isTop: Bool
     let events: [AtBatEvent]
