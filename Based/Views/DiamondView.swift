@@ -45,6 +45,7 @@ class DiamondView: UIView {
     private var bases: BasesReached? {
         didSet {
             if oldValue != bases {
+                needsBaseRedraw = true
                 setNeedsLayout()
             }
         }
@@ -52,6 +53,7 @@ class DiamondView: UIView {
     private var isRun: Bool = false {
         didSet {
             if oldValue != isRun {
+                needsBaseRedraw = true
                 setNeedsLayout()
             }
         }
@@ -59,6 +61,7 @@ class DiamondView: UIView {
     private var style: Style = .scorecard {
         didSet {
             if oldValue != style {
+                needsBaseRedraw = true
                 setNeedsLayout()
             }
         }
@@ -66,12 +69,14 @@ class DiamondView: UIView {
     private var accentColorOverride: UIColor? {
         didSet {
             if oldValue != accentColorOverride {
+                needsBaseRedraw = true
                 setNeedsLayout()
             }
         }
     }
     
     private var lastBounds: CGRect = .zero
+    private var needsBaseRedraw = true
     
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -109,8 +114,14 @@ class DiamondView: UIView {
         if boundsChanged {
             mainDiamondLayer.fillColor = AppColors.diamondFill.cgColor
             drawMainDiamond()
-            updateActiveBases()
             lastBounds = bounds
+        }
+        
+        // Update bases when data changed via configure() or bounds changed,
+        // even when bounds are unchanged (e.g. cell reuse on team switch)
+        if needsBaseRedraw || boundsChanged {
+            updateActiveBases()
+            needsBaseRedraw = false
         }
         
         // Ensure text layers use correct scale after layout

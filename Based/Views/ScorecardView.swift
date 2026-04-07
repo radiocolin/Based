@@ -195,6 +195,12 @@ class ScorecardView: UIView {
     func configure(with data: ScorecardData) {
         let oldData = scorecardData
         let hasChanges = data != oldData
+        
+        // Capture the old item counts BEFORE updating data, since numberOfItems reads scorecardData
+        let oldLeftCount = leftCollectionView.numberOfItems(inSection: 0)
+        let oldRightCount = rightCollectionView.numberOfItems(inSection: 0)
+        let oldColumns = columnLayout.totalColumns
+        
         self.scorecardData = data
         self.columnLayout = computeColumnLayout()
         updateNameColumnWidth()
@@ -202,10 +208,11 @@ class ScorecardView: UIView {
         updateContentWidth()
         
         if hasChanges {
-            // If the structure (lineup size or columns) changed, we must reload everything
-            let oldLineupCount = (oldData?.lineups.home.count ?? 0) + (oldData?.lineups.away.count ?? 0)
-            let newLineupCount = (data.lineups.home.count) + (data.lineups.away.count)
-            let structureChanged = oldLineupCount != newLineupCount || lastColumnLayout?.totalColumns != columnLayout.totalColumns
+            // Compare what the collection view currently has vs what the new data produces
+            let lineup = isHomeTeam ? data.lineups.home : data.lineups.away
+            let newLeftCount = lineup.count + 1
+            let newRightCount = newLeftCount * columnLayout.totalColumns
+            let structureChanged = oldLeftCount != newLeftCount || oldRightCount != newRightCount || oldColumns != columnLayout.totalColumns
             
             if structureChanged {
                 leftCollectionView.reloadData()

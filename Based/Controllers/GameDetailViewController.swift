@@ -87,6 +87,13 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     init(gamePk: Int, games: [ScheduleGame]) {
         self.gamePk = gamePk
         self.currentGames = games
+        // Derive initial live state from schedule data so we don't have to wait for fetches
+        let game = games.first(where: { $0.gamePk == gamePk })
+        let state = game?.status.detailedState.lowercased() ?? ""
+        let code = game?.status.statusCode?.lowercased() ?? ""
+        let isFinal = state == "final" || state == "game over" || state == "completed early" || code == "f" || code == "o"
+        let isScheduled = state == "scheduled" || state == "pre-game" || state == "postponed" || code == "s" || code == "p"
+        self.isGameLive = !isFinal && !isScheduled && !state.isEmpty
         super.init(nibName: nil, bundle: nil)
     }
     
@@ -323,6 +330,10 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         currentLinescore = snapshot.linescore
         currentGameData = snapshot.gameData
 
+        // Update live state before scorecard so all decisions see the correct value
+        let wasLive = isGameLive
+        isGameLive = snapshot.isGameLive
+
         if let scorecard = snapshot.scorecard, scorecard != currentScorecard {
             updateScorecard(with: scorecard)
         }
@@ -331,7 +342,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             updateLiveDetailSheet(with: currentAtBat)
         }
 
-        updateUI(with: snapshot)
+        updateUI(with: snapshot, wasLive: wasLive)
     }
     
     func didUpdateGameStatus(_ status: String) {
@@ -585,16 +596,13 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         }
     }
 
-    private func updateUI(with snapshot: LiveGameSnapshot) {
+    private func updateUI(with snapshot: LiveGameSnapshot, wasLive: Bool) {
         let linescore = snapshot.linescore
         let gameData = snapshot.gameData
         let game = currentGames.first(where: { $0.gamePk == gamePk })
         let awayName = game?.teams.away.team.name ?? "Away"
         let homeName = game?.teams.home.team.name ?? "Home"
 
-        let isLive = snapshot.isGameLive
-        let wasLive = self.isGameLive
-        self.isGameLive = isLive
         updateTeamSegmentedControlTitles()
 
         let hasCurrentAtBat = snapshot.phase == .activeAtBat
@@ -608,8 +616,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         updatePlaceholderVisibility()
         
         // In timeline mode, use embedded live panel instead of bottom panel
-        let showBottomPanel = isLive && !isTimelineMode
-        let showEmbeddedLive = isLive && isTimelineMode
+        let showBottomPanel = isGameLive && !isTimelineMode
+        let showEmbeddedLive = isGameLive && isTimelineMode
         
         // Always ensure scroll view bottom matches live panel state
         let needsUpdate = currentStateView.isHidden == showBottomPanel
@@ -646,7 +654,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         scorecardView.setIsLive(hasCurrentAtBat)
         
         // Auto-sync on first live detection
-        if !wasLive && isLive && hasCurrentAtBat {
+        if !wasLive && isGameLive && hasCurrentAtBat {
             syncWithActiveAtBat()
         }
     }
@@ -662,11 +670,14 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         
         let isTop = scorecard.isTopInning ?? true
 
-        // Default to the team at bat on first load
-        if isFirstLoad {
-            setDisplayedTeam(toBattingTeamForTopInning: isTop)
-        } else if previousScorecard?.isTopInning != scorecard.isTopInning && wasViewingBattingTeam {
-            setDisplayedTeam(toBattingTeamForTopInning: isTop)
+        // For live games, default to the team at bat and follow half-inning changes.
+        // For non-live games, leave the picker on away (index 0) — no auto-switching.
+        if isGameLive {
+            if isFirstLoad {
+                setDisplayedTeam(toBattingTeamForTopInning: isTop)
+            } else if previousScorecard?.isTopInning != scorecard.isTopInning && wasViewingBattingTeam {
+                setDisplayedTeam(toBattingTeamForTopInning: isTop)
+            }
         }
         
         scorecardView.configure(with: scorecard)

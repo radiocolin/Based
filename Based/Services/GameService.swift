@@ -195,16 +195,26 @@ class GameService {
     }
     
     private func performSmartUpdate(gamePk: Int) async throws {
-        // 1. Always fetch linescore (smallest, highest frequency)
+        // 1. Fetch linescore first (smallest payload, needed for early snapshot)
         let linescore = try await MLBAPIClient.shared.fetchLinescore(gamePk: gamePk)
         
-        // 2. Fetch live feed (optional, for MVR/Challenges) - Fail-safe
+        // 2. Send an early snapshot so the header populates immediately on first load
         var liveFeed: LiveFeedResponse?
+        let isFirstLoad = lastScorecard == nil
+        if isFirstLoad {
+            await MainActor.run {
+                self.lastLinescore = linescore
+                let earlySnapshot = self.makeSnapshot(linescore: linescore, scorecard: nil, gameData: nil)
+                self.delegate?.didUpdateSnapshot(earlySnapshot)
+            }
+        }
+        
+        // 3. Fetch live feed (optional, for MVR/Challenges) - Fail-safe
         if !useMockData {
             liveFeed = try? await MLBAPIClient.shared.fetchLiveFeed(gamePk: gamePk)
         }
         
-        // 3. Decide if we need to fetch PBP/Boxscore (ScorecardData)
+        // 4. Decide if we need to fetch PBP/Boxscore (ScorecardData)
         var shouldFetchScorecard = false
         
         if lastScorecard != nil {
@@ -249,8 +259,26 @@ class GameService {
             throw NSError(domain: "GameService", code: 400, userInfo: [NSLocalizedDescriptionKey: "No game selected"])
         }
         
-        let pbp = try await MLBAPIClient.shared.fetchPlayByPlay(gamePk: gamePk)
-        let box = try await MLBAPIClient.shared.fetchBoxscore(gamePk: gamePk)
+        // Fetch PBP and boxscore in parallel using TaskGroup (avoids async let runtime issues)
+        var pbp: PlayByPlayResponse?
+        var box: BoxscoreResponse?
+        
+        try await withThrowingTaskGroup(of: Any.self) { group in
+            group.addTask {
+                try await MLBAPIClient.shared.fetchPlayByPlay(gamePk: gamePk) as Any
+            }
+            group.addTask {
+                try await MLBAPIClient.shared.fetchBoxscore(gamePk: gamePk) as Any
+            }
+            for try await result in group {
+                if let p = result as? PlayByPlayResponse { pbp = p }
+                else if let b = result as? BoxscoreResponse { box = b }
+            }
+        }
+        
+        guard let pbp, let box else {
+            throw NSError(domain: "GameService", code: 500, userInfo: [NSLocalizedDescriptionKey: "Failed to fetch game data"])
+        }
         
         return transformToScorecardData(playByPlay: pbp, boxscore: box, linescore: linescore)
     }
