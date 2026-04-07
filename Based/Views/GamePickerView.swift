@@ -52,13 +52,16 @@ class GamePickerView: UIView {
         layer.addSublayer(borderLayer)
 
         // Date Row
-        prevButton.setTitle("<", for: .normal)
-        prevButton.titleLabel?.font = UIFont(name: headerFont, size: 22) ?? .boldSystemFont(ofSize: 22)
+        let iconSize = CGSize(width: 28, height: 28)
+        let prevImg = UIImage.pencilStyledIcon(named: "arrow.left", color: pencilColor, size: iconSize)
+        prevButton.setImage(prevImg, for: .normal)
+        prevButton.setTitle(nil, for: .normal)
         prevButton.tintColor = pencilColor
         prevButton.addTarget(self, action: #selector(prevDate), for: .touchUpInside)
 
-        nextButton.setTitle(">", for: .normal)
-        nextButton.titleLabel?.font = UIFont(name: headerFont, size: 22) ?? .boldSystemFont(ofSize: 22)
+        let nextImg = UIImage.pencilStyledIcon(named: "arrow.right", color: pencilColor, size: iconSize)
+        nextButton.setImage(nextImg, for: .normal)
+        nextButton.setTitle(nil, for: .normal)
         nextButton.tintColor = pencilColor
         nextButton.addTarget(self, action: #selector(nextDate), for: .touchUpInside)
 
@@ -98,12 +101,12 @@ class GamePickerView: UIView {
             // Date Row
             prevButton.topAnchor.constraint(equalTo: topAnchor, constant: 8),
             prevButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
-            prevButton.widthAnchor.constraint(equalToConstant: 36),
+            prevButton.widthAnchor.constraint(equalToConstant: 28),
             prevButton.heightAnchor.constraint(equalToConstant: 28),
 
             nextButton.topAnchor.constraint(equalTo: prevButton.topAnchor),
             nextButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
-            nextButton.widthAnchor.constraint(equalToConstant: 36),
+            nextButton.widthAnchor.constraint(equalToConstant: 28),
             nextButton.heightAnchor.constraint(equalToConstant: 28),
 
             dateLabel.centerYAnchor.constraint(equalTo: prevButton.centerYAnchor),

@@ -152,15 +152,36 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         let font = UIFont(name: "PermanentMarker-Regular", size: 18) ?? .systemFont(ofSize: 18)
         let pencilColor = AppColors.pencil
 
-        let backItem = UIBarButtonItem(title: "< BACK", style: .plain, target: self, action: #selector(backTapped))
-        backItem.setTitleTextAttributes([.font: font, .foregroundColor: pencilColor], for: .normal)
-        backItem.setTitleTextAttributes([.font: font, .foregroundColor: pencilColor.withAlphaComponent(0.5)], for: .highlighted)
-        navigationItem.leftBarButtonItem = backItem
+        // Custom Back Button with wobbly chevron
+        let backBtn = UIButton(type: .system)
+        let chevronImg = UIImage.pencilStyledIcon(named: "chevron.backward", color: pencilColor, size: CGSize(width: 20, height: 20))
         
-        let shareItem = UIBarButtonItem(image: UIImage(systemName: "square.and.arrow.up"), style: .plain, target: self, action: #selector(shareScorecard))
+        let backFont = UIFont(name: "PatrickHand-Regular", size: 20) ?? .systemFont(ofSize: 20)
+        
+        var config = UIButton.Configuration.plain()
+        config.image = chevronImg
+        config.title = "Back"
+        config.imagePadding = 2
+        config.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 10)
+        
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var outgoing = incoming
+            outgoing.font = backFont
+            return outgoing
+        }
+        
+        backBtn.configuration = config
+        backBtn.tintColor = pencilColor
+        backBtn.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
+        navigationItem.leftBarButtonItem = UIBarButtonItem(customView: backBtn)
+        
+        let iconSize = CGSize(width: 32, height: 32)
+        let shareImg = UIImage.pencilStyledIcon(named: "square.and.arrow.up", color: pencilColor, size: iconSize, offset: CGPoint(x: -0.5, y: 0), scaleMultiplier: 0.9)
+        let shareItem = UIBarButtonItem(image: shareImg, style: .plain, target: self, action: #selector(shareScorecard))
         
         let timelineSymbol = isTimelineMode ? "square.grid.3x2" : "calendar.day.timeline.left"
-        let timelineItem = UIBarButtonItem(image: UIImage(systemName: timelineSymbol), style: .plain, target: self, action: #selector(toggleTimelineMode))
+        let timelineImg = UIImage.pencilStyledIcon(named: timelineSymbol, color: pencilColor, size: iconSize, offset: CGPoint(x: 1.5, y: 0.0))
+        let timelineItem = UIBarButtonItem(image: timelineImg, style: .plain, target: self, action: #selector(toggleTimelineMode))
         
         navigationItem.rightBarButtonItems = [shareItem, timelineItem]
         

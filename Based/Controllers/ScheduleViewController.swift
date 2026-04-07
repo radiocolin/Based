@@ -70,13 +70,16 @@ class ScheduleViewController: UIViewController {
         dateHeaderView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(dateHeaderView)
         
-        prevButton.setTitle("<", for: .normal)
-        prevButton.titleLabel?.font = UIFont(name: headerFont, size: 24) ?? .boldSystemFont(ofSize: 24)
+        let arrowSize = CGSize(width: 32, height: 32)
+        let prevImg = UIImage.pencilStyledIcon(named: "arrow.left", color: pencilColor, size: arrowSize)
+        prevButton.setImage(prevImg, for: .normal)
+        prevButton.setTitle(nil, for: .normal)
         prevButton.tintColor = pencilColor
         prevButton.addTarget(self, action: #selector(prevDate), for: .touchUpInside)
         
-        nextButton.setTitle(">", for: .normal)
-        nextButton.titleLabel?.font = UIFont(name: headerFont, size: 24) ?? .boldSystemFont(ofSize: 24)
+        let nextImg = UIImage.pencilStyledIcon(named: "arrow.right", color: pencilColor, size: arrowSize)
+        nextButton.setImage(nextImg, for: .normal)
+        nextButton.setTitle(nil, for: .normal)
         nextButton.tintColor = pencilColor
         nextButton.addTarget(self, action: #selector(nextDate), for: .touchUpInside)
         
@@ -131,11 +134,11 @@ class ScheduleViewController: UIViewController {
 
             prevButton.leadingAnchor.constraint(equalTo: dateHeaderView.leadingAnchor, constant: 20),
             prevButton.centerYAnchor.constraint(equalTo: dateHeaderView.centerYAnchor),
-            prevButton.widthAnchor.constraint(equalToConstant: 44),
+            prevButton.widthAnchor.constraint(equalToConstant: 32),
 
             nextButton.trailingAnchor.constraint(equalTo: dateHeaderView.trailingAnchor, constant: -20),
             nextButton.centerYAnchor.constraint(equalTo: dateHeaderView.centerYAnchor),
-            nextButton.widthAnchor.constraint(equalToConstant: 44),
+            nextButton.widthAnchor.constraint(equalToConstant: 32),
 
             dateLabel.leadingAnchor.constraint(equalTo: prevButton.trailingAnchor),
             {
