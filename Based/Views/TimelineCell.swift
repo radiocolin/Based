@@ -108,7 +108,7 @@ class TimelineCell: UITableViewCell {
             
             resultLabel.centerXAnchor.constraint(equalTo: diamondView.centerXAnchor),
             resultLabel.centerYAnchor.constraint(equalTo: diamondView.centerYAnchor),
-            resultLabel.widthAnchor.constraint(equalTo: diamondView.widthAnchor, multiplier: 0.6),
+            resultLabel.widthAnchor.constraint(equalTo: diamondView.widthAnchor, multiplier: 0.8),
             
             ballsLabel.topAnchor.constraint(equalTo: diamondContainer.topAnchor, constant: 4),
             ballsLabel.leadingAnchor.constraint(equalTo: diamondContainer.leadingAnchor, constant: 4),

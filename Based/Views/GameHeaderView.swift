@@ -265,22 +265,38 @@ class GameHeaderView: UIView {
         awayName.textColor = awayColor
         homeName.textColor = homeColor
         
-        let awayRuns = linescore.teams?.away?.runs ?? 0
-        let homeRuns = linescore.teams?.home?.runs ?? 0
-
-        awayR.text = "\(awayRuns)"
-        awayH.text = "\(linescore.teams?.away?.hits ?? 0)"
-        awayE.text = "\(linescore.teams?.away?.errors ?? 0)"
-        homeR.text = "\(homeRuns)"
-        homeH.text = "\(linescore.teams?.home?.hits ?? 0)"
-        homeE.text = "\(linescore.teams?.home?.errors ?? 0)"
-
-        awayR.textColor = awayRuns > 0 ? awayColor : pencilColor
-        awayH.textColor = pencilColor
-        awayE.textColor = pencilColor
-        homeR.textColor = homeRuns > 0 ? homeColor : pencilColor
-        homeH.textColor = pencilColor
-        homeE.textColor = pencilColor
+        let zeroColor = pencilColor.withAlphaComponent(0.7)
+        
+        // R/H/E totals — only show once game data is available
+        if let runs = linescore.teams?.away?.runs {
+            awayR.text = "\(runs)"
+            awayR.textColor = runs > 0 ? awayColor : zeroColor
+        } else { awayR.text = "" }
+        
+        if let hits = linescore.teams?.away?.hits {
+            awayH.text = "\(hits)"
+            awayH.textColor = zeroColor
+        } else { awayH.text = "" }
+        
+        if let errors = linescore.teams?.away?.errors {
+            awayE.text = "\(errors)"
+            awayE.textColor = zeroColor
+        } else { awayE.text = "" }
+        
+        if let runs = linescore.teams?.home?.runs {
+            homeR.text = "\(runs)"
+            homeR.textColor = runs > 0 ? homeColor : zeroColor
+        } else { homeR.text = "" }
+        
+        if let hits = linescore.teams?.home?.hits {
+            homeH.text = "\(hits)"
+            homeH.textColor = zeroColor
+        } else { homeH.text = "" }
+        
+        if let errors = linescore.teams?.home?.errors {
+            homeE.text = "\(errors)"
+            homeE.textColor = zeroColor
+        } else { homeE.text = "" }
         
         for label in awayInningLabels {
             label.text = ""
@@ -295,12 +311,14 @@ class GameHeaderView: UIView {
                 if let num = inning.num {
                     let index = num - 1
                     if index >= 0 && index < 9 {
-                        let awayInningRuns = inning.away?.runs ?? 0
-                        let homeInningRuns = inning.home?.runs ?? 0
-                        awayInningLabels[index].text = "\(awayInningRuns)"
-                        awayInningLabels[index].textColor = awayInningRuns > 0 ? awayColor : pencilColor
-                        homeInningLabels[index].text = "\(homeInningRuns)"
-                        homeInningLabels[index].textColor = homeInningRuns > 0 ? homeColor : pencilColor
+                        if let awayRuns = inning.away?.runs {
+                            awayInningLabels[index].text = "\(awayRuns)"
+                            awayInningLabels[index].textColor = awayRuns > 0 ? awayColor : zeroColor
+                        }
+                        if let homeRuns = inning.home?.runs {
+                            homeInningLabels[index].text = "\(homeRuns)"
+                            homeInningLabels[index].textColor = homeRuns > 0 ? homeColor : zeroColor
+                        }
                     }
                 }
             }

@@ -540,9 +540,15 @@ class GameService {
         case "sac_bunt", "sac_bunt_double_play", "bunt_groundout", "bunt_pop_out": return "SAC"
         case "field_out", "force_out", "flyout", "foul_fly", "popout", "lineout", "grounded_into_double_play", "grounded_into_triple_play":
             if eventType == "grounded_into_double_play" {
-                // Find the longest credit sequence in this play, usually the one involving the batter's out
-                let allCredits = play.runners?.compactMap { $0.credits?.compactMap { $0.position?.code } } ?? []
-                if let sequence = allCredits.max(by: { $0.count < $1.count }), !sequence.isEmpty {
+                // Chain credits from all out-runners to get the full fielding sequence (e.g. 4-6-3)
+                let outRunners = (play.runners ?? []).filter { $0.movement?.isOut == true }
+                let allCodes = outRunners.flatMap { $0.credits?.compactMap { $0.position?.code } ?? [] }
+                // Deduplicate consecutive positions (relay player appears at end of one chain and start of next)
+                var sequence: [String] = []
+                for code in allCodes {
+                    if code != sequence.last { sequence.append(code) }
+                }
+                if !sequence.isEmpty {
                     return "\(sequence.joined(separator: "-"))\nGIDP"
                 }
                 return "GIDP"
