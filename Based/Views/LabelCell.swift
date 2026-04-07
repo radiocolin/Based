@@ -18,11 +18,17 @@ class LabelCell: UICollectionViewCell {
         super.init(frame: frame)
         contentView.addSubview(label)
         label.translatesAutoresizingMaskIntoConstraints = false
+        
+        let leading = label.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 6)
+        let trailing = label.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -6)
+        // Set priority to 999 to avoid conflicts with system-imposed zero width during cell layout
+        leading.priority = UILayoutPriority(999)
+        trailing.priority = UILayoutPriority(999)
+        
         NSLayoutConstraint.activate([
-            label.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             label.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            label.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 6),
-            label.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -6)
+            leading,
+            trailing
         ])
         // Subtle grid line instead of border
         contentView.layer.borderWidth = 0.5
@@ -32,6 +38,13 @@ class LabelCell: UICollectionViewCell {
     
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        contentView.layer.borderWidth = 0.5
+        label.text = nil
+        label.attributedText = nil
     }
 
     override func layoutSubviews() {

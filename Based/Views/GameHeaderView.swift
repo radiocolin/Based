@@ -119,14 +119,20 @@ class GameHeaderView: UIView {
         let rowHeight: CGFloat = 28
         let headerHeight: CGFloat = 22
         
+        let containerTrailing = containerView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16)
+        containerTrailing.priority = UILayoutPriority(999)
+        
+        let venueTrailing = venueWeatherLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16)
+        venueTrailing.priority = UILayoutPriority(999)
+
         NSLayoutConstraint.activate([
             containerView.topAnchor.constraint(equalTo: topAnchor, constant: 4),
             containerView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
-            containerView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
+            containerTrailing,
 
             venueWeatherLabel.topAnchor.constraint(equalTo: containerView.bottomAnchor, constant: 6),
             venueWeatherLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
-            venueWeatherLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
+            venueTrailing,
             venueWeatherLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
             
             headerBackground.topAnchor.constraint(equalTo: containerView.topAnchor),

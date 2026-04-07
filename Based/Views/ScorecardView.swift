@@ -154,7 +154,17 @@ class ScorecardView: UIView {
         updateHeaderLabels()
     }
 
+    private var lastColumnLayout: ColumnLayout?
+    
     private func updateHeaderLabels() {
+        if let last = lastColumnLayout, last.totalColumns == columnLayout.totalColumns, 
+           last.innings.count == columnLayout.innings.count {
+            // Check if subcolumn counts changed
+            let countsChanged = zip(last.innings, columnLayout.innings).contains { $0.subColumnCount != $1.subColumnCount }
+            if !countsChanged { return }
+        }
+        lastColumnLayout = columnLayout
+        
         rightHeaderStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         for inningLayout in columnLayout.innings {
             let label = UILabel()
@@ -183,15 +193,30 @@ class ScorecardView: UIView {
     }
     
     func configure(with data: ScorecardData) {
-        let hasChanges = data != scorecardData
+        let oldData = scorecardData
+        let hasChanges = data != oldData
         self.scorecardData = data
         self.columnLayout = computeColumnLayout()
         updateNameColumnWidth()
         updateHeaderLabels()
         updateContentWidth()
+        
         if hasChanges {
-            leftCollectionView.reloadData()
-            rightCollectionView.reloadData()
+            // If the structure (lineup size or columns) changed, we must reload everything
+            let oldLineupCount = (oldData?.lineups.home.count ?? 0) + (oldData?.lineups.away.count ?? 0)
+            let newLineupCount = (data.lineups.home.count) + (data.lineups.away.count)
+            let structureChanged = oldLineupCount != newLineupCount || lastColumnLayout?.totalColumns != columnLayout.totalColumns
+            
+            if structureChanged {
+                leftCollectionView.reloadData()
+                rightCollectionView.reloadData()
+            } else {
+                // If only data changed, reconfigure visible cells for smoothness
+                let visibleLeft = leftCollectionView.indexPathsForVisibleItems
+                let visibleRight = rightCollectionView.indexPathsForVisibleItems
+                leftCollectionView.reconfigureItems(at: visibleLeft)
+                rightCollectionView.reconfigureItems(at: visibleRight)
+            }
         }
         invalidateIntrinsicContentSize()
     }
@@ -238,8 +263,11 @@ class ScorecardView: UIView {
     }
     
     func setIsLive(_ live: Bool) {
+        let changed = self.isLive != live
         self.isLive = live
-        rightCollectionView.reloadData()
+        if changed {
+            rightCollectionView.reconfigureItems(at: rightCollectionView.indexPathsForVisibleItems)
+        }
     }
     
     func scrollToActiveCell() {
@@ -372,7 +400,28 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate, U
         if collectionView == leftCollectionView {
             return CGSize(width: nameWidth, height: rowHeight)
         } else {
-            let col = indexPath.item % columnLayout.totalColumns
+            let totalCols = columnLayout.totalColumns
+            let col = indexPath.item % totalCols
+            
+            // For the totals row, if an inning has multiple sub-columns (batting around),
+            // make the first sub-column span all of them and subsequent ones zero width.
+            let rowIndex = indexPath.item / totalCols
+            guard let data = scorecardData else { return .zero }
+            let lineupCount = (isHomeTeam ? data.lineups.home.count : data.lineups.away.count)
+            let isTotalsRow = rowIndex == lineupCount
+            
+            if isTotalsRow {
+                if let (inningNum, subIndex) = columnLayout.inningInfo(forColumn: col) {
+                    if let inningLayout = columnLayout.layout(forInning: inningNum), inningLayout.subColumnCount > 1 {
+                        if subIndex == 0 {
+                            return CGSize(width: inningWidth * CGFloat(inningLayout.subColumnCount), height: rowHeight)
+                        } else {
+                            return CGSize(width: 0, height: rowHeight)
+                        }
+                    }
+                }
+            }
+            
             let width = columnLayout.statInfo(forColumn: col) != nil ? statWidth : inningWidth
             return CGSize(width: width, height: rowHeight)
         }
@@ -470,16 +519,21 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate, U
             if isTotalsRow {
                 let cell = collectionView.dequeueReusableCell(withReuseIdentifier: LabelCell.reuseIdentifier, for: indexPath) as! LabelCell
                 cell.label.textColor = AppColors.pencil
-                if let (inningNum, _) = columnLayout.inningInfo(forColumn: col) {
-                    let inningObj = data.innings.first { $0.num == inningNum }
-                    let events = isHomeTeam ? (inningObj?.home ?? []) : (inningObj?.away ?? [])
-                    let runs = events.reduce(0) { $0 + $1.rbi } // This is a rough estimate of runs in inning, MLB API usually provides runs per inning in linescore
-                    cell.label.text = runs > 0 ? "\(runs)" : ""
-                    if runs > 0 {
-                        cell.label.textColor = teamAccentColor
+                if let (inningNum, subIndex) = columnLayout.inningInfo(forColumn: col) {
+                    if subIndex == 0 {
+                        let inningObj = data.innings.first { $0.num == inningNum }
+                        let events = isHomeTeam ? (inningObj?.home ?? []) : (inningObj?.away ?? [])
+                        let runs = events.reduce(0) { $0 + $1.rbi }
+                        cell.label.text = runs > 0 ? "\(runs)" : ""
+                        cell.label.textColor = (runs > 0) ? teamAccentColor : AppColors.pencil
+                        cell.contentView.layer.borderWidth = 0.5
+                    } else {
+                        cell.label.text = ""
+                        cell.contentView.layer.borderWidth = 0
                     }
                 } else {
                     cell.label.text = ""
+                    cell.contentView.layer.borderWidth = 0.5
                 }
                 cell.backgroundColor = AppColors.header
                 return cell

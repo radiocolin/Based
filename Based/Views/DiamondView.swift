@@ -42,10 +42,36 @@ class DiamondView: UIView {
     }
 
     private var diamondPoints: (home: CGPoint, first: CGPoint, second: CGPoint, third: CGPoint)?
-    private var bases: BasesReached?
-    private var isRun: Bool = false
-    private var style: Style = .scorecard
-    private var accentColorOverride: UIColor?
+    private var bases: BasesReached? {
+        didSet {
+            if oldValue != bases {
+                setNeedsLayout()
+            }
+        }
+    }
+    private var isRun: Bool = false {
+        didSet {
+            if oldValue != isRun {
+                setNeedsLayout()
+            }
+        }
+    }
+    private var style: Style = .scorecard {
+        didSet {
+            if oldValue != style {
+                setNeedsLayout()
+            }
+        }
+    }
+    private var accentColorOverride: UIColor? {
+        didSet {
+            if oldValue != accentColorOverride {
+                setNeedsLayout()
+            }
+        }
+    }
+    
+    private var lastBounds: CGRect = .zero
     
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -78,9 +104,14 @@ class DiamondView: UIView {
     
     override func layoutSubviews() {
         super.layoutSubviews()
-        mainDiamondLayer.fillColor = AppColors.diamondFill.cgColor
-        drawMainDiamond()
-        updateActiveBases()
+        
+        let boundsChanged = bounds != lastBounds
+        if boundsChanged {
+            mainDiamondLayer.fillColor = AppColors.diamondFill.cgColor
+            drawMainDiamond()
+            updateActiveBases()
+            lastBounds = bounds
+        }
         
         // Ensure text layers use correct scale after layout
         basesLayer.sublayers?.compactMap { $0 as? CATextLayer }.forEach {
@@ -145,6 +176,9 @@ class DiamondView: UIView {
     
     private func updateActiveBases() {
         guard let p = diamondPoints, let bases = bases else { return }
+        
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         
         basesLayer.sublayers?.forEach { $0.removeFromSuperlayer() }
         fillLayer.fillColor = UIColor.clear.cgColor
@@ -265,6 +299,8 @@ class DiamondView: UIView {
                 drawAnnotation(annotation, points: p, color: accentColor)
             }
         }
+        
+        CATransaction.commit()
     }
 
     private func updateTextureLayer(color: UIColor, isScoringPlay: Bool) {

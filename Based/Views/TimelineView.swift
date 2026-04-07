@@ -169,6 +169,9 @@ class TimelineView: UIView {
         separator.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(separator)
         
+        let bottomConstraint = separator.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+        bottomConstraint.priority = .defaultHigh
+        
         NSLayoutConstraint.activate([
             titleBg.topAnchor.constraint(equalTo: container.topAnchor),
             titleBg.leadingAnchor.constraint(equalTo: container.leadingAnchor),
@@ -187,11 +190,12 @@ class TimelineView: UIView {
             separator.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             separator.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             separator.heightAnchor.constraint(equalToConstant: 0.5),
-            separator.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+            bottomConstraint
         ])
         
         // Size the header for UITableView
-        container.frame = CGRect(x: 0, y: 0, width: tableView.bounds.width, height: 192.5)
+        let measurementWidth = tableView.bounds.width > 0 ? tableView.bounds.width : 375
+        container.frame = CGRect(x: 0, y: 0, width: measurementWidth, height: 192.5)
         container.setNeedsLayout()
         container.layoutIfNeeded()
         
@@ -214,20 +218,27 @@ class TimelineView: UIView {
     
     private func rebuildFooter() {
         let footer = UIView()
-        // Give Auto Layout a realistic temporary height while we measure the footer.
-        // A height of 1 triggers unsatisfiable top/bottom constraints during sizing.
-        footer.frame = CGRect(x: 0, y: 0, width: tableView.bounds.width, height: 1000)
+        // Use a reasonable width for measurement if the table view hasn't laid out yet.
+        let measurementWidth = tableView.bounds.width > 0 ? tableView.bounds.width : 375
+        footer.frame = CGRect(x: 0, y: 0, width: measurementWidth, height: 1000)
+        
         let stack = UIStackView()
         stack.axis = .vertical
         stack.spacing = 16
         stack.translatesAutoresizingMaskIntoConstraints = false
         footer.addSubview(stack)
         
+        let trailingConstraint = stack.trailingAnchor.constraint(equalTo: footer.trailingAnchor, constant: -16)
+        trailingConstraint.priority = .defaultHigh // Allow flexibility if width is small
+        
+        let bottomConstraint = stack.bottomAnchor.constraint(equalTo: footer.bottomAnchor, constant: -24)
+        bottomConstraint.priority = .defaultHigh // Allow flexible height during measurement
+        
         NSLayoutConstraint.activate([
             stack.topAnchor.constraint(equalTo: footer.topAnchor, constant: 20),
             stack.leadingAnchor.constraint(equalTo: footer.leadingAnchor, constant: 16),
-            stack.trailingAnchor.constraint(equalTo: footer.trailingAnchor, constant: -16),
-            stack.bottomAnchor.constraint(equalTo: footer.bottomAnchor, constant: -24)
+            trailingConstraint,
+            bottomConstraint
         ])
         
         // Pitchers
@@ -249,7 +260,9 @@ class TimelineView: UIView {
         let hasGameInfo = !gameInfoItems.isEmpty || weather != nil
         if hasGameInfo {
             let gameInfoView = buildGameInfoLabel()
-            gameInfoView.widthAnchor.constraint(equalToConstant: 200).isActive = true
+            let widthConstraint = gameInfoView.widthAnchor.constraint(equalToConstant: 200)
+            widthConstraint.priority = .defaultHigh // Allow it to shrink on small screens
+            widthConstraint.isActive = true
             infoRow.addArrangedSubview(gameInfoView)
         }
         
@@ -257,15 +270,21 @@ class TimelineView: UIView {
             stack.addArrangedSubview(infoRow)
         }
         
+        // If there is NO content, don't even set a footer.
+        guard !stack.arrangedSubviews.isEmpty else {
+            tableView.tableFooterView = nil
+            return
+        }
+        
         // Size the footer
         footer.setNeedsLayout()
         footer.layoutIfNeeded()
         let size = stack.systemLayoutSizeFitting(
-            CGSize(width: tableView.bounds.width - 32, height: UIView.layoutFittingCompressedSize.height),
+            CGSize(width: measurementWidth - 32, height: UIView.layoutFittingCompressedSize.height),
             withHorizontalFittingPriority: .required,
             verticalFittingPriority: .fittingSizeLevel
         )
-        footer.frame = CGRect(x: 0, y: 0, width: tableView.bounds.width, height: size.height + 44)
+        footer.frame = CGRect(x: 0, y: 0, width: measurementWidth, height: size.height + 44)
         
         tableView.tableFooterView = footer
     }

@@ -159,7 +159,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         
         let shareItem = UIBarButtonItem(image: UIImage(systemName: "square.and.arrow.up"), style: .plain, target: self, action: #selector(shareScorecard))
         
-        let timelineSymbol = isTimelineMode ? "rectangle.grid.3x2" : "calendar.day.timeline.left"
+        let timelineSymbol = isTimelineMode ? "square.grid.3x2" : "calendar.day.timeline.left"
         let timelineItem = UIBarButtonItem(image: UIImage(systemName: timelineSymbol), style: .plain, target: self, action: #selector(toggleTimelineMode))
         
         navigationItem.rightBarButtonItems = [shareItem, timelineItem]
@@ -485,22 +485,38 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             // Main Scroll
             mainScrollView.topAnchor.constraint(equalTo: stickyHeaderContainer.bottomAnchor),
             mainScrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            mainScrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            {
+                let c = mainScrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+                c.priority = UILayoutPriority(999)
+                return c
+            }(),
             
             // Timeline
             timelineView.topAnchor.constraint(equalTo: gameHeaderView.bottomAnchor, constant: 8),
             timelineView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            timelineView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            {
+                let c = timelineView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+                c.priority = UILayoutPriority(999)
+                return c
+            }(),
             
             mainStackView.topAnchor.constraint(equalTo: mainScrollView.contentLayoutGuide.topAnchor),
             mainStackView.leadingAnchor.constraint(equalTo: mainScrollView.contentLayoutGuide.leadingAnchor, constant: 16),
-            mainStackView.trailingAnchor.constraint(equalTo: mainScrollView.contentLayoutGuide.trailingAnchor, constant: -16),
+            {
+                let c = mainStackView.trailingAnchor.constraint(equalTo: mainScrollView.contentLayoutGuide.trailingAnchor, constant: -16)
+                c.priority = UILayoutPriority(999)
+                return c
+            }(),
             mainStackView.bottomAnchor.constraint(equalTo: mainScrollView.contentLayoutGuide.bottomAnchor, constant: -24),
             mainStackView.widthAnchor.constraint(equalTo: mainScrollView.frameLayoutGuide.widthAnchor, constant: -32),
             
             currentStateView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             currentStateView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            currentStateView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            {
+                let c = currentStateView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+                c.priority = UILayoutPriority(999)
+                return c
+            }(),
             currentStateView.heightAnchor.constraint(equalToConstant: 190)
         ])
         

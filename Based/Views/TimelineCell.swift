@@ -89,6 +89,9 @@ class TimelineCell: UITableViewCell {
         infoStack.addArrangedSubview(pitcherLabel)
         infoStack.addArrangedSubview(descriptionLabel)
         
+        let infoTrailing = infoStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -12)
+        infoTrailing.priority = UILayoutPriority(999)
+
         NSLayoutConstraint.activate([
             leftContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 12),
             leftContainer.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12),
@@ -120,7 +123,7 @@ class TimelineCell: UITableViewCell {
             outsLabel.trailingAnchor.constraint(equalTo: diamondContainer.trailingAnchor, constant: -4),
             
             infoStack.leadingAnchor.constraint(equalTo: leftContainer.trailingAnchor, constant: 16),
-            infoStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -12),
+            infoTrailing,
             infoStack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12),
             infoStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12)
         ])

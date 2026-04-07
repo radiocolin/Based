@@ -302,12 +302,20 @@ class GameCardCell: UICollectionViewCell {
 
             // Status
             statusLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: pad),
-            statusLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -pad),
+            {
+                let c = statusLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -pad)
+                c.priority = UILayoutPriority(999)
+                return c
+            }(),
             statusLabel.bottomAnchor.constraint(equalTo: venueLabel.topAnchor, constant: -2),
             
             // Venue
             venueLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: pad),
-            venueLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -pad),
+            {
+                let c = venueLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -pad)
+                c.priority = UILayoutPriority(999)
+                return c
+            }(),
             venueLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -4),
         ])
     }

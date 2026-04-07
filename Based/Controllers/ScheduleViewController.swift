@@ -138,7 +138,11 @@ class ScheduleViewController: UIViewController {
             nextButton.widthAnchor.constraint(equalToConstant: 44),
 
             dateLabel.leadingAnchor.constraint(equalTo: prevButton.trailingAnchor),
-            dateLabel.trailingAnchor.constraint(equalTo: nextButton.leadingAnchor),
+            {
+                let c = dateLabel.trailingAnchor.constraint(equalTo: nextButton.leadingAnchor)
+                c.priority = UILayoutPriority(999)
+                return c
+            }(),
             dateLabel.centerYAnchor.constraint(equalTo: dateHeaderView.centerYAnchor),
 
             // Collection View

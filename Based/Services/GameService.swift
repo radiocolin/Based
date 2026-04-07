@@ -132,15 +132,42 @@ class GameService {
         currentGamePk = gamePk
         
         pollingTask = Task {
+            do {
+                // Initial update to check status
+                try await performSmartUpdate(gamePk: gamePk)
+                
+                // If game is already final, don't start polling
+                if let linescore = lastLinescore, 
+                   let gameData = lastScorecard?.gameInfo { // We need gameData to be sure, but linescore might suffice
+                    let phase = livePhase(for: linescore, gameData: nil)
+                    if phase == .final {
+                        return
+                    }
+                }
+            } catch {
+                print("Initial update failed: \(error)")
+            }
+            
             while !Task.isCancelled {
+                let interval = calculatePollingInterval()
+                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+                
+                if Task.isCancelled { break }
+                
                 do {
                     try await performSmartUpdate(gamePk: gamePk)
+                    
+                    // Check if game just finished
+                    if let linescore = lastLinescore {
+                        let phase = livePhase(for: linescore, gameData: nil)
+                        if phase == .final {
+                            print("Game is final, stopping polling.")
+                            break
+                        }
+                    }
                 } catch {
                     print("Update failed: \(error)")
                 }
-                
-                let interval = calculatePollingInterval()
-                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
             }
         }
     }
