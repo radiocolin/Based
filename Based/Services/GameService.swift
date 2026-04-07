@@ -45,9 +45,12 @@ class GameService {
         let hasEvent = play.result?.event != nil
         let isComplete = play.about?.isComplete == true
         let isLive = play.about?.isComplete == false
+        let hasLivePitches = play.playEvents?.contains(where: { $0.isPitch == true }) == true
 
-        guard type == "atBat", !isStatusOnlyPlay(play), hasEvent else { return false }
-        return isComplete || (includeLive && isLive)
+        guard type == "atBat", !isStatusOnlyPlay(play) else { return false }
+        if isComplete { return hasEvent }
+        if includeLive && isLive { return hasEvent || hasLivePitches }
+        return false
     }
     
     func startPolling(gamePk: Int) {
