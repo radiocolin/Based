@@ -42,6 +42,16 @@ class GameService {
     private var lastLinescore: Linescore?
     private var lastScorecard: ScorecardData?
     private var lastFetchTime: Date?
+    private var isBackgrounded = false
+    
+    // Error backoff: doubles on each consecutive failure, resets on success
+    private var consecutiveErrors = 0
+    private let maxBackoffInterval: TimeInterval = 60.0
+    
+    // Post-inning cleanup: re-poll when a half-inning transition is missing its 3rd out
+    private var needsInningCleanup = false
+    private var inningCleanupAttempts = 0
+    private let maxCleanupAttempts = 5
 
     private func isStatusOnlyPlay(_ play: Play) -> Bool {
         let type = play.result?.type ?? ""
@@ -127,24 +137,60 @@ class GameService {
         )
     }
     
+    /// Check if the just-completed half-inning has all 3 outs recorded in PBP data.
+    /// If not, flag for re-fetch so we eventually capture the missing final at-bat.
+    private func checkInningCleanup(scorecard: ScorecardData, linescore: Linescore) {
+        let state = linescore.inningState?.lowercased() ?? ""
+        guard state == "mid" || state == "end" else {
+            // Not in a transition — clear cleanup state
+            needsInningCleanup = false
+            inningCleanupAttempts = 0
+            return
+        }
+        
+        let currentInning = linescore.currentInning ?? 1
+        guard let inningData = scorecard.innings.first(where: { $0.num == currentInning }) else {
+            needsInningCleanup = true
+            inningCleanupAttempts += 1
+            return
+        }
+        
+        // "Mid" = top of currentInning just ended (away batting → check away events)
+        // "End" = bottom of currentInning just ended (home batting → check home events)
+        let events = (state == "mid") ? inningData.away : inningData.home
+        let maxOuts = events.map { $0.outs }.max() ?? 0
+        
+        if maxOuts < 3 && inningCleanupAttempts < maxCleanupAttempts {
+            needsInningCleanup = true
+            inningCleanupAttempts += 1
+            print("[InningCleanup] \(state.uppercased()) \(currentInning): only \(maxOuts) outs recorded, attempt \(inningCleanupAttempts)/\(maxCleanupAttempts)")
+        } else {
+            if maxOuts >= 3 && needsInningCleanup {
+                print("[InningCleanup] \(state.uppercased()) \(currentInning): 3 outs now recorded, cleanup complete")
+            }
+            needsInningCleanup = false
+            if maxOuts >= 3 { inningCleanupAttempts = 0 }
+        }
+    }
+    
     func startPolling(gamePk: Int) {
         stopPolling()
         currentGamePk = gamePk
         
         pollingTask = Task {
             do {
-                // Initial update to check status
                 try await performSmartUpdate(gamePk: gamePk)
+                consecutiveErrors = 0
                 
                 // If game is already final, don't start polling
-                if let linescore = lastLinescore, 
-                   let gameData = lastScorecard?.gameInfo { // We need gameData to be sure, but linescore might suffice
+                if let linescore = lastLinescore {
                     let phase = livePhase(for: linescore, gameData: nil)
                     if phase == .final {
                         return
                     }
                 }
             } catch {
+                consecutiveErrors += 1
                 print("Initial update failed: \(error)")
             }
             
@@ -154,8 +200,13 @@ class GameService {
                 
                 if Task.isCancelled { break }
                 
+                // Skip network calls while backgrounded — iOS will suspend us anyway,
+                // but this prevents wasted requests during the brief grace period.
+                if isBackgrounded { continue }
+                
                 do {
                     try await performSmartUpdate(gamePk: gamePk)
+                    consecutiveErrors = 0
                     
                     // Check if game just finished
                     if let linescore = lastLinescore {
@@ -166,8 +217,30 @@ class GameService {
                         }
                     }
                 } catch {
-                    print("Update failed: \(error)")
+                    consecutiveErrors += 1
+                    let backoff = min(basePollingInterval() * pow(2.0, Double(consecutiveErrors - 1)), maxBackoffInterval)
+                    print("Update failed (attempt \(consecutiveErrors), next in \(Int(backoff))s): \(error.localizedDescription)")
                 }
+            }
+        }
+    }
+    
+    /// Called by SceneDelegate when app enters background
+    func didEnterBackground() {
+        isBackgrounded = true
+    }
+    
+    /// Called by SceneDelegate when app returns to foreground — triggers an immediate refresh
+    func willEnterForeground() {
+        isBackgrounded = false
+        guard let gamePk = currentGamePk, pollingTask != nil else { return }
+        Task {
+            do {
+                try await performSmartUpdate(gamePk: gamePk)
+                consecutiveErrors = 0
+            } catch {
+                consecutiveErrors += 1
+                print("Foreground refresh failed: \(error.localizedDescription)")
             }
         }
     }
@@ -177,21 +250,36 @@ class GameService {
         pollingTask = nil
         lastLinescore = nil
         lastScorecard = nil
+        needsInningCleanup = false
+        inningCleanupAttempts = 0
+        consecutiveErrors = 0
     }
     
-    private func calculatePollingInterval() -> TimeInterval {
+    /// Base interval before error backoff is applied
+    private func basePollingInterval() -> TimeInterval {
+        // Fast-poll during inning cleanup to capture the missing 3rd-out play
+        if needsInningCleanup { return 5.0 }
+        
         guard let linescore = lastLinescore else { return 10.0 }
         let state = linescore.inningState?.lowercased() ?? ""
         
         if state.contains("in progress") || state.contains("live") {
-            return 8.0 // Fast polling during active play
+            return 8.0
         } else if state.contains("warmup") || state.contains("pre-game") {
             return 30.0
         } else if state.contains("final") {
-            return 300.0 // Game over, stop or poll very slowly
+            return 300.0
         } else {
             return 15.0 // Between innings, etc.
         }
+    }
+    
+    private func calculatePollingInterval() -> TimeInterval {
+        let base = basePollingInterval()
+        guard consecutiveErrors > 0 else { return base }
+        // Exponential backoff: base * 2^(errors-1), capped at 60s
+        let backoff = min(base * pow(2.0, Double(consecutiveErrors - 1)), maxBackoffInterval)
+        return backoff
     }
     
     private func performSmartUpdate(gamePk: Int) async throws {
@@ -226,7 +314,8 @@ class GameService {
                linescore.teams?.away?.runs != lastLinescore?.teams?.away?.runs ||
                linescore.currentInning != lastLinescore?.currentInning || 
                linescore.inningHalf != lastLinescore?.inningHalf ||
-               linescore.offense?.batter?.id != lastLinescore?.offense?.batter?.id {
+               linescore.offense?.batter?.id != lastLinescore?.offense?.batter?.id ||
+               needsInningCleanup {
                 shouldFetchScorecard = true
             }
         } else {
@@ -238,6 +327,11 @@ class GameService {
             await MainActor.run {
                 self.lastScorecard = scorecard
             }
+        }
+        
+        // Post-inning cleanup: check if a just-completed half-inning is missing its 3rd out
+        if let scorecard = lastScorecard {
+            checkInningCleanup(scorecard: scorecard, linescore: linescore)
         }
         
         await MainActor.run {
@@ -412,6 +506,7 @@ class GameService {
         }.reversed() // Most recent first
         
         var scorecardInnings: [ScorecardInning] = []
+        let linescoreInnings = linescore?.innings ?? []
         for i in 1...maxInning {
             let inningPlays = allPlays.filter { $0.about?.inning == i }
             
@@ -425,7 +520,10 @@ class GameService {
                 transformPlayToEvent(play, allPlays: allPlays, playIndex: allPlays.firstIndex(where: { $0.about?.atBatIndex == play.about?.atBatIndex }) ?? 0)
             }
             
-            scorecardInnings.append(ScorecardInning(num: i, ordinal: "\(i)", home: homeEvents, away: awayEvents))
+            // Authoritative per-inning runs from linescore (always correct, even when PBP lags)
+            let linescoreInning = linescoreInnings.first { $0.num == i }
+            
+            scorecardInnings.append(ScorecardInning(num: i, ordinal: "\(i)", home: homeEvents, away: awayEvents, homeRuns: linescoreInning?.home?.runs, awayRuns: linescoreInning?.away?.runs))
         }
 
         let liveCurrentAtBat: AtBatEvent?

@@ -604,7 +604,11 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate, U
                     if subIndex == 0 {
                         let inningObj = data.innings.first { $0.num == inningNum }
                         let events = isHomeTeam ? (inningObj?.home ?? []) : (inningObj?.away ?? [])
-                        let runs = events.filter { $0.bases.home }.count
+                        // Prefer authoritative linescore runs (always correct during transitions)
+                        // Fall back to counting PBP events if linescore data isn't available yet
+                        let linescoreRuns = isHomeTeam ? inningObj?.homeRuns : inningObj?.awayRuns
+                        let derivedRuns = events.filter { $0.bases.home }.count
+                        let runs = linescoreRuns ?? derivedRuns
                         cell.label.text = runs > 0 ? "\(runs)" : ""
                         cell.label.textColor = (runs > 0) ? teamAccentColor : AppColors.pencil
                         cell.contentView.layer.borderWidth = 0.5

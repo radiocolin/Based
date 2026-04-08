@@ -68,6 +68,8 @@ struct ScorecardInning: Codable, Sendable, Equatable {
     let ordinal: String
     let home: [AtBatEvent]
     let away: [AtBatEvent]
+    let homeRuns: Int?  // Authoritative from linescore (nil if inning hasn't started)
+    let awayRuns: Int?  // Authoritative from linescore (nil if inning hasn't started)
 }
 
 struct AtBatEvent: Codable, Sendable, Equatable {

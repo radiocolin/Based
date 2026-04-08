@@ -1,29 +1,19 @@
 Latest Since Last Notes Update
 
-Live / Pregame / Final
-- Open a live, pregame, and final game.
-- Verify game detail does not stay "live" once the feed reports Scheduled, Pre-Game, Final, Game Over, or Completed Early.
+Inning Transition Cleanup
+- Watch a live game through a half-inning ending. The 3rd-out at-bat should appear in the scorecard within a few seconds of the "MID" or "END" break starting.
+- Check the inning run totals in the scorecard footer row during breaks — they should show the correct run count immediately, even if the final at-bat cell hasn't filled in yet.
+- If a run scores on the 3rd out (e.g. sac fly), the run should show in the inning total right away.
 
-Scoreboard Cleanup
-- Pregame: inning boxes and R/H/E should stay blank until data exists.
-- Live/final: inning lines still populate, and runs are team-colored only when greater than 0.
-
-At-Bat Presentation
-- Open the same at-bat from scorecard, timeline, and live state.
-- Result, description, count, and diamond styling should match across all entry points.
-- Scoring plays and HRs should carry batting-team color through scorecard, timeline, and at-bat detail.
-- Called strikeouts should still render as a backward K.
-
-Timeline / Scorecard Filtering
-- Non-at-bat events like delays, substitutions, mound visits, replay/challenge notices, and advisories should not appear as batting events.
-- Ground-ball double plays should show a chained fielding label when available (example: 4-6-3 GIDP).
-
-Team Color Readability
-- Check darker teams like White Sox, Pirates, Padres, Mariners, Yankees, Astros, and Rockies in light and dark mode.
-- Team-colored runs and scoring marks should remain readable.
+Network Resilience
+- Put your phone in airplane mode for 30+ seconds during a live game, then re-enable. The scorecard should recover and catch up without needing to leave and re-enter the game.
+- On a weak or spotty connection, the app should not freeze or hang. It should gracefully slow down and recover when signal returns.
+- Lock your phone during a live game, wait 30+ seconds, then unlock. The scorecard should refresh immediately — you should not have to wait for the next update.
+- Background the app for a minute, then return. Same thing — it should catch up right away.
 
 Regression Checks
-- Player detail still opens from batter and pitcher taps, with correct hitter/pitcher stats.
-- Historical at-bat detail should still show the correct pitcher.
-- Timeline footer should still show pitchers, umpires, game info, and weather when available.
-- View mode persistence should still remember scorecard vs timeline across reopening and relaunch.
+- At-bat presentation still works from scorecard, timeline, and live state.
+- Team colors still readable in light and dark mode.
+- Player detail still opens from batter and pitcher taps.
+- Timeline footer still shows pitchers, umpires, game info.
+- View mode persistence still remembers scorecard vs timeline.

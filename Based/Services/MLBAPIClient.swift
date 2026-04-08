@@ -1,20 +1,20 @@
 import Foundation
 
-// MARK: - ETag Cache
+// MARK: - ETag Cache (stores both raw data and pre-decoded objects)
 
 private actor ETagCache {
-    private var storage: [String: (etag: String, data: Data)] = [:]
+    private var storage: [String: (etag: String, data: Data, decoded: Any)] = [:]
 
     func etag(for endpoint: String) -> String? {
         storage[endpoint]?.etag
     }
 
-    func cachedData(for endpoint: String) -> Data? {
-        storage[endpoint]?.data
+    func cachedDecoded<T>(for endpoint: String) -> T? {
+        storage[endpoint]?.decoded as? T
     }
 
-    func store(etag: String, data: Data, for endpoint: String) {
-        storage[endpoint] = (etag, data)
+    func store<T>(etag: String, data: Data, decoded: T, for endpoint: String) {
+        storage[endpoint] = (etag, data, decoded)
     }
 }
 
@@ -22,11 +22,17 @@ private actor ETagCache {
 
 final class MLBAPIClient: Sendable {
     static let shared = MLBAPIClient()
-    private let session = URLSession.shared
+    private let session: URLSession
     private let baseURL = URL(string: "https://statsapi.mlb.com")!
     private let etagCache = ETagCache()
 
-    private init() {}
+    private init() {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 15   // 15s per request (don't hang the radio on bad coverage)
+        config.timeoutIntervalForResource = 30  // 30s total for the resource
+        config.waitsForConnectivity = false      // Fail fast rather than queue requests
+        session = URLSession(configuration: config)
+    }
 
     func fetch<T: Decodable>(_ type: T.Type, endpoint: String) async throws -> T {
         guard let url = URL(string: endpoint, relativeTo: baseURL) else {
@@ -44,14 +50,17 @@ final class MLBAPIClient: Sendable {
         let (data, response) = try await session.data(for: request)
 
         if let httpResponse = response as? HTTPURLResponse {
+            // 304 Not Modified — return pre-decoded cached object (no JSON parsing needed)
             if httpResponse.statusCode == 304,
-               let cachedData = await etagCache.cachedData(for: endpoint) {
+               let cached: T = await etagCache.cachedDecoded(for: endpoint) {
                 NSLog("[API] 304 Not Modified: %@", endpoint)
-                return try JSONDecoder().decode(T.self, from: cachedData)
+                return cached
             }
 
             if let etag = httpResponse.value(forHTTPHeaderField: "ETag") {
-                await etagCache.store(etag: etag, data: data, for: endpoint)
+                let decoded = try JSONDecoder().decode(T.self, from: data)
+                await etagCache.store(etag: etag, data: data, decoded: decoded, for: endpoint)
+                return decoded
             }
         }
 
