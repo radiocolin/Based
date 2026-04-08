@@ -1,68 +1,56 @@
 {
   "fill" : {
-    "automatic-gradient" : "extended-srgb:0.00000,0.53333,1.00000,1.00000"
+    "automatic-gradient" : "extended-gray:1.00000,1.00000"
   },
   "groups" : [
     {
-      "blend-mode" : "normal",
-      "hidden-specializations" : [
-        {
-          "idiom" : "square",
-          "value" : false
-        }
-      ],
       "layers" : [
         {
-          "blend-mode" : "normal",
-          "fill" : "none",
           "glass" : false,
-          "hidden-specializations" : [
-            {
-              "idiom" : "square",
-              "value" : false
-            }
-          ],
-          "image-name" : "based.png",
-          "name" : "based",
-          "position-specializations" : [
-            {
-              "idiom" : "square",
-              "value" : {
-                "scale" : 1.49,
-                "translation-in-points" : [
-                  0,
-                  0
-                ]
-              }
-            }
-          ]
-        }
-      ],
-      "lighting-specializations" : [
+          "image-name" : "4–6.png",
+          "name" : "4–6",
+          "position" : {
+            "scale" : 0.56,
+            "translation-in-points" : [
+              -2.109375,
+              15.8046875
+            ]
+          }
+        },
         {
-          "appearance" : "tinted",
-          "value" : "combined"
+          "glass" : false,
+          "image-name" : "Bases.png",
+          "name" : "Bases",
+          "position" : {
+            "scale" : 0.57,
+            "translation-in-points" : [
+              -26.2734375,
+              23.2265625
+            ]
+          }
+        },
+        {
+          "glass" : false,
+          "hidden" : false,
+          "image-name" : "Baseball.png",
+          "name" : "Baseball",
+          "position" : {
+            "scale" : 0.55,
+            "translation-in-points" : [
+              -26.921875,
+              14.984375
+            ]
+          }
         }
       ],
       "shadow" : {
         "kind" : "neutral",
         "opacity" : 0.5
       },
-      "specular-specializations" : [
-        {
-          "appearance" : "tinted",
-          "value" : false
-        }
-      ],
-      "translucency-specializations" : [
-        {
-          "appearance" : "tinted",
-          "value" : {
-            "enabled" : false,
-            "value" : 0.5
-          }
-        }
-      ]
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
     }
   ],
   "supported-platforms" : {

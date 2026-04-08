@@ -823,7 +823,7 @@ class GameService {
             if normalizedEvent.contains("walk") { return "BB" }
             if normalizedEvent.contains("hit by pitch") { return "HBP" }
             if normalizedEvent.contains("fielder") && normalizedEvent.contains("choice") { return "FC" }
-            if normalizedEvent.contains("sacrifice fly") { return "SF" }
+            if normalizedEvent.contains("sacrifice fly") { return "SAC" }
             if normalizedEvent.contains("sacrifice") || normalizedEvent.contains("sac bunt") || normalizedEvent.contains("sacrifice bunt") { return "SAC" }
             if normalizedEvent.contains("double play") { return "GIDP" }
             if normalizedEvent.contains("triple play") { return "TP" }

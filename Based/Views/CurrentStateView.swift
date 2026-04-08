@@ -228,8 +228,8 @@ class CurrentStateView: UIView {
     ) {
         let state = linescore.inningState?.lowercased() ?? "---"
         let outs = linescore.outs ?? 0
-        let side = linescore.inningHalf?.uppercased() ?? ""
-        let ordinal = linescore.currentInningOrdinal?.uppercased() ?? "---"
+        let side = linescore.inningHalf ?? ""
+        let ordinal = linescore.currentInningOrdinal ?? "---"
         let isTransitionBreak = !hasActiveAtBat && outs >= 3
         let isBreak = state == "mid" || state == "end" || isTransitionBreak
         
@@ -262,7 +262,7 @@ class CurrentStateView: UIView {
             countLabel.text = ""
             pitchCountLabel.text = ""
         } else {
-            batterLabel.text = linescore.offense?.batter?.fullName?.uppercased() ?? "---"
+            batterLabel.text = linescore.offense?.batter?.fullName ?? "---"
             pitcherLabel.text = "vs. \(linescore.defense?.pitcher?.fullName ?? "---")"
             countLabel.text = "\(linescore.balls ?? 0)-\(linescore.strikes ?? 0)"
             

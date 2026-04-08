@@ -109,4 +109,12 @@ extension MLBAPIClient {
         }
         return player
     }
+
+    func fetchTeams() async throws -> [Team] {
+        struct TeamsResponse: Decodable {
+            let teams: [Team]
+        }
+        let response = try await fetch(TeamsResponse.self, endpoint: "/api/v1/teams?sportId=1")
+        return response.teams
+    }
 }

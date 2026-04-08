@@ -138,7 +138,7 @@ class PlayerDetailViewController: UIViewController {
             contentStack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor, constant: -40)
         ])
 
-        headerLabel.text = playerName.uppercased()
+        headerLabel.text = playerName
         headerLabel.font = UIFont(name: headerFont, size: 28) ?? .systemFont(ofSize: 28, weight: .bold)
         headerLabel.textColor = pencilColor
         headerLabel.textAlignment = .center

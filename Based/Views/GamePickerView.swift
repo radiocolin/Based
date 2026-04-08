@@ -361,7 +361,7 @@ class GameCardCell: UICollectionViewCell {
 
         // Status & Venue
         statusLabel.text = formatStatus(game)
-        venueLabel.text = game.venue?.name?.uppercased() ?? ""
+        venueLabel.text = game.venue?.name ?? ""
 
         // Selection state
         contentView.backgroundColor = isSelected ? selectedColor : paperColor

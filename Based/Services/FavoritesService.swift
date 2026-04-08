@@ -2,6 +2,7 @@ import Foundation
 
 final class FavoritesService: Sendable {
     static let shared = FavoritesService()
+    static let favoritesDidChangeNotification = Notification.Name("FavoritesServiceFavoritesDidChange")
     private let favoritesKey = "based_favorite_team_ids"
     private let defaults = UserDefaults.standard
     
@@ -20,5 +21,10 @@ final class FavoritesService: Sendable {
             favorites.append(teamId)
         }
         defaults.set(favorites, forKey: favoritesKey)
+        NotificationCenter.default.post(name: Self.favoritesDidChangeNotification, object: nil)
+    }
+
+    func getFavoriteTeamIds() -> [Int] {
+        defaults.array(forKey: favoritesKey) as? [Int] ?? []
     }
 }

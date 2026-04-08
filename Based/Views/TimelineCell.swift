@@ -152,7 +152,7 @@ class TimelineCell: UITableViewCell {
         outsLabel.text = presentation.outsText
         outsLabel.textColor = presentation.primaryColor
         
-        batterLabel.text = event.batterName.uppercased()
+        batterLabel.text = event.batterName
         pitcherLabel.text = "vs \(event.pitcherName)"
         
         descriptionLabel.text = event.description

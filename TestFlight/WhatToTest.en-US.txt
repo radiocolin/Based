@@ -1,4 +1,4 @@
-Latest Since Last Notes Update
+This is the final version of Based for the App Store.
 
 Inning Transition Cleanup
 - Watch a live game through a half-inning ending. The 3rd-out at-bat should appear in the scorecard within a few seconds of the "MID" or "END" break starting.

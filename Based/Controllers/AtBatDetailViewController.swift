@@ -55,7 +55,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         if let accentColor {
             self.accentColor = accentColor
         }
-        batterLabel.text = self.batterName.uppercased()
+        batterLabel.text = self.batterName
         applyPitcherHeader()
         applyEventPresentation()
         
@@ -96,7 +96,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         titleStack.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(titleStack)
         
-        batterLabel.text = batterName.uppercased()
+        batterLabel.text = batterName
         batterLabel.font = UIFont(name: headerFont, size: 24) ?? .systemFont(ofSize: 24, weight: .bold)
         batterLabel.textColor = pencilColor
         batterLabel.textAlignment = .center
@@ -343,7 +343,7 @@ class PitchCell: UITableViewCell {
             return ""
         }
 
-        return pitch.outcome.uppercased()
+        return pitch.outcome
     }
 
     private func speedText(for pitch: PitchEvent) -> String {

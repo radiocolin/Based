@@ -109,13 +109,12 @@ class ScheduleViewController: UIViewController {
         let screenWidth = view.window?.windowScene?.screen.bounds.width ?? view.frame.width
         let width = (screenWidth - padding) / 2
         layout.itemSize = CGSize(width: width, height: 120) 
-        layout.footerReferenceSize = CGSize(width: screenWidth, height: 140)        
+        
         collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
         collectionView.backgroundColor = .clear
         collectionView.delegate = self
         collectionView.dataSource = self
         collectionView.register(GameCardCell.self, forCellWithReuseIdentifier: GameCardCell.reuseIdentifier)
-        collectionView.register(ScheduleFooterView.self, forSupplementaryViewOfKind: UICollectionView.elementKindSectionFooter, withReuseIdentifier: ScheduleFooterView.reuseIdentifier)
         
         let gameLongPress = UILongPressGestureRecognizer(target: self, action: #selector(handleGameLongPress(_:)))
         collectionView.addGestureRecognizer(gameLongPress)
@@ -159,7 +158,7 @@ class ScheduleViewController: UIViewController {
         ])
         }
 
-    private func setupNavigationBar() {        title = "BASED"
+    private func setupNavigationBar() {        title = "Based"
         
         let font = UIFont(name: "PermanentMarker-Regular", size: 28) ?? .systemFont(ofSize: 28, weight: .bold)
         let appearance = UINavigationBarAppearance()
@@ -285,7 +284,7 @@ class ScheduleViewController: UIViewController {
     private func updateDateLabel() {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE, MMMM d"
-        dateLabel.text = formatter.string(from: currentDate).uppercased()
+        dateLabel.text = formatter.string(from: currentDate)
         
         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
         let isTomorrow = Calendar.current.isDate(currentDate, inSameDayAs: tomorrow)
@@ -496,233 +495,6 @@ class ScheduleViewController: UIViewController {
     }
 }
 
-// MARK: - Footer View
-
-// MARK: - Pencil Swatch Button
-
-private class PencilSwatchButton: UIControl {
-    let swatchColor: UIColor?  // nil = eraser/reset
-    private let fillLayer = CAShapeLayer()
-    private let borderLayer = CAShapeLayer()
-    private let checkLayer = CAShapeLayer()
-
-    init(color: UIColor?) {
-        self.swatchColor = color
-        super.init(frame: .zero)
-        layer.addSublayer(fillLayer)
-        layer.addSublayer(borderLayer)
-        layer.addSublayer(checkLayer)
-        borderLayer.fillColor = UIColor.clear.cgColor
-        borderLayer.lineWidth = 1.2
-        borderLayer.lineCap = .round
-        checkLayer.fillColor = UIColor.clear.cgColor
-        checkLayer.lineWidth = 1.8
-        checkLayer.lineCap = .round
-    }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    var isCurrentTint: Bool = false {
-        didSet { setNeedsLayout() }
-    }
-
-    override var intrinsicContentSize: CGSize { CGSize(width: 32, height: 32) }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        let center = CGPoint(x: bounds.midX, y: bounds.midY)
-        let radius: CGFloat = min(bounds.width, bounds.height) / 2 - 2
-
-        // Fill
-        let circlePath = UIBezierPath.pencilRoughCircle(center: center, radius: radius, jitter: 0.8)
-        if let c = swatchColor {
-            fillLayer.path = circlePath.cgPath
-            fillLayer.fillColor = c.cgColor
-        } else {
-            // Eraser: empty circle with an X
-            fillLayer.path = circlePath.cgPath
-            fillLayer.fillColor = AppColors.paper.cgColor
-        }
-
-        // Border
-        let borderPath = UIBezierPath.pencilRoughCircle(center: center, radius: radius, jitter: 1.0)
-        borderLayer.path = borderPath.cgPath
-        borderLayer.strokeColor = AppColors.pencil.withAlphaComponent(isCurrentTint ? 0.8 : 0.3).cgColor
-
-        // Check mark or X for eraser
-        if swatchColor == nil {
-            // Draw a small X
-            let s: CGFloat = radius * 0.45
-            let xPath = UIBezierPath()
-            xPath.append(.pencilLine(from: CGPoint(x: center.x - s, y: center.y - s),
-                                     to: CGPoint(x: center.x + s, y: center.y + s), jitter: 0.5))
-            xPath.append(.pencilLine(from: CGPoint(x: center.x + s, y: center.y - s),
-                                     to: CGPoint(x: center.x - s, y: center.y + s), jitter: 0.5))
-            checkLayer.path = xPath.cgPath
-            checkLayer.strokeColor = AppColors.pencil.withAlphaComponent(0.4).cgColor
-        } else if isCurrentTint {
-            // Draw a small check
-            let s: CGFloat = radius * 0.4
-            let checkPath = UIBezierPath()
-            checkPath.append(.pencilLine(
-                from: CGPoint(x: center.x - s * 0.6, y: center.y),
-                to: CGPoint(x: center.x - s * 0.1, y: center.y + s * 0.5), jitter: 0.3))
-            checkPath.append(.pencilLine(
-                from: CGPoint(x: center.x - s * 0.1, y: center.y + s * 0.5),
-                to: CGPoint(x: center.x + s * 0.7, y: center.y - s * 0.5), jitter: 0.3))
-            checkLayer.path = checkPath.cgPath
-            checkLayer.strokeColor = UIColor.white.cgColor
-        } else {
-            checkLayer.path = nil
-        }
-    }
-}
-
-class ScheduleFooterView: UICollectionReusableView {
-    static let reuseIdentifier = "ScheduleFooterView"
-
-    private let stackView = UIStackView()
-    private let madeInStack = UIStackView()
-    private let madeWithLabel = UILabel()
-    private let heartImageView = UIImageView(image: UIImage(named: "PhiladelphiaLove.symbols")?.withRenderingMode(.alwaysTemplate))
-    private let inPhiladelphiaLabel = UILabel()
-
-
-    // Tint row
-    private let tintRow = UIStackView()
-    private let colorWell = UIColorWell()
-    private var swatchButtons: [PencilSwatchButton] = []
-
-    private static let presetColors: [UIColor] = [
-        UIColor(red: 0.00, green: 0.22, blue: 0.52, alpha: 1.0),   // Dodger blue
-        UIColor(red: 0.76, green: 0.09, blue: 0.17, alpha: 1.0),   // Cardinal red
-        UIColor(red: 0.11, green: 0.24, blue: 0.15, alpha: 1.0),   // Oakland green
-        UIColor(red: 0.92, green: 0.38, blue: 0.04, alpha: 1.0),   // Oriole orange
-        UIColor(red: 0.42, green: 0.27, blue: 0.14, alpha: 1.0),   // Padre brown
-    ]
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        setupUI()
-        NotificationCenter.default.addObserver(self, selector: #selector(tintDidChange), name: TintService.tintDidChangeNotification, object: nil)
-    }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    private func setupUI() {
-        let font = UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14)
-        let pencilColor = AppColors.pencil.withAlphaComponent(0.6)
-
-        [madeWithLabel, inPhiladelphiaLabel].forEach {
-            $0.font = font
-            $0.textColor = pencilColor
-            $0.textAlignment = .center
-        }
-
-        madeWithLabel.text = "Made with "
-        inPhiladelphiaLabel.text = " in Philadelphia by Colin Weir"
-
-        heartImageView.contentMode = .scaleAspectFit
-        heartImageView.tintColor = .systemRed
-        heartImageView.setContentHuggingPriority(.required, for: .horizontal)
-        heartImageView.setContentCompressionResistancePriority(.required, for: .horizontal)
-
-        madeInStack.axis = .horizontal
-        madeInStack.spacing = 0
-        madeInStack.alignment = .center
-        madeInStack.addArrangedSubview(madeWithLabel)
-        madeInStack.addArrangedSubview(heartImageView)
-        madeInStack.addArrangedSubview(inPhiladelphiaLabel)
-
-        // Build tint swatch row: eraser + presets + color well
-        tintRow.axis = .horizontal
-        tintRow.spacing = 8
-        tintRow.alignment = .center
-
-        // Eraser button (nil color = reset)
-        let eraserBtn = PencilSwatchButton(color: nil)
-        eraserBtn.addTarget(self, action: #selector(swatchTapped(_:)), for: .touchUpInside)
-        tintRow.addArrangedSubview(eraserBtn)
-        swatchButtons.append(eraserBtn)
-
-        // Preset color swatches
-        for color in Self.presetColors {
-            let btn = PencilSwatchButton(color: color)
-            btn.addTarget(self, action: #selector(swatchTapped(_:)), for: .touchUpInside)
-            tintRow.addArrangedSubview(btn)
-            swatchButtons.append(btn)
-        }
-
-        // Color well for custom
-        colorWell.supportsAlpha = false
-        colorWell.selectedColor = TintService.shared.tintColor
-        colorWell.addTarget(self, action: #selector(colorChanged(_:)), for: .valueChanged)
-        tintRow.addArrangedSubview(colorWell)
-
-        updateSwatchSelection()
-
-        stackView.axis = .vertical
-        stackView.spacing = 8
-        stackView.alignment = .center
-        stackView.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(stackView)
-
-        stackView.addArrangedSubview(tintRow)
-        stackView.addArrangedSubview(madeInStack)
-
-        let leadingConstraint = stackView.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 16)
-        let trailingConstraint = stackView.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -16)
-        let topConstraint = stackView.topAnchor.constraint(greaterThanOrEqualTo: topAnchor, constant: 16)
-        let bottomConstraint = stackView.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -32)
-
-        [leadingConstraint, trailingConstraint, topConstraint, bottomConstraint].forEach {
-            $0.priority = .defaultHigh
-        }
-
-        NSLayoutConstraint.activate([
-            stackView.centerXAnchor.constraint(equalTo: centerXAnchor),
-            topConstraint,
-            bottomConstraint,
-            leadingConstraint,
-            trailingConstraint,
-            heartImageView.heightAnchor.constraint(equalToConstant: 14),
-            heartImageView.widthAnchor.constraint(equalToConstant: 16)
-        ])
-    }
-
-    private func updateSwatchSelection() {
-        let current = TintService.shared.tintColor
-        for btn in swatchButtons {
-            if let sc = btn.swatchColor, let cur = current {
-                // Compare hue to handle dynamic color resolution
-                var h1: CGFloat = 0, h2: CGFloat = 0
-                var s1: CGFloat = 0, s2: CGFloat = 0
-                sc.getHue(&h1, saturation: &s1, brightness: nil, alpha: nil)
-                cur.getHue(&h2, saturation: &s2, brightness: nil, alpha: nil)
-                btn.isCurrentTint = abs(h1 - h2) < 0.02 && abs(s1 - s2) < 0.1
-            } else {
-                btn.isCurrentTint = (btn.swatchColor == nil && current == nil)
-            }
-        }
-    }
-
-    @objc private func swatchTapped(_ sender: PencilSwatchButton) {
-        TintService.shared.tintColor = sender.swatchColor
-        colorWell.selectedColor = sender.swatchColor
-    }
-
-    @objc private func colorChanged(_ sender: UIColorWell) {
-        TintService.shared.tintColor = sender.selectedColor
-    }
-
-    @objc private func tintDidChange() {
-        updateSwatchSelection()
-        // Refresh attribution label colors
-        let pencilColor = AppColors.pencil.withAlphaComponent(0.6)
-        [madeWithLabel, inPhiladelphiaLabel].forEach { $0.textColor = pencilColor }
-    }
-}
-
 extension ScheduleViewController: UICollectionViewDataSource, UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
         return currentGames.count
@@ -734,17 +506,10 @@ extension ScheduleViewController: UICollectionViewDataSource, UICollectionViewDe
         return cell
     }
     
-    func collectionView(_ collectionView: UICollectionView, viewForSupplementaryElementOfKind kind: String, at indexPath: IndexPath) -> UICollectionReusableView {
-        if kind == UICollectionView.elementKindSectionFooter {
-            let footer = collectionView.dequeueReusableSupplementaryView(ofKind: kind, withReuseIdentifier: ScheduleFooterView.reuseIdentifier, for: indexPath) as! ScheduleFooterView
-            return footer
-        }
-        return UICollectionReusableView()
-    }
-    
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         let game = currentGames[indexPath.item]
         let detailVC = GameDetailViewController(gamePk: game.gamePk, games: currentGames)
+        detailVC.hidesBottomBarWhenPushed = true
         
         // Setup handwriting back button for the detail view
         let font = UIFont(name: "PermanentMarker-Regular", size: 18) ?? .systemFont(ofSize: 18)
