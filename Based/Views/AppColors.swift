@@ -65,11 +65,15 @@ enum AppColors {
     }}
 
     /// Inactive / unavailable cell overlay
-    static let inactive = UIColor { tc in
-        tc.userInterfaceStyle == .dark
-            ? UIColor(white: 0.15, alpha: 0.6)
-            : UIColor(white: 0.9, alpha: 0.6)
-    }
+    static var inactive: UIColor { UIColor { tc in
+        let isDark = tc.userInterfaceStyle == .dark
+        if let tint = TintService.shared.tintColor {
+            return tintedBackground(tint: tint, isDark: isDark, mixAmount: 0.15)
+        }
+        return isDark
+            ? UIColor(white: 0.2, alpha: 0.8)
+            : UIColor(white: 0.85, alpha: 0.8)
+    }}
 
     /// Diamond infield fill
     static let diamondFill = UIColor { tc in

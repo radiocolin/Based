@@ -67,9 +67,16 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private var lastActiveAtBatKey: String?
     private let gamePk: Int
     private var isGameLive = false
-    private var isTimelineMode = UserDefaults.standard.bool(forKey: "preferTimelineMode")
+    private var isTimelineMode = UserDefaults.standard.bool(forKey: "preferTimelineMode") {
+        didSet {
+            let inset = isTimelineMode ? hiddenSegmentedTopInset : visibleSegmentedTopInset
+            teamSegmentedSafeTopConstraint?.constant = inset
+            teamSegmentedAdvisoryTopConstraint?.constant = inset
+        }
+    }
 
-    private var teamSegmentedTopConstraint: NSLayoutConstraint?
+    private var teamSegmentedSafeTopConstraint: NSLayoutConstraint?
+    private var teamSegmentedAdvisoryTopConstraint: NSLayoutConstraint?
     private var scrollBottomConstraint: NSLayoutConstraint?
     private var timelineBottomConstraint: NSLayoutConstraint?
     private var dismissedAdvisories: Set<String> = []
@@ -115,6 +122,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: GameDetailViewController, _) in
             self.setupNavigationBar()
             self.updateStickyHeaders()
+            self.advisoryBanner.layer.borderColor = UIColor.red.withAlphaComponent(0.3).cgColor
             if let scorecard = self.currentScorecard {
                 self.scorecardView.configure(with: scorecard)
             }
@@ -266,7 +274,9 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         timelineView.alpha = isTimelineMode ? 1 : 0
         
         // Adjust constraints to move headers
-        teamSegmentedTopConstraint?.constant = isTimelineMode ? hiddenSegmentedTopInset : visibleSegmentedTopInset
+        let inset = isTimelineMode ? hiddenSegmentedTopInset : visibleSegmentedTopInset
+        teamSegmentedSafeTopConstraint?.constant = inset
+        teamSegmentedAdvisoryTopConstraint?.constant = inset
     }
 
     @objc private func shareScorecard() {
@@ -410,13 +420,17 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         infoColumnsStack.addArrangedSubview(umpireLabel)
         infoColumnsStack.addArrangedSubview(gameInfoLabel)
         
-        gameInfoLabel.widthAnchor.constraint(equalToConstant: 200).isActive = true
+        let gameInfoWidth = gameInfoLabel.widthAnchor.constraint(equalToConstant: 200)
+        gameInfoWidth.priority = .init(999)
+        gameInfoWidth.isActive = true
         
         [scorecardView, pitcherContainer, infoColumnsStack, placeholderLabel].forEach {
             mainStackView.addArrangedSubview($0)
         }
         
-        placeholderLabel.heightAnchor.constraint(greaterThanOrEqualToConstant: 200).isActive = true
+        let placeholderHeight = placeholderLabel.heightAnchor.constraint(greaterThanOrEqualToConstant: 200)
+        placeholderHeight.priority = .init(999)
+        placeholderHeight.isActive = true
         
         scorecardView.setHeadersVisible(false)
         scorecardView.delegate = self
@@ -476,10 +490,11 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             advisoryCloseBtn.widthAnchor.constraint(equalToConstant: 30),
         ])
         
-        teamSegmentedTopConstraint = teamSegmentedControl.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8)
+        teamSegmentedSafeTopConstraint = teamSegmentedControl.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: isTimelineMode ? hiddenSegmentedTopInset : visibleSegmentedTopInset)
+        teamSegmentedAdvisoryTopConstraint = teamSegmentedControl.topAnchor.constraint(equalTo: advisoryBanner.bottomAnchor, constant: isTimelineMode ? hiddenSegmentedTopInset : visibleSegmentedTopInset)
         
         NSLayoutConstraint.activate([
-            teamSegmentedTopConstraint!,
+            teamSegmentedSafeTopConstraint!,
             teamSegmentedControl.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             teamSegmentedControl.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
             teamSegmentedControl.heightAnchor.constraint(equalToConstant: 40),
@@ -497,7 +512,11 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             stickyHeaderContainer.topAnchor.constraint(equalTo: gameHeaderView.bottomAnchor, constant: 8),
             stickyHeaderContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             stickyHeaderContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            stickyHeaderContainer.heightAnchor.constraint(equalToConstant: headerHeight),
+            {
+                let c = stickyHeaderContainer.heightAnchor.constraint(equalToConstant: headerHeight)
+                c.priority = .init(999)
+                return c
+            }(),
             
             topLeftLabel.leadingAnchor.constraint(equalTo: stickyHeaderContainer.leadingAnchor),
             topLeftLabel.topAnchor.constraint(equalTo: stickyHeaderContainer.topAnchor),
@@ -561,6 +580,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         timelineBottomConstraint?.isActive = true
         
         stickyNameWidthConstraint = topLeftLabel.widthAnchor.constraint(equalToConstant: 90)
+        stickyNameWidthConstraint?.priority = .init(999)
         stickyNameWidthConstraint?.isActive = true
     }
 
@@ -572,6 +592,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         let layout = scorecardView.currentColumnLayout
         for inningLayout in layout.innings {
             let label = UILabel()
+            label.translatesAutoresizingMaskIntoConstraints = false
             label.text = "\(inningLayout.inningNum)"
             label.textAlignment = .center
             label.font = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
@@ -579,11 +600,17 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             label.backgroundColor = AppColors.header
             label.layer.borderWidth = 0.5
             label.layer.borderColor = AppColors.grid.cgColor
-            label.widthAnchor.constraint(equalToConstant: inningWidth * CGFloat(inningLayout.subColumnCount)).isActive = true
+            
+            let width = inningWidth * CGFloat(inningLayout.subColumnCount)
+            let widthConstraint = label.widthAnchor.constraint(equalToConstant: width)
+            widthConstraint.priority = .init(999)
+            widthConstraint.isActive = true
+            
             rightHeaderStack.addArrangedSubview(label)
         }
         for stat in layout.statColumns {
             let label = UILabel()
+            label.translatesAutoresizingMaskIntoConstraints = false
             label.text = stat
             label.textAlignment = .center
             label.font = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
@@ -591,7 +618,11 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             label.backgroundColor = AppColors.header
             label.layer.borderWidth = 0.5
             label.layer.borderColor = AppColors.grid.cgColor
-            label.widthAnchor.constraint(equalToConstant: statWidth).isActive = true
+            
+            let widthConstraint = label.widthAnchor.constraint(equalToConstant: statWidth)
+            widthConstraint.priority = .init(999)
+            widthConstraint.isActive = true
+            
             rightHeaderStack.addArrangedSubview(label)
         }
     }
@@ -727,20 +758,12 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         if let advisory = scorecard.advisories.first, !dismissedAdvisories.contains(advisory) {
             advisoryLabel.text = advisory
             advisoryBanner.isHidden = false
-            teamSegmentedTopConstraint?.isActive = false
-            teamSegmentedTopConstraint = teamSegmentedControl.topAnchor.constraint(
-                equalTo: advisoryBanner.bottomAnchor,
-                constant: isTimelineMode ? hiddenSegmentedTopInset : visibleSegmentedTopInset
-            )
-            teamSegmentedTopConstraint?.isActive = true
+            teamSegmentedSafeTopConstraint?.isActive = false
+            teamSegmentedAdvisoryTopConstraint?.isActive = true
         } else {
             advisoryBanner.isHidden = true
-            teamSegmentedTopConstraint?.isActive = false
-            teamSegmentedTopConstraint = teamSegmentedControl.topAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.topAnchor,
-                constant: isTimelineMode ? hiddenSegmentedTopInset : visibleSegmentedTopInset
-            )
-            teamSegmentedTopConstraint?.isActive = true
+            teamSegmentedAdvisoryTopConstraint?.isActive = false
+            teamSegmentedSafeTopConstraint?.isActive = true
         }
     }
 
@@ -774,12 +797,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         
         UIView.animate(withDuration: 0.3) {
             self.advisoryBanner.isHidden = true
-            self.teamSegmentedTopConstraint?.isActive = false
-            self.teamSegmentedTopConstraint = self.teamSegmentedControl.topAnchor.constraint(
-                equalTo: self.view.safeAreaLayoutGuide.topAnchor,
-                constant: self.isTimelineMode ? self.hiddenSegmentedTopInset : self.visibleSegmentedTopInset
-            )
-            self.teamSegmentedTopConstraint?.isActive = true
+            self.teamSegmentedAdvisoryTopConstraint?.isActive = false
+            self.teamSegmentedSafeTopConstraint?.isActive = true
             self.view.layoutIfNeeded()
         }
     }

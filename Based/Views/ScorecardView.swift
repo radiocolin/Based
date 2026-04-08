@@ -26,10 +26,10 @@ class ScorecardView: UIView {
     private let rightHeaderStack = UIStackView()
     private var rightCollectionView: UICollectionView!
     
-    // Constraints
     private var leftTopConstraint: NSLayoutConstraint?
     private var rightTopConstraint: NSLayoutConstraint?
     private var headerHeightConstraint: NSLayoutConstraint?
+    private var rightHeaderHeightConstraint: NSLayoutConstraint?
     private var nameWidthConstraint: NSLayoutConstraint?
     private var headerNameWidthConstraint: NSLayoutConstraint?
     
@@ -54,12 +54,25 @@ class ScorecardView: UIView {
         backgroundColor = AppColors.paper
         layer.cornerRadius = 16
         clipsToBounds = true
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: ScorecardView, _) in
+            self.topLeftLabel.textColor = AppColors.pencil
+            self.topLeftLabel.backgroundColor = AppColors.header
+            for view in self.rightHeaderStack.arrangedSubviews {
+                if let label = view as? UILabel {
+                    label.textColor = AppColors.pencil
+                    label.backgroundColor = AppColors.header
+                    label.layer.borderColor = AppColors.grid.cgColor
+                }
+            }
+            self.leftCollectionView.reloadData()
+            self.rightCollectionView.reloadData()
+        }
     }
     
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     private func setupUI() {
         addSubview(topLeftLabel)
         topLeftLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -99,11 +112,19 @@ class ScorecardView: UIView {
         rightScrollView.addSubview(rightCollectionView)
         
         headerHeightConstraint = topLeftLabel.heightAnchor.constraint(equalToConstant: headerHeight)
+        headerHeightConstraint?.priority = .init(999)
+        
+        rightHeaderHeightConstraint = rightHeaderStack.heightAnchor.constraint(equalToConstant: headerHeight)
+        rightHeaderHeightConstraint?.priority = .init(999)
+        
         leftTopConstraint = leftCollectionView.topAnchor.constraint(equalTo: topLeftLabel.bottomAnchor)
         rightTopConstraint = rightCollectionView.topAnchor.constraint(equalTo: rightHeaderStack.bottomAnchor)
         
         headerNameWidthConstraint = topLeftLabel.widthAnchor.constraint(equalToConstant: nameWidth)
+        headerNameWidthConstraint?.priority = .init(999)
+        
         nameWidthConstraint = leftCollectionView.widthAnchor.constraint(equalToConstant: nameWidth)
+        nameWidthConstraint?.priority = .init(999)
         
         NSLayoutConstraint.activate([
             topLeftLabel.topAnchor.constraint(equalTo: topAnchor),
@@ -124,7 +145,7 @@ class ScorecardView: UIView {
             rightHeaderStack.topAnchor.constraint(equalTo: rightScrollView.contentLayoutGuide.topAnchor),
             rightHeaderStack.leadingAnchor.constraint(equalTo: rightScrollView.contentLayoutGuide.leadingAnchor),
             rightHeaderStack.trailingAnchor.constraint(equalTo: rightScrollView.contentLayoutGuide.trailingAnchor),
-            rightHeaderStack.heightAnchor.constraint(equalToConstant: headerHeight),
+            rightHeaderHeightConstraint!,
             
             rightTopConstraint!,
             rightCollectionView.leadingAnchor.constraint(equalTo: rightScrollView.contentLayoutGuide.leadingAnchor),
@@ -136,13 +157,24 @@ class ScorecardView: UIView {
     }
 
     private var rightContentWidthConstraint: NSLayoutConstraint?
+    private var rightHeaderWidthConstraint: NSLayoutConstraint?
+    
     private func updateContentWidth() {
-        rightContentWidthConstraint?.isActive = false
         let inningsWidth = inningWidth * CGFloat(columnLayout.innings.map { $0.subColumnCount }.reduce(0, +))
         let statsWidthTotal = statWidth * CGFloat(columnLayout.statColumns.count)
-        rightContentWidthConstraint = rightCollectionView.widthAnchor.constraint(equalToConstant: inningsWidth + statsWidthTotal)
-        rightContentWidthConstraint?.isActive = true
-        rightHeaderStack.widthAnchor.constraint(equalTo: rightCollectionView.widthAnchor).isActive = true
+        let totalWidth = inningsWidth + statsWidthTotal
+        
+        if let constraint = rightContentWidthConstraint {
+            constraint.constant = totalWidth
+        } else {
+            rightContentWidthConstraint = rightCollectionView.widthAnchor.constraint(equalToConstant: totalWidth)
+            rightContentWidthConstraint?.isActive = true
+        }
+        
+        if rightHeaderWidthConstraint == nil {
+            rightHeaderWidthConstraint = rightHeaderStack.widthAnchor.constraint(equalTo: rightCollectionView.widthAnchor)
+            rightHeaderWidthConstraint?.isActive = true
+        }
     }
     
     private func setupCollectionViews() {
@@ -168,6 +200,7 @@ class ScorecardView: UIView {
         rightHeaderStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         for inningLayout in columnLayout.innings {
             let label = UILabel()
+            label.translatesAutoresizingMaskIntoConstraints = false
             label.text = "\(inningLayout.inningNum)"
             label.textAlignment = .center
             label.font = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
@@ -175,11 +208,17 @@ class ScorecardView: UIView {
             label.backgroundColor = AppColors.header
             label.layer.borderWidth = 0.5
             label.layer.borderColor = AppColors.grid.cgColor
-            label.widthAnchor.constraint(equalToConstant: inningWidth * CGFloat(inningLayout.subColumnCount)).isActive = true
+            
+            let width = inningWidth * CGFloat(inningLayout.subColumnCount)
+            let widthConstraint = label.widthAnchor.constraint(equalToConstant: width)
+            widthConstraint.priority = .init(999)
+            widthConstraint.isActive = true
+            
             rightHeaderStack.addArrangedSubview(label)
         }
         for stat in columnLayout.statColumns {
             let label = UILabel()
+            label.translatesAutoresizingMaskIntoConstraints = false
             label.text = stat
             label.textAlignment = .center
             label.font = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
@@ -187,7 +226,11 @@ class ScorecardView: UIView {
             label.backgroundColor = AppColors.header
             label.layer.borderWidth = 0.5
             label.layer.borderColor = AppColors.grid.cgColor
-            label.widthAnchor.constraint(equalToConstant: statWidth).isActive = true
+            
+            let widthConstraint = label.widthAnchor.constraint(equalToConstant: statWidth)
+            widthConstraint.priority = .init(999)
+            widthConstraint.isActive = true
+            
             rightHeaderStack.addArrangedSubview(label)
         }
     }
@@ -256,15 +299,9 @@ class ScorecardView: UIView {
         topLeftLabel.isHidden = !visible
         rightHeaderStack.isHidden = !visible
         
-        headerHeightConstraint?.constant = visible ? headerHeight : 0
-        
-        // When not visible, we want collection views to jump to the top
-        if !visible {
-            leftTopConstraint?.isActive = false
-            rightTopConstraint?.isActive = false
-            leftCollectionView.topAnchor.constraint(equalTo: topAnchor).isActive = true
-            rightCollectionView.topAnchor.constraint(equalTo: rightScrollView.topAnchor).isActive = true
-        }
+        let h = visible ? headerHeight : 0
+        headerHeightConstraint?.constant = h
+        rightHeaderHeightConstraint?.constant = h
         
         invalidateIntrinsicContentSize()
     }
@@ -410,18 +447,54 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate, U
             let totalCols = columnLayout.totalColumns
             let col = indexPath.item % totalCols
             
-            // For the totals row, if an inning has multiple sub-columns (batting around),
-            // make the first sub-column span all of them and subsequent ones zero width.
+            // For the totals row OR inactive cells, handle merging
             let rowIndex = indexPath.item / totalCols
             guard let data = scorecardData else { return .zero }
-            let lineupCount = (isHomeTeam ? data.lineups.home.count : data.lineups.away.count)
-            let isTotalsRow = rowIndex == lineupCount
+            let lineup = isHomeTeam ? data.lineups.home : data.lineups.away
+            let isTotalsRow = rowIndex == lineup.count
             
             if isTotalsRow {
                 if let (inningNum, subIndex) = columnLayout.inningInfo(forColumn: col) {
                     if let inningLayout = columnLayout.layout(forInning: inningNum), inningLayout.subColumnCount > 1 {
                         if subIndex == 0 {
                             return CGSize(width: inningWidth * CGFloat(inningLayout.subColumnCount), height: rowHeight)
+                        } else {
+                            return CGSize(width: 0, height: rowHeight)
+                        }
+                    }
+                }
+            } else {
+                let batter = lineup[rowIndex]
+                if let (inningNum, subIndex) = columnLayout.inningInfo(forColumn: col) {
+                    let isBeforeEntry = inningNum < (batter.inningEntered ?? 1)
+                    let exitInning = batter.inningExited ?? 99
+                    let isAfterExit = inningNum > exitInning
+                    
+                    if isBeforeEntry {
+                        // Merge all columns from 1 to entry-1 into the first possible cell
+                        if inningNum == 1 && subIndex == 0 {
+                            let endInning = (batter.inningEntered ?? 1) - 1
+                            var totalWidth: CGFloat = 0
+                            for i in 1...endInning {
+                                if let layout = columnLayout.layout(forInning: i) {
+                                    totalWidth += inningWidth * CGFloat(layout.subColumnCount)
+                                }
+                            }
+                            return CGSize(width: totalWidth, height: rowHeight)
+                        } else {
+                            return CGSize(width: 0, height: rowHeight)
+                        }
+                    } else if isAfterExit {
+                        // Merge all columns from exit+1 to end into the first cell after exit
+                        if inningNum == exitInning + 1 && subIndex == 0 {
+                            let maxInning = columnLayout.innings.last?.inningNum ?? 9
+                            var totalWidth: CGFloat = 0
+                            for i in (exitInning + 1)...maxInning {
+                                if let layout = columnLayout.layout(forInning: i) {
+                                    totalWidth += inningWidth * CGFloat(layout.subColumnCount)
+                                }
+                            }
+                            return CGSize(width: totalWidth, height: rowHeight)
                         } else {
                             return CGSize(width: 0, height: rowHeight)
                         }
@@ -553,21 +626,33 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate, U
             
             guard let (inningNum, subIndex) = columnLayout.inningInfo(forColumn: col) else {
                 cell.configure(with: nil)
+                cell.setInactive(false)
                 return cell
             }
             
+            // Inning data
             let inningObj = data.innings.first { $0.num == inningNum }
             let events = isHomeTeam ? inningObj?.home : inningObj?.away
             let batterEvents = events?.filter { $0.batterId == batter.id } ?? []
             let event: AtBatEvent? = subIndex < batterEvents.count ? batterEvents[subIndex] : nil
             
+            cell.configure(with: event)
+
             let isBeforeEntry = inningNum < (batter.inningEntered ?? 1)
-            let isAfterExit = batter.inningExited != nil && inningNum > (batter.inningExited ?? 99)
+            let exitInning = batter.inningExited ?? 99
+            let isAfterExit = inningNum > exitInning
+            
+            // For merged cells, hide borders on the non-primary ones
+            let isPrimaryMerged = (isBeforeEntry && inningNum == 1 && subIndex == 0) || 
+                                 (isAfterExit && inningNum == exitInning + 1 && subIndex == 0)
+            let isHiddenMerged = (isBeforeEntry && !isPrimaryMerged) || (isAfterExit && !isPrimaryMerged)
             
             if isBeforeEntry || isAfterExit {
                 cell.backgroundColor = AppColors.inactive
+                cell.setInactive(true)
             } else {
                 cell.backgroundColor = rowBackgroundColor
+                cell.setInactive(false)
             }
             
             // Highlight current active cell
@@ -581,11 +666,10 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate, U
                 cell.contentView.layer.borderColor = UIColor.systemBlue.cgColor
                 cell.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.08)
             } else {
-                cell.contentView.layer.borderWidth = 0.5
+                cell.contentView.layer.borderWidth = isHiddenMerged ? 0 : 0.5
                 cell.contentView.layer.borderColor = AppColors.grid.cgColor
             }
             
-            cell.configure(with: event)
             return cell
         }
     }

@@ -40,6 +40,9 @@ class GameHeaderView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         setupUI()
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: GameHeaderView, _) in
+            self.setNeedsLayout()
+        }
     }
     
     required init?(coder: NSCoder) {

@@ -74,6 +74,11 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         super.viewDidLoad()
         setupUI()
         applyEventPresentation()
+
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: AtBatDetailViewController, _) in
+            self.pitchesTableView.reloadData()
+            self.view.setNeedsLayout()
+        }
     }
     
     override func viewDidLayoutSubviews() {

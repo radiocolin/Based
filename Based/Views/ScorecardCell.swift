@@ -53,23 +53,51 @@ class ScorecardCell: UICollectionViewCell {
         resultLabel.minimumScaleFactor = 0.5
         
         // Constraints — inset the diamond slightly so corner labels have breathing room
+        let top = diamondView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4)
+        let leading = diamondView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 2)
+        let trailing = diamondView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -2)
+        let bottom = diamondView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -4)
+        
+        [top, leading, trailing, bottom].forEach { $0.priority = UILayoutPriority(999) }
+        
         NSLayoutConstraint.activate([
-            diamondView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4),
-            diamondView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 2),
-            diamondView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -2),
-            diamondView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -4),
+            top, leading, trailing, bottom,
             
             resultLabel.centerXAnchor.constraint(equalTo: diamondView.centerXAnchor),
             resultLabel.centerYAnchor.constraint(equalTo: diamondView.centerYAnchor),
             
-            ballsLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 2),
-            ballsLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 2),
+            {
+                let c = ballsLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 2)
+                c.priority = .init(999)
+                return c
+            }(),
+            {
+                let c = ballsLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 2)
+                c.priority = .init(999)
+                return c
+            }(),
             
-            strikesLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 2),
-            strikesLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -2),
+            {
+                let c = strikesLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 2)
+                c.priority = .init(999)
+                return c
+            }(),
+            {
+                let c = strikesLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -2)
+                c.priority = .init(999)
+                return c
+            }(),
             
-            outsLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -2),
-            outsLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -2)
+            {
+                let c = outsLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -2)
+                c.priority = .init(999)
+                return c
+            }(),
+            {
+                let c = outsLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -2)
+                c.priority = .init(999)
+                return c
+            }()
         ])
     }
     
@@ -113,12 +141,21 @@ class ScorecardCell: UICollectionViewCell {
         )
     }
 
+    func setInactive(_ inactive: Bool) {
+        diamondView.isHidden = inactive
+        resultLabel.isHidden = inactive
+        ballsLabel.isHidden = inactive
+        strikesLabel.isHidden = inactive
+        outsLabel.isHidden = inactive
+    }
+
     func setAccentColor(_ color: UIColor) {
         accentColor = color
     }
     
     override func prepareForReuse() {
         super.prepareForReuse()
+        setInactive(false)
         resultLabel.transform = .identity
         resultLabel.text = ""
         resultLabel.textColor = AppColors.pencil

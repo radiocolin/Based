@@ -39,6 +39,12 @@ class GamePickerView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         setupUI()
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: GamePickerView, _) in
+            self.dateLabel.textColor = self.pencilColor
+            self.noGamesLabel.textColor = self.pencilColor.withAlphaComponent(0.5)
+            self.collectionView.reloadData()
+            self.setNeedsLayout()
+        }
     }
 
     required init?(coder: NSCoder) {

@@ -82,6 +82,11 @@ class DiamondView: UIView {
         super.init(frame: frame)
         setupLayers()
         backgroundColor = .clear
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: DiamondView, _) in
+            self.lastBounds = .zero
+            self.needsBaseRedraw = true
+            self.setNeedsLayout()
+        }
     }
     
     required init?(coder: NSCoder) {

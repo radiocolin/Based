@@ -50,12 +50,17 @@ class PlayerDetailViewController: UIViewController {
         super.viewDidLoad()
         setupUI()
         fetchPlayerInfo()
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: PlayerDetailViewController, _) in
+            self.view.setNeedsLayout()
+        }
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         drawPencilLines()
     }
+
+
 
     private var playerID: Int {
         switch subject {

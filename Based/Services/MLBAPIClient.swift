@@ -1,11 +1,30 @@
 import Foundation
 
+// MARK: - ETag Cache
+
+private actor ETagCache {
+    private var storage: [String: (etag: String, data: Data)] = [:]
+
+    func etag(for endpoint: String) -> String? {
+        storage[endpoint]?.etag
+    }
+
+    func cachedData(for endpoint: String) -> Data? {
+        storage[endpoint]?.data
+    }
+
+    func store(etag: String, data: Data, for endpoint: String) {
+        storage[endpoint] = (etag, data)
+    }
+}
+
 // MARK: - MLB API Client
 
 final class MLBAPIClient: Sendable {
     static let shared = MLBAPIClient()
     private let session = URLSession.shared
     private let baseURL = URL(string: "https://statsapi.mlb.com")!
+    private let etagCache = ETagCache()
 
     private init() {}
 
@@ -15,7 +34,27 @@ final class MLBAPIClient: Sendable {
         }
 
         NSLog("[API] Fetching: %@", url.absoluteString)
-        let (data, _) = try await session.data(from: url)
+        var request = URLRequest(url: url)
+        request.setValue("gzip", forHTTPHeaderField: "Accept-Encoding")
+
+        if let etag = await etagCache.etag(for: endpoint) {
+            request.setValue(etag, forHTTPHeaderField: "If-None-Match")
+        }
+
+        let (data, response) = try await session.data(for: request)
+
+        if let httpResponse = response as? HTTPURLResponse {
+            if httpResponse.statusCode == 304,
+               let cachedData = await etagCache.cachedData(for: endpoint) {
+                NSLog("[API] 304 Not Modified: %@", endpoint)
+                return try JSONDecoder().decode(T.self, from: cachedData)
+            }
+
+            if let etag = httpResponse.value(forHTTPHeaderField: "ETag") {
+                await etagCache.store(etag: etag, data: data, for: endpoint)
+            }
+        }
+
         return try JSONDecoder().decode(T.self, from: data)
     }
 }

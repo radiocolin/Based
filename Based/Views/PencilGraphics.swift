@@ -474,6 +474,11 @@ class PencilSegmentedOverlay: UIView {
         addSubview(selectionView)
 
         segmentedControl.addTarget(self, action: #selector(selectionChanged), for: .valueChanged)
+
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: PencilSegmentedOverlay, _) in
+            self.lastRenderedIndex = -1
+            self.setNeedsLayout()
+        }
     }
 
     required init?(coder: NSCoder) {

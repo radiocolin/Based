@@ -41,6 +41,9 @@ class CurrentStateView: UIView {
         super.init(frame: frame)
         setupUI()
         setupGestures()
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: CurrentStateView, _) in
+            self.setNeedsLayout()
+        }
     }
     
     required init?(coder: NSCoder) {
@@ -189,6 +192,7 @@ class CurrentStateView: UIView {
         
         let fullWidth = bounds.width
         topSeparatorLayer.path = UIBezierPath.pencilLine(from: CGPoint(x: 0, y: 0), to: CGPoint(x: fullWidth, y: 0)).cgPath
+        topSeparatorLayer.strokeColor = pencilColor.cgColor
         
         drawLayoutLines()
     }
@@ -259,7 +263,7 @@ class CurrentStateView: UIView {
             pitchCountLabel.text = ""
         } else {
             batterLabel.text = linescore.offense?.batter?.fullName?.uppercased() ?? "---"
-            pitcherLabel.text = "vs \(linescore.defense?.pitcher?.fullName ?? "---")"
+            pitcherLabel.text = "vs. \(linescore.defense?.pitcher?.fullName ?? "---")"
             countLabel.text = "\(linescore.balls ?? 0)-\(linescore.strikes ?? 0)"
             
             if let count = linescore.currentPitchCount {

@@ -451,6 +451,8 @@ class GameService {
             return GameInfoItem(label: label, value: note.value)
         }
 
+        let activePlay = playByPlay.currentPlay?.about?.isComplete == false ? playByPlay.currentPlay : nil
+
         return ScorecardData(
             teams: ScorecardTeams(home: boxscore.teams?.home?.team ?? Team(id: 0, name: "Home", link: ""), away: boxscore.teams?.away?.team ?? Team(id: 0, name: "Away", link: "")),
             lineups: Lineups(home: homeLineup, away: awayLineup),
@@ -461,9 +463,9 @@ class GameService {
             advisories: Array(advisories.prefix(3)),
             umpires: umpires,
             gameInfo: gameInfo,
-            currentInning: linescore?.currentInning ?? playByPlay.currentPlay?.about?.inning,
-            isTopInning: linescore?.isTopInning ?? playByPlay.currentPlay?.about?.isTopInning,
-            currentBatterId: linescore?.offense?.batter?.id ?? playByPlay.currentPlay?.matchup?.batter?.id
+            currentInning: linescore?.currentInning ?? activePlay?.about?.inning,
+            isTopInning: linescore?.isTopInning ?? activePlay?.about?.isTopInning,
+            currentBatterId: linescore?.offense?.batter?.id ?? activePlay?.matchup?.batter?.id
         )
     }
 

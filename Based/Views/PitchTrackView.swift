@@ -59,6 +59,9 @@ class PitchTrackView: UIView {
         super.init(frame: frame)
         setupLayers()
         backgroundColor = .clear
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: PitchTrackView, _) in
+            self.setNeedsLayout()
+        }
     }
     
     required init?(coder: NSCoder) {
