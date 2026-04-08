@@ -4,6 +4,65 @@
   },
   "groups" : [
     {
+      "hidden" : false,
+      "layers" : [
+        {
+          "glass" : false,
+          "image-name" : "4–6.png",
+          "name" : "4–6",
+          "position" : {
+            "scale" : 0.56,
+            "translation-in-points" : [
+              -2.109375,
+              15.8046875
+            ]
+          }
+        },
+        {
+          "glass" : false,
+          "image-name" : "Bases.png",
+          "name" : "Bases",
+          "position" : {
+            "scale" : 0.57,
+            "translation-in-points" : [
+              -26.2734375,
+              23.2265625
+            ]
+          }
+        },
+        {
+          "glass" : false,
+          "hidden" : false,
+          "image-name" : "Baseball-dark.png",
+          "name" : "Baseball-dark",
+          "position" : {
+            "scale" : 0.55,
+            "translation-in-points" : [
+              -26.9,
+              15
+            ]
+          }
+        }
+      ],
+      "opacity-specializations" : [
+        {
+          "value" : 0
+        },
+        {
+          "appearance" : "dark",
+          "value" : 1
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    },
+    {
       "layers" : [
         {
           "glass" : false,
@@ -41,6 +100,12 @@
               14.984375
             ]
           }
+        }
+      ],
+      "opacity-specializations" : [
+        {
+          "appearance" : "dark",
+          "value" : 0
         }
       ],
       "shadow" : {

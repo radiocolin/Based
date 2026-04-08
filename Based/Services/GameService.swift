@@ -1,4 +1,5 @@
 import Foundation
+import Network
 
 protocol GameUpdateDelegate: AnyObject {
     func didUpdateSnapshot(_ snapshot: LiveGameSnapshot)
@@ -41,8 +42,14 @@ class GameService {
     private var pollingTask: Task<Void, Never>?
     private var lastLinescore: Linescore?
     private var lastScorecard: ScorecardData?
+    private var lastGameData: GameData?
     private var lastFetchTime: Date?
     private var isBackgrounded = false
+    
+    // Network monitoring: skip polls when there's no connectivity
+    private let networkMonitor = NWPathMonitor()
+    private var hasConnectivity = true
+    private var isConstrainedNetwork = false  // Low Data Mode
     
     // Error backoff: doubles on each consecutive failure, resets on success
     private var consecutiveErrors = 0
@@ -177,6 +184,13 @@ class GameService {
         stopPolling()
         currentGamePk = gamePk
         
+        // Monitor connectivity to avoid wasting radio on doomed requests
+        networkMonitor.pathUpdateHandler = { [weak self] path in
+            self?.hasConnectivity = (path.status == .satisfied)
+            self?.isConstrainedNetwork = path.isConstrained  // Low Data Mode
+        }
+        networkMonitor.start(queue: DispatchQueue(label: "NetworkMonitor"))
+        
         pollingTask = Task {
             do {
                 try await performSmartUpdate(gamePk: gamePk)
@@ -200,9 +214,9 @@ class GameService {
                 
                 if Task.isCancelled { break }
                 
-                // Skip network calls while backgrounded — iOS will suspend us anyway,
-                // but this prevents wasted requests during the brief grace period.
-                if isBackgrounded { continue }
+                // Skip network calls when there's no point — backgrounded or no connectivity.
+                // This prevents wasted radio cycles on doomed requests.
+                if isBackgrounded || !hasConnectivity { continue }
                 
                 do {
                     try await performSmartUpdate(gamePk: gamePk)
@@ -248,8 +262,10 @@ class GameService {
     func stopPolling() {
         pollingTask?.cancel()
         pollingTask = nil
+        networkMonitor.cancel()
         lastLinescore = nil
         lastScorecard = nil
+        lastGameData = nil
         needsInningCleanup = false
         inningCleanupAttempts = 0
         consecutiveErrors = 0
@@ -261,17 +277,22 @@ class GameService {
         if needsInningCleanup { return 5.0 }
         
         guard let linescore = lastLinescore else { return 10.0 }
+        // MLB API inningState values: "Top", "Bottom", "Mid", "End"
         let state = linescore.inningState?.lowercased() ?? ""
         
-        if state.contains("in progress") || state.contains("live") {
-            return 8.0
-        } else if state.contains("warmup") || state.contains("pre-game") {
-            return 30.0
+        let interval: TimeInterval
+        if state == "top" || state == "bottom" {
+            interval = 8.0   // Active play
+        } else if state == "mid" || state == "end" {
+            interval = 15.0  // Between half-innings
         } else if state.contains("final") {
-            return 300.0
+            interval = 300.0
         } else {
-            return 15.0 // Between innings, etc.
+            interval = 30.0  // Pre-game, warmup, or unknown
         }
+        
+        // Low Data Mode: double all intervals to halve bandwidth usage
+        return isConstrainedNetwork ? interval * 2 : interval
     }
     
     private func calculatePollingInterval() -> TimeInterval {
@@ -287,7 +308,6 @@ class GameService {
         let linescore = try await MLBAPIClient.shared.fetchLinescore(gamePk: gamePk)
         
         // 2. Send an early snapshot so the header populates immediately on first load
-        var liveFeed: LiveFeedResponse?
         let isFirstLoad = lastScorecard == nil
         if isFirstLoad {
             await MainActor.run {
@@ -297,12 +317,7 @@ class GameService {
             }
         }
         
-        // 3. Fetch live feed (optional, for MVR/Challenges) - Fail-safe
-        if !useMockData {
-            liveFeed = try? await MLBAPIClient.shared.fetchLiveFeed(gamePk: gamePk)
-        }
-        
-        // 4. Decide if we need to fetch PBP/Boxscore (ScorecardData)
+        // 3. Decide if we need to fetch PBP/Boxscore (ScorecardData)
         var shouldFetchScorecard = false
         
         if lastScorecard != nil {
@@ -315,6 +330,12 @@ class GameService {
                linescore.currentInning != lastLinescore?.currentInning || 
                linescore.inningHalf != lastLinescore?.inningHalf ||
                linescore.offense?.batter?.id != lastLinescore?.offense?.batter?.id ||
+               // Runner changes: SB, CS, WP, PB, pickoff errors, defensive indifference
+               linescore.offense?.first?.id != lastLinescore?.offense?.first?.id ||
+               linescore.offense?.second?.id != lastLinescore?.offense?.second?.id ||
+               linescore.offense?.third?.id != lastLinescore?.offense?.third?.id ||
+               // Pitcher changes: mid-inning substitutions
+               linescore.defense?.pitcher?.id != lastLinescore?.defense?.pitcher?.id ||
                needsInningCleanup {
                 shouldFetchScorecard = true
             }
@@ -322,8 +343,19 @@ class GameService {
             shouldFetchScorecard = true
         }
         
+        // 4. Fetch PBP/Boxscore + LiveFeed together when state changed.
+        //    LiveFeed (MVR, challenges, weather) only updates after plays, so piggyback
+        //    on scorecard fetches instead of hitting it every cycle.
         if shouldFetchScorecard {
             let scorecard = try await fetchScorecard(linescore: linescore)
+            
+            // Fetch live feed alongside scorecard (fail-safe, non-blocking)
+            if !useMockData {
+                if let feed = try? await MLBAPIClient.shared.fetchLiveFeed(gamePk: gamePk) {
+                    lastGameData = feed.gameData
+                }
+            }
+            
             await MainActor.run {
                 self.lastScorecard = scorecard
             }
@@ -336,7 +368,7 @@ class GameService {
         
         await MainActor.run {
             self.lastLinescore = linescore
-            let snapshot = self.makeSnapshot(linescore: linescore, scorecard: self.lastScorecard, gameData: liveFeed?.gameData)
+            let snapshot = self.makeSnapshot(linescore: linescore, scorecard: self.lastScorecard, gameData: self.lastGameData)
             self.delegate?.didUpdateSnapshot(snapshot)
         }
     }
