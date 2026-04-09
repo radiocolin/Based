@@ -70,11 +70,14 @@ struct ScorecardInning: Codable, Sendable, Equatable {
     let away: [AtBatEvent]
     let homeRuns: Int?  // Authoritative from linescore (nil if inning hasn't started)
     let awayRuns: Int?  // Authoritative from linescore (nil if inning hasn't started)
+    let homeScoringPlayerIds: [Int]
+    let awayScoringPlayerIds: [Int]
 }
 
 struct AtBatEvent: Codable, Sendable, Equatable {
     let batterId: Int
     let batterName: String
+    let pinchRunnerName: String? // Name of the PR who replaced the batter on base
     let pitcherId: Int
     let pitcherName: String
     let inning: Int
@@ -85,6 +88,7 @@ struct AtBatEvent: Codable, Sendable, Equatable {
     let strikes: Int
     let outs: Int
     let rbi: Int
+    let isRunnerOnly: Bool
     let bases: BasesReached
     let pitches: [PitchEvent]?
 }
@@ -122,6 +126,7 @@ struct PitchEvent: Codable, Sendable, Equatable {
 struct BaseAnnotation: Codable, Sendable, Equatable {
     enum Kind: String, Codable, Sendable {
         case error          // "E6" — next to the base reached
+        case pinchRunner    // "PR" — indicates a pinch runner took over on base
         case stolenBase     // "SB" — next to the base stolen to
         case caughtStealing // "CS" — next to the out-line between bases
     }
@@ -135,6 +140,10 @@ struct BasesReached: Codable, Sendable, Equatable {
     let second: Bool
     let third: Bool
     let home: Bool
+    let lineToFirst: Bool?
+    let lineToSecond: Bool?
+    let lineToThird: Bool?
+    let lineToHome: Bool?
     
     // Outs between bases
     let outAtFirst: Bool?
@@ -205,6 +214,7 @@ extension ScorecardData {
         for inning in innings {
             let events = isHome ? inning.home : inning.away
             for event in events where event.batterId == batterId {
+                if event.isRunnerOnly { continue }
                 let result = event.result
                 if result == "BB" || result == "IBB" || result == "HBP" { walks += 1 }
                 else if result == "SF" || result == "SAC" {}
@@ -212,9 +222,12 @@ extension ScorecardData {
                     atBats += 1
                     if ["1B", "2B", "3B", "HR"].contains(result) { hits += 1 }
                 }
-                if event.bases.home { runs += 1 }
                 rbi += event.rbi
                 if result == "K" || result == "Ʞ" { strikeouts += 1 }
+            }
+            let scoringPlayerIds = isHome ? inning.homeScoringPlayerIds : inning.awayScoringPlayerIds
+            if scoringPlayerIds.contains(batterId) {
+                runs += 1
             }
         }
         return PlayerGameStats(atBats: atBats, hits: hits, runs: runs, rbi: rbi, walks: walks, strikeouts: strikeouts)

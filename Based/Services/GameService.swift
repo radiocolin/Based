@@ -47,7 +47,8 @@ class GameService {
     private var isBackgrounded = false
     
     // Network monitoring: skip polls when there's no connectivity
-    private let networkMonitor = NWPathMonitor()
+    // NWPathMonitor cannot be restarted after cancel(), so recreate each time.
+    private var networkMonitor: NWPathMonitor?
     private var hasConnectivity = true
     private var isConstrainedNetwork = false  // Low Data Mode
     
@@ -184,12 +185,14 @@ class GameService {
         stopPolling()
         currentGamePk = gamePk
         
-        // Monitor connectivity to avoid wasting radio on doomed requests
-        networkMonitor.pathUpdateHandler = { [weak self] path in
+        // Create a fresh monitor (NWPathMonitor can't be restarted after cancel)
+        let monitor = NWPathMonitor()
+        networkMonitor = monitor
+        monitor.pathUpdateHandler = { [weak self] path in
             self?.hasConnectivity = (path.status == .satisfied)
             self?.isConstrainedNetwork = path.isConstrained  // Low Data Mode
         }
-        networkMonitor.start(queue: DispatchQueue(label: "NetworkMonitor"))
+        monitor.start(queue: DispatchQueue(label: "NetworkMonitor"))
         
         pollingTask = Task {
             do {
@@ -262,7 +265,8 @@ class GameService {
     func stopPolling() {
         pollingTask?.cancel()
         pollingTask = nil
-        networkMonitor.cancel()
+        networkMonitor?.cancel()
+        networkMonitor = nil
         lastLinescore = nil
         lastScorecard = nil
         lastGameData = nil
@@ -508,6 +512,28 @@ class GameService {
         
         let homePitchers = (boxscore.teams?.home?.pitchers ?? []).compactMap { createPitcher(id: $0, team: boxscore.teams?.home) }
         let awayPitchers = (boxscore.teams?.away?.pitchers ?? []).compactMap { createPitcher(id: $0, team: boxscore.teams?.away) }
+        let playerNameMap = Dictionary(
+            uniqueKeysWithValues:
+                (boxscore.teams?.home?.players ?? [:]).values.compactMap { player -> (Int, String)? in
+                    guard let id = player.person?.id, let fullName = player.person?.fullName else { return nil }
+                    return (id, fullName)
+                } +
+                (boxscore.teams?.away?.players ?? [:]).values.compactMap { player -> (Int, String)? in
+                    guard let id = player.person?.id, let fullName = player.person?.fullName else { return nil }
+                    return (id, fullName)
+                }
+        )
+        let playerNumberMap = Dictionary(
+            uniqueKeysWithValues:
+                (boxscore.teams?.home?.players ?? [:]).values.compactMap { player -> (Int, String)? in
+                    guard let id = player.person?.id, let jerseyNumber = player.jerseyNumber else { return nil }
+                    return (id, jerseyNumber)
+                } +
+                (boxscore.teams?.away?.players ?? [:]).values.compactMap { player -> (Int, String)? in
+                    guard let id = player.person?.id, let jerseyNumber = player.jerseyNumber else { return nil }
+                    return (id, jerseyNumber)
+                }
+        )
 
         var umpires: [ScorecardUmpire] = []
         if let officials = boxscore.officials, !officials.isEmpty {
@@ -545,17 +571,40 @@ class GameService {
             // Only include actual at-bats for the scorecard grid
             let atBatPlays = inningPlays.filter { shouldIncludePlayInScorecard($0, includeLive: true) }
             
-            let awayEvents = atBatPlays.filter { $0.about?.isTopInning == true }.enumerated().map { (idx, play) in
-                transformPlayToEvent(play, allPlays: allPlays, playIndex: allPlays.firstIndex(where: { $0.about?.atBatIndex == play.about?.atBatIndex }) ?? 0)
-            }
-            let homeEvents = atBatPlays.filter { $0.about?.isTopInning == false }.enumerated().map { (idx, play) in
-                transformPlayToEvent(play, allPlays: allPlays, playIndex: allPlays.firstIndex(where: { $0.about?.atBatIndex == play.about?.atBatIndex }) ?? 0)
-            }
+            let awayEvents = buildHalfInningEvents(
+                from: atBatPlays.filter { $0.about?.isTopInning == true },
+                allPlays: allPlays,
+                playerNameMap: playerNameMap,
+                playerNumberMap: playerNumberMap
+            )
+            let homeEvents = buildHalfInningEvents(
+                from: atBatPlays.filter { $0.about?.isTopInning == false },
+                allPlays: allPlays,
+                playerNameMap: playerNameMap,
+                playerNumberMap: playerNumberMap
+            )
+            let awayScoringPlayerIds = scoringPlayerIds(
+                from: inningPlays.filter { $0.about?.isTopInning == true }
+            )
+            let homeScoringPlayerIds = scoringPlayerIds(
+                from: inningPlays.filter { $0.about?.isTopInning == false }
+            )
             
             // Authoritative per-inning runs from linescore (always correct, even when PBP lags)
             let linescoreInning = linescoreInnings.first { $0.num == i }
             
-            scorecardInnings.append(ScorecardInning(num: i, ordinal: "\(i)", home: homeEvents, away: awayEvents, homeRuns: linescoreInning?.home?.runs, awayRuns: linescoreInning?.away?.runs))
+            scorecardInnings.append(
+                ScorecardInning(
+                    num: i,
+                    ordinal: "\(i)",
+                    home: homeEvents,
+                    away: awayEvents,
+                    homeRuns: linescoreInning?.home?.runs,
+                    awayRuns: linescoreInning?.away?.runs,
+                    homeScoringPlayerIds: homeScoringPlayerIds,
+                    awayScoringPlayerIds: awayScoringPlayerIds
+                )
+            )
         }
 
         let liveCurrentAtBat: AtBatEvent?
@@ -565,14 +614,26 @@ class GameService {
            shouldIncludePlayInScorecard(currentPlay, includeLive: true),
            currentBatterId == nil || currentPlay.matchup?.batter?.id == currentBatterId {
             let currentIndex = allPlays.firstIndex(where: { $0.about?.atBatIndex == currentPlay.about?.atBatIndex }) ?? max(allPlays.count - 1, 0)
-            liveCurrentAtBat = transformPlayToEvent(currentPlay, allPlays: allPlays, playIndex: currentIndex)
+            liveCurrentAtBat = transformPlayToEvent(
+                currentPlay,
+                allPlays: allPlays,
+                playIndex: currentIndex,
+                playerNameMap: playerNameMap,
+                playerNumberMap: playerNumberMap
+            )
         } else {
             liveCurrentAtBat = nil
         }
 
         // Timeline is all at-bat plays sorted newest-to-oldest
         let timeline = allPlays.filter { shouldIncludePlayInScorecard($0, includeLive: false) }.enumerated().map { (idx, play) in
-            transformPlayToEvent(play, allPlays: allPlays, playIndex: allPlays.firstIndex(where: { $0.about?.atBatIndex == play.about?.atBatIndex }) ?? 0)
+            transformPlayToEvent(
+                play,
+                allPlays: allPlays,
+                playIndex: allPlays.firstIndex(where: { $0.about?.atBatIndex == play.about?.atBatIndex }) ?? 0,
+                playerNameMap: playerNameMap,
+                playerNumberMap: playerNumberMap
+            )
         }.reversed()
         
         // Extract game info from boxscore info array
@@ -599,7 +660,263 @@ class GameService {
         )
     }
 
-    private func transformPlayToEvent(_ play: Play, allPlays: [Play], playIndex: Int) -> AtBatEvent {
+    private func scoringPlayerIds(from plays: [Play]) -> [Int] {
+        var scoringIds: [Int] = []
+
+        for play in plays {
+            for runner in play.runners ?? [] {
+                guard let runnerId = runner.details?.runner?.id else { continue }
+                let endBase = runner.movement?.end?.lowercased()
+                let didScore = endBase == "score" || endBase == "home" || runner.details?.isScoringEvent == true
+                if didScore, !scoringIds.contains(runnerId) {
+                    scoringIds.append(runnerId)
+                }
+            }
+        }
+
+        return scoringIds
+    }
+
+    private func buildHalfInningEvents(
+        from plays: [Play],
+        allPlays: [Play],
+        playerNameMap: [Int: String],
+        playerNumberMap: [Int: String]
+    ) -> [AtBatEvent] {
+        var events: [AtBatEvent] = []
+        var placedRunnerIds = Set<Int>()
+
+        for play in plays {
+            let playIndex = allPlays.firstIndex(where: { $0.about?.atBatIndex == play.about?.atBatIndex }) ?? 0
+
+            for runner in placedRunnersStartingInInning(in: play, playerNameMap: playerNameMap) {
+                if placedRunnerIds.insert(runner.id).inserted {
+                    events.append(
+                        transformPlacedRunnerToEvent(
+                            runnerId: runner.id,
+                            runnerName: runner.name,
+                            startingBase: runner.base,
+                            seedPlay: play,
+                            allPlays: allPlays,
+                            playIndex: playIndex,
+                            playerNameMap: playerNameMap,
+                            playerNumberMap: playerNumberMap
+                        )
+                    )
+                }
+            }
+
+            events.append(
+                transformPlayToEvent(
+                    play,
+                    allPlays: allPlays,
+                    playIndex: playIndex,
+                    playerNameMap: playerNameMap,
+                    playerNumberMap: playerNumberMap
+                )
+            )
+        }
+
+        return events
+    }
+
+    private func placedRunnersStartingInInning(
+        in play: Play,
+        playerNameMap: [Int: String]
+    ) -> [(id: Int, name: String, base: Int)] {
+        let pattern = /^(.+) starts inning at ([1234])(st|nd|rd|th) base\.$/
+
+        return (play.playEvents ?? []).compactMap { event in
+            guard event.type == "action",
+                  let description = event.details?.description,
+                  let match = description.wholeMatch(of: pattern),
+                  let base = Int(match.2),
+                  let playerId = playerNameMap.first(where: { $0.value == String(match.1) })?.key else {
+                return nil
+            }
+
+            return (id: playerId, name: String(match.1), base: base)
+        }
+    }
+
+    private func transformPlacedRunnerToEvent(
+        runnerId: Int,
+        runnerName: String,
+        startingBase: Int,
+        seedPlay: Play,
+        allPlays: [Play],
+        playIndex: Int,
+        playerNameMap: [Int: String],
+        playerNumberMap: [Int: String]
+    ) -> AtBatEvent {
+        let inning = seedPlay.about?.inning ?? 1
+        let isTop = seedPlay.about?.isTopInning ?? true
+        let pitcherId = seedPlay.matchup?.pitcher?.id ?? 0
+        let pitcherName = seedPlay.matchup?.pitcher?.fullName ?? "Unknown"
+        var pinchRunnerName: String?
+
+        var reachFirst = startingBase == 1
+        var reachSecond = startingBase == 2
+        var reachThird = startingBase == 3
+        var reachHome = startingBase == 4
+
+        var lineToFirst = false
+        var lineToSecond = false
+        var lineToThird = false
+        var lineToHome = false
+
+        var outFirst = false
+        var outSecond = false
+        var outThird = false
+        var outHome = false
+        var annotations: [BaseAnnotation] = []
+        var currentRunnerId = runnerId
+
+        for i in playIndex..<allPlays.count {
+            let play = allPlays[i]
+            if play.about?.inning != inning || play.about?.isTopInning != isTop { break }
+
+            for event in play.playEvents ?? [] {
+                if event.isSubstitution == true && event.replacedPlayer?.id == currentRunnerId {
+                    let pinchRunnerId = event.player?.id
+                    if pinchRunnerName == nil {
+                        pinchRunnerName = pinchRunnerId.flatMap { playerNameMap[$0] } ?? event.player?.fullName
+                    }
+                    if let base = currentBaseForRunner(
+                        reachFirst: reachFirst,
+                        reachSecond: reachSecond,
+                        reachThird: reachThird,
+                        reachHome: reachHome
+                    ), base < 4 {
+                        let jerseyNumber = pinchRunnerId.flatMap { playerNumberMap[$0] }
+                        let label = jerseyNumber.map { "PR\n#\($0)" } ?? "PR"
+                        annotations.append(BaseAnnotation(kind: .pinchRunner, base: base, label: label))
+                    }
+                    if let pinchRunnerId {
+                        currentRunnerId = pinchRunnerId
+                    }
+                }
+            }
+
+            for runner in play.runners ?? [] where runner.details?.runner?.id == currentRunnerId {
+                let start = runner.movement?.start?.lowercased() ?? runner.movement?.originBase?.lowercased() ?? ""
+                let end = runner.movement?.end?.lowercased() ?? ""
+                let outBase = runner.movement?.outBase?.lowercased() ?? ""
+
+                if start == "1b" { reachFirst = true }
+                if start == "2b" { reachSecond = true }
+                if start == "3b" { reachThird = true }
+
+                switch end {
+                case "1b":
+                    reachFirst = true
+                    lineToFirst = true
+                case "2b":
+                    reachSecond = true
+                    lineToSecond = true
+                case "3b":
+                    reachThird = true
+                    lineToThird = true
+                case "score", "home":
+                    if start == "2b" || reachSecond { reachSecond = true; reachThird = true }
+                    if start == "3b" || reachThird { reachThird = true }
+                    reachHome = true
+                    if start == "2b" || reachSecond { lineToThird = true }
+                    lineToHome = true
+                default:
+                    break
+                }
+
+                if runner.movement?.isOut == true {
+                    switch outBase {
+                    case "1b":
+                        reachFirst = false
+                        outFirst = true
+                        lineToFirst = true
+                    case "2b":
+                        reachSecond = false
+                        outSecond = true
+                        lineToSecond = true
+                    case "3b":
+                        reachThird = false
+                        outThird = true
+                        lineToThird = true
+                    case "home":
+                        reachHome = false
+                        outHome = true
+                        lineToHome = true
+                    default:
+                        break
+                    }
+                }
+
+                if let credits = runner.credits,
+                   let errorCredit = credits.first(where: { ($0.credit ?? "").lowercased().contains("error") }),
+                   let posCode = errorCredit.position?.code {
+                    let errBase = end == "2b" ? 2 : end == "3b" ? 3 : end == "score" || end == "home" ? 4 : 1
+                    annotations.append(BaseAnnotation(kind: .error, base: errBase, label: "E\(posCode)"))
+                }
+
+                if reachHome || outFirst || outSecond || outThird || outHome {
+                    break
+                }
+            }
+
+            if reachHome || outFirst || outSecond || outThird || outHome {
+                break
+            }
+        }
+
+        let startedBaseLabel = startingBase == 2 ? "2nd" : startingBase == 3 ? "3rd" : "\(startingBase)th"
+        let baseDescription = reachHome
+            ? "\(runnerName) started the inning on \(startedBaseLabel) base and scored."
+            : "\(runnerName) started the inning on \(startedBaseLabel) base."
+        let description = enrichedDescription(
+            baseDescription: baseDescription,
+            pinchRunnerName: pinchRunnerName
+        )
+
+        return AtBatEvent(
+            batterId: runnerId,
+            batterName: runnerName,
+            pinchRunnerName: pinchRunnerName,
+            pitcherId: pitcherId,
+            pitcherName: pitcherName,
+            inning: inning,
+            isTop: isTop,
+            result: "",
+            description: description,
+            balls: 0,
+            strikes: 0,
+            outs: 0,
+            rbi: 0,
+            isRunnerOnly: true,
+            bases: BasesReached(
+                first: reachFirst,
+                second: reachSecond,
+                third: reachThird,
+                home: reachHome,
+                lineToFirst: lineToFirst,
+                lineToSecond: lineToSecond,
+                lineToThird: lineToThird,
+                lineToHome: lineToHome,
+                outAtFirst: outFirst,
+                outAtSecond: outSecond,
+                outAtThird: outThird,
+                outAtHome: outHome,
+                annotations: annotations.isEmpty ? nil : annotations
+            ),
+            pitches: nil
+        )
+    }
+
+    private func transformPlayToEvent(
+        _ play: Play,
+        allPlays: [Play],
+        playIndex: Int,
+        playerNameMap: [Int: String],
+        playerNumberMap: [Int: String]
+    ) -> AtBatEvent {
         let pitches = (play.playEvents ?? []).filter { $0.isPitch == true }.enumerated().map { (index, event) in
             PitchEvent(
                 pitchNumber: index + 1,
@@ -622,6 +939,7 @@ class GameService {
         let pitcherName = play.matchup?.pitcher?.fullName ?? "Unknown"
         let inning = play.about?.inning ?? 1
         let isTop = play.about?.isTopInning ?? true
+        var pinchRunnerName: String?
         
         // Track bases reached
         var reachFirst = false, reachSecond = false, reachThird = false, reachHome = false
@@ -675,12 +993,36 @@ class GameService {
         }
         
         // Pass 2: Subsequent plays in the same inning/half
+        var currentRunnerId = batterId
         for i in (playIndex + 1)..<allPlays.count {
             let nextPlay = allPlays[i]
             if nextPlay.about?.inning != inning || nextPlay.about?.isTopInning != isTop { break }
             
+            // Track substitutions for the current runner in this square
+            for event in nextPlay.playEvents ?? [] {
+                if event.isSubstitution == true && event.replacedPlayer?.id == currentRunnerId {
+                    let pinchRunnerId = event.player?.id
+                    if pinchRunnerName == nil {
+                        pinchRunnerName = pinchRunnerId.flatMap { playerNameMap[$0] } ?? event.player?.fullName
+                    }
+                    if let base = currentBaseForRunner(
+                        reachFirst: reachFirst,
+                        reachSecond: reachSecond,
+                        reachThird: reachThird,
+                        reachHome: reachHome
+                    ), base < 4 {
+                        let jerseyNumber = pinchRunnerId.flatMap { playerNumberMap[$0] }
+                        let label = jerseyNumber.map { "PR\n#\($0)" } ?? "PR"
+                        annotations.append(BaseAnnotation(kind: .pinchRunner, base: base, label: label))
+                    }
+                    if let newId = pinchRunnerId {
+                        currentRunnerId = newId
+                    }
+                }
+            }
+            
             for runner in nextPlay.runners ?? [] {
-                if runner.details?.runner?.id == batterId {
+                if runner.details?.runner?.id == currentRunnerId {
                     let end = runner.movement?.end?.lowercased() ?? ""
                     let runnerEventType = runner.details?.eventType?.lowercased() ?? ""
                     let isCaughtStealing = runnerEventType.contains("caught_stealing")
@@ -747,24 +1089,35 @@ class GameService {
             outFirst = false
         }
         
+        let playDescription = enrichedDescription(
+            baseDescription: play.result?.description ?? "",
+            pinchRunnerName: pinchRunnerName
+        )
+
         return AtBatEvent(
             batterId: batterId,
             batterName: batterName,
+            pinchRunnerName: pinchRunnerName,
             pitcherId: pitcherId,
             pitcherName: pitcherName,
             inning: inning,
             isTop: isTop,
             result: scorecardNotation(for: play, batterId: batterId),
-            description: play.result?.description ?? "",
+            description: playDescription,
             balls: play.count?.balls ?? 0,
             strikes: play.count?.strikes ?? 0,
             outs: play.count?.outs ?? 0,
             rbi: play.result?.rbi ?? 0,
+            isRunnerOnly: false,
             bases: BasesReached(
                 first: reachFirst,
                 second: reachSecond,
                 third: reachThird,
                 home: reachHome,
+                lineToFirst: nil,
+                lineToSecond: nil,
+                lineToThird: nil,
+                lineToHome: nil,
                 outAtFirst: outFirst,
                 outAtSecond: outSecond,
                 outAtThird: outThird,
@@ -773,6 +1126,31 @@ class GameService {
             ),
             pitches: pitches
         )
+    }
+
+    private func currentBaseForRunner(
+        reachFirst: Bool,
+        reachSecond: Bool,
+        reachThird: Bool,
+        reachHome: Bool
+    ) -> Int? {
+        if reachHome { return 4 }
+        if reachThird { return 3 }
+        if reachSecond { return 2 }
+        if reachFirst { return 1 }
+        return nil
+    }
+
+    private func enrichedDescription(baseDescription: String, pinchRunnerName: String?) -> String {
+        guard let pinchRunnerName, !pinchRunnerName.isEmpty else {
+            return baseDescription
+        }
+
+        let note = "Pinch runner: \(pinchRunnerName)."
+        if baseDescription.isEmpty {
+            return note
+        }
+        return "\(baseDescription) \(note)"
     }
 
     private func scorecardNotation(for play: Play, batterId: Int? = nil) -> String {

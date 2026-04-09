@@ -23,6 +23,7 @@ struct AtBatPresentation {
 
     var displayResult: String {
         if isLive { return "LIVE" }
+        if event.isRunnerOnly { return "Z" }
         return isCalledStrikeout ? "K" : event.result
     }
 
@@ -47,15 +48,18 @@ struct AtBatPresentation {
     }
 
     var ballsText: String {
-        "\(event.balls)B"
+        if event.isRunnerOnly { return "" }
+        return "\(event.balls)B"
     }
 
     var strikesText: String {
-        "\(event.strikes)S"
+        if event.isRunnerOnly { return "" }
+        return "\(event.strikes)S"
     }
 
     var outsText: String {
-        event.outs > 0 ? "\(event.outs)" : ""
+        if event.isRunnerOnly { return "" }
+        return event.outs > 0 ? "\(event.outs)" : ""
     }
 
     func resultAttributedString(font: UIFont) -> NSAttributedString? {

@@ -203,6 +203,10 @@ class DiamondView: UIView {
 
         let shouldUseAccent = style == .scorecard && (isRun || bases.home)
         let accentColor = shouldUseAccent ? (accentColorOverride ?? AppColors.pencil) : AppColors.pencil
+        let lineToFirst = bases.lineToFirst ?? bases.first
+        let lineToSecond = bases.lineToSecond ?? bases.second
+        let lineToThird = bases.lineToThird ?? bases.third
+        let lineToHome = bases.lineToHome ?? bases.home
         
         let path = UIBezierPath()
         
@@ -224,10 +228,10 @@ class DiamondView: UIView {
 
         // Draw Scorecard Progress Lines
         if style == .scorecard {
-            if bases.first || bases.outAtFirst == true { addSegment(from: p.home, to: p.first, wasOut: bases.outAtFirst) }
-            if bases.second || bases.outAtSecond == true { addSegment(from: p.first, to: p.second, wasOut: bases.outAtSecond) }
-            if bases.third || bases.outAtThird == true { addSegment(from: p.second, to: p.third, wasOut: bases.outAtThird) }
-            if bases.home || bases.outAtHome == true {
+            if lineToFirst || bases.outAtFirst == true { addSegment(from: p.home, to: p.first, wasOut: bases.outAtFirst) }
+            if lineToSecond || bases.outAtSecond == true { addSegment(from: p.first, to: p.second, wasOut: bases.outAtSecond) }
+            if lineToThird || bases.outAtThird == true { addSegment(from: p.second, to: p.third, wasOut: bases.outAtThird) }
+            if lineToHome || bases.outAtHome == true {
                 addSegment(from: p.third, to: p.home, wasOut: bases.outAtHome)
             }
             

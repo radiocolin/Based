@@ -107,7 +107,7 @@ class ScheduleViewController: UIViewController {
         
         let padding: CGFloat = 16 * 2 + 12
         let screenWidth = view.window?.windowScene?.screen.bounds.width ?? view.frame.width
-        let width = (screenWidth - padding) / 2
+        let width = max((screenWidth - padding) / 2, 100)
         layout.itemSize = CGSize(width: width, height: 120) 
         
         collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
@@ -446,9 +446,11 @@ class ScheduleViewController: UIViewController {
         if sender.state == .began {
             let today = Date()
             if !Calendar.current.isDateInToday(currentDate) {
-                // Haptic feedback for the jump
-                let generator = UIImpactFeedbackGenerator(style: .medium)
-                generator.impactOccurred()
+                // Haptic feedback for the jump (unavailable on Mac)
+                if !ProcessInfo.processInfo.isiOSAppOnMac {
+                    let generator = UIImpactFeedbackGenerator(style: .medium)
+                    generator.impactOccurred()
+                }
                 
                 loadSchedule(for: today)
             }
