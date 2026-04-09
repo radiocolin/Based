@@ -598,6 +598,10 @@ class PencilSectionBackgroundView: UIView {
         borderLayer.lineWidth = 1.2
         borderLayer.lineCap = .round
         layer.addSublayer(borderLayer)
+
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: PencilSectionBackgroundView, _) in
+            self.updatePath()
+        }
     }
     
     required init?(coder: NSCoder) { fatalError() }
@@ -637,8 +641,4 @@ class PencilSectionBackgroundView: UIView {
         borderLayer.strokeColor = AppColors.pencil.withAlphaComponent(0.4).cgColor
     }
     
-    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
-        super.traitCollectionDidChange(previousTraitCollection)
-        updatePath()
-    }
 }

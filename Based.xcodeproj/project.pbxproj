@@ -8,12 +8,10 @@
 
 /* Begin PBXBuildFile section */
 		3BC51E0B2F83FE0300D98EF4 /* WhatToTest.en-US.txt in Resources */ = {isa = PBXBuildFile; fileRef = 3BC51E092F83FE0300D98EF4 /* WhatToTest.en-US.txt */; };
-		3BC51E0C2F83FE0300D98EF4 /* what-to-test in Resources */ = {isa = PBXBuildFile; fileRef = 3BC51E082F83FE0300D98EF4 /* what-to-test */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		3B1570D22F1D487300479B89 /* Based.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Based.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		3BC51E082F83FE0300D98EF4 /* what-to-test */ = {isa = PBXFileReference; lastKnownFileType = text; path = "what-to-test"; sourceTree = "<group>"; };
 		3BC51E092F83FE0300D98EF4 /* WhatToTest.en-US.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "WhatToTest.en-US.txt"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -69,7 +67,6 @@
 		3BC51E0A2F83FE0300D98EF4 /* TestFlight */ = {
 			isa = PBXGroup;
 			children = (
-				3BC51E082F83FE0300D98EF4 /* what-to-test */,
 				3BC51E092F83FE0300D98EF4 /* WhatToTest.en-US.txt */,
 			);
 			path = TestFlight;
@@ -140,7 +137,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				3BC51E0B2F83FE0300D98EF4 /* WhatToTest.en-US.txt in Resources */,
-				3BC51E0C2F83FE0300D98EF4 /* what-to-test in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
