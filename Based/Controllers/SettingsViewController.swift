@@ -17,6 +17,14 @@ class SettingsViewController: UIViewController {
         "Seattle Mariners", "St. Louis Cardinals", "Tampa Bay Rays", "Texas Rangers",
         "Toronto Blue Jays", "Washington Nationals"
     ]
+
+    private var neutralPencilColor: UIColor {
+        UIColor { traitCollection in
+            traitCollection.userInterfaceStyle == .dark
+                ? UIColor(red: 0.82, green: 0.80, blue: 0.78, alpha: 0.9)
+                : UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
+        }
+    }
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -144,16 +152,26 @@ class SettingsViewController: UIViewController {
 
     private func presentTintSelector() {
         let currentTint = TintService.shared.tintColor
+        let selectedTeamTint = mlbTeams.first { team in
+            let color = TeamColorProvider.color(for: team)
+            return currentTint != nil && currentTint!.isSimilar(to: color)
+        }
+        let customTintDisplayColor = selectedTeamTint == nil ? currentTint : nil
+
         let quickOptions = [
             SettingsSelectionOption(
                 title: "Pencil",
                 isSelected: currentTint == nil,
-                accessibilityValue: currentTint == nil ? "Selected" : nil
+                accessibilityValue: currentTint == nil ? "Selected" : nil,
+                displayColor: neutralPencilColor
             ) { [weak self] in
                 TintService.shared.tintColor = nil
                 self?.dismiss(animated: true)
             },
-            SettingsSelectionOption(title: "Custom Color...") { [weak self] in
+            SettingsSelectionOption(
+                title: "Custom Color...",
+                displayColor: customTintDisplayColor
+            ) { [weak self] in
                 self?.dismiss(animated: true) {
                     self?.presentColorPicker()
                 }
@@ -166,7 +184,8 @@ class SettingsViewController: UIViewController {
             return SettingsSelectionOption(
                 title: team,
                 isSelected: isSelected,
-                accessibilityValue: isSelected ? "Selected" : nil
+                accessibilityValue: isSelected ? "Selected" : nil,
+                displayColor: color
             ) { [weak self] in
                 TintService.shared.tintColor = color
                 self?.dismiss(animated: true)
@@ -504,12 +523,14 @@ private struct SettingsSelectionOption {
     let title: String
     let isSelected: Bool
     let accessibilityValue: String?
+    let displayColor: UIColor?
     let action: () -> Void
 
-    init(title: String, isSelected: Bool = false, accessibilityValue: String? = nil, action: @escaping () -> Void) {
+    init(title: String, isSelected: Bool = false, accessibilityValue: String? = nil, displayColor: UIColor? = nil, action: @escaping () -> Void) {
         self.title = title
         self.isSelected = isSelected
         self.accessibilityValue = accessibilityValue
+        self.displayColor = displayColor
         self.action = action
     }
 }
@@ -522,6 +543,11 @@ private struct SettingsSelectionSection {
 private final class SettingsSelectionViewController: UITableViewController {
     private let titleText: String
     private let sections: [SettingsSelectionSection]
+    private let neutralPencilColor = UIColor { traitCollection in
+        traitCollection.userInterfaceStyle == .dark
+            ? UIColor(red: 0.82, green: 0.80, blue: 0.78, alpha: 0.9)
+            : UIColor(red: 0.2, green: 0.2, blue: 0.2, alpha: 0.9)
+    }
 
     init(titleText: String, sections: [SettingsSelectionSection]) {
         self.titleText = titleText
@@ -583,11 +609,11 @@ private final class SettingsSelectionViewController: UITableViewController {
         cell.backgroundColor = .clear
         cell.textLabel?.text = option.title
         cell.textLabel?.font = AppFont.patrick(18, textStyle: .body, compatibleWith: traitCollection)
-        cell.textLabel?.textColor = AppColors.pencil
+        cell.textLabel?.textColor = option.displayColor ?? neutralPencilColor
         cell.textLabel?.numberOfLines = 0
         cell.textLabel?.adjustsFontForContentSizeCategory = true
         cell.accessoryType = option.isSelected ? .checkmark : .none
-        cell.tintColor = AppColors.pencil
+        cell.tintColor = option.displayColor ?? neutralPencilColor
         cell.accessibilityLabel = option.title
         cell.accessibilityValue = option.accessibilityValue
         return cell
