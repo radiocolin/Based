@@ -37,14 +37,19 @@ class TeamHeroCell: UICollectionViewCell {
     }
     
     private func setupUI() {
+        isAccessibilityElement = true
+        accessibilityTraits = .staticText
         contentView.addSubview(containerView)
         containerView.translatesAutoresizingMaskIntoConstraints = false
+        containerView.isAccessibilityElement = false
         
         containerView.addSubview(nameLabel)
         containerView.addSubview(statsLabel)
         
         nameLabel.translatesAutoresizingMaskIntoConstraints = false
         statsLabel.translatesAutoresizingMaskIntoConstraints = false
+        nameLabel.isAccessibilityElement = false
+        statsLabel.isAccessibilityElement = false
         
         NSLayoutConstraint.activate([
             containerView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
@@ -61,8 +66,19 @@ class TeamHeroCell: UICollectionViewCell {
     }
     
     func configure(with teamStats: TeamGameStats, isHome: Bool) {
-        nameLabel.text = teamStats.team?.name ?? "Unknown Team"
-        statsLabel.text = "R: \(teamStats.runs ?? 0)  H: \(teamStats.hits ?? 0)  E: \(teamStats.errors ?? 0)"
+        let teamName = teamStats.team?.name ?? "Unknown Team"
+        let runs = teamStats.runs ?? 0
+        let hits = teamStats.hits ?? 0
+        let errors = teamStats.errors ?? 0
+        nameLabel.text = teamName
+        statsLabel.text = "R: \(runs)  H: \(hits)  E: \(errors)"
         containerView.backgroundColor = isHome ? .systemRed : .systemBlue // Basic colors for Phillies/Braves
+        accessibilityLabel = AccessibilitySupport.joined([
+            isHome ? "Home team" : "Away team",
+            teamName,
+            "Runs \(runs)",
+            "Hits \(hits)",
+            "Errors \(errors)"
+        ])
     }
 }

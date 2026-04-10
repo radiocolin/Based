@@ -1,6 +1,30 @@
-Fixes for handling:
--extra innings on the scoreboard
--extra inning zombie runners
--pinch hitters
+Please test this build with VoiceOver enabled.
 
-Fixed a freeze on launch on macOS
+Focus areas:
+
+- Schedule screen
+  Open several games and confirm each game card reads clearly with teams, score, status, and venue.
+  Check the previous/next day controls and date picker announcement behavior.
+
+- Game detail screen
+  Move through the header, team picker, advisory banner, scorecard, timeline, and live at-bat panel.
+  Confirm controls are announced clearly and activate as expected.
+
+- Scorecard
+  Swipe through batter rows and inning cells.
+  Make sure VoiceOver explains which batter row you are on, which inning/plate appearance you are on, and whether a cell is the current live at-bat, an empty slot, or a totals/stat cell.
+  Try both away and home scorecards.
+
+- Timeline and live game state
+  Check that each timeline item reads as one coherent summary instead of separate fragments.
+  Confirm the current at-bat panel gives useful game context and opens details when activated.
+
+- At-bat and player detail screens
+  Open multiple at-bats and player cards.
+  Verify the result, description, pitch sequence, and tappable player/pitcher names are announced correctly.
+
+- Settings
+  Test appearance, tint color, favorites management, and the attribution/footer area with VoiceOver.
+  Confirm menu buttons, add/remove favorite actions, and row summaries are understandable.
+
+Please report anything that is confusing, repetitive, missing context, or difficult to activate with VoiceOver.

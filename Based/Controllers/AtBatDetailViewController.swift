@@ -88,6 +88,8 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
     
     private func setupUI() {
         view.backgroundColor = paperColor
+        pitchTrackView.isAccessibilityElement = false
+        atBatGraphicView.isAccessibilityElement = false
         
         // intentional Title Layout (Stacked if needed)
         titleStack.axis = .vertical
@@ -102,6 +104,8 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         batterLabel.textAlignment = .center
         batterLabel.numberOfLines = 0
         batterLabel.isUserInteractionEnabled = true
+        batterLabel.accessibilityTraits = .button
+        batterLabel.accessibilityHint = "Double tap for player details."
         
         resultLabel.font = UIFont(name: "PermanentMarker-Regular", size: 32) ?? .systemFont(ofSize: 32, weight: .bold)
         resultLabel.textColor = pencilColor
@@ -114,6 +118,8 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         subHeaderLabel.textAlignment = .center
         subHeaderLabel.translatesAutoresizingMaskIntoConstraints = false
         subHeaderLabel.isUserInteractionEnabled = true
+        subHeaderLabel.accessibilityTraits = .button
+        subHeaderLabel.accessibilityHint = "Double tap for pitcher details."
         view.addSubview(subHeaderLabel)
         
         // Top Container Views
@@ -193,6 +199,8 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         resultLabel.text = presentation.displayResult
         resultLabel.transform = presentation.resultTransform
         descriptionLabel.text = presentation.displayDescription
+        resultLabel.accessibilityLabel = "Result, \(presentation.displayResult)"
+        descriptionLabel.accessibilityLabel = "Play description, \(presentation.displayDescription)"
     }
 
     private func applyPitcherHeader() {
@@ -207,6 +215,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         let text = NSMutableAttributedString(string: "vs. ", attributes: prefixAttributes)
         text.append(NSAttributedString(string: pitcherName.capitalized, attributes: pitcherAttributes))
         subHeaderLabel.attributedText = text
+        subHeaderLabel.accessibilityLabel = "Pitcher, \(pitcherName.capitalized)"
     }
 
     @objc private func handleBatterTap() {
@@ -288,12 +297,15 @@ class PitchCell: UITableViewCell {
     private func setup() {
         backgroundColor = .clear
         selectionStyle = .none
+        isAccessibilityElement = true
+        accessibilityTraits = .staticText
         
         [numLabel, descLabel, speedLabel, outcomeLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             contentView.addSubview($0)
             $0.textColor = AppColors.pencil
             $0.font = UIFont(name: "PatrickHand-Regular", size: 18)
+            $0.isAccessibilityElement = false
         }
         
         numLabel.font = UIFont(name: "PermanentMarker-Regular", size: 16)
@@ -330,6 +342,7 @@ class PitchCell: UITableViewCell {
         outcomeLabel.isHidden = outcomeLabel.text?.isEmpty ?? true
         
         speedLabel.text = speedText(for: pitch)
+        accessibilityLabel = AccessibilitySupport.pitchDescription(pitch)
     }
 
     private func subtitleText(for pitch: PitchEvent) -> String {

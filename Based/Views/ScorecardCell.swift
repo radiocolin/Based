@@ -21,10 +21,13 @@ class ScorecardCell: UICollectionViewCell {
     }
     
     private func setupUI() {
+        isAccessibilityElement = true
+        accessibilityTraits = .staticText
         contentView.backgroundColor = .clear
         
         // Add Diamond
         diamondView.translatesAutoresizingMaskIntoConstraints = false
+        diamondView.isAccessibilityElement = false
         contentView.addSubview(diamondView)
         
         // Add Labels
@@ -34,6 +37,7 @@ class ScorecardCell: UICollectionViewCell {
         
         [resultLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
+            $0.isAccessibilityElement = false
             $0.font = UIFont(name: dataFont, size: 18) ?? .systemFont(ofSize: 18, weight: .bold)
             $0.textColor = pencilColor
             $0.textAlignment = .center
@@ -42,6 +46,7 @@ class ScorecardCell: UICollectionViewCell {
         
         [ballsLabel, strikesLabel, outsLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
+            $0.isAccessibilityElement = false
             $0.font = UIFont(name: legibilityFont, size: 12) ?? .systemFont(ofSize: 12)
             $0.textColor = pencilColor
             $0.textAlignment = .center
@@ -169,6 +174,9 @@ class ScorecardCell: UICollectionViewCell {
         diamondView.alpha = 1.0
         contentView.layer.borderWidth = 0.5
         contentView.layer.borderColor = AppColors.grid.cgColor
+        accessibilityLabel = nil
+        accessibilityHint = nil
+        accessibilityTraits = .staticText
     }
 
     override func layoutSubviews() {
@@ -177,5 +185,11 @@ class ScorecardCell: UICollectionViewCell {
         if contentView.layer.borderWidth == 0.5 {
             contentView.layer.borderColor = AppColors.grid.cgColor
         }
+    }
+
+    func setAccessibility(label: String?, hint: String? = nil, traits: UIAccessibilityTraits = .staticText) {
+        accessibilityLabel = label
+        accessibilityHint = hint
+        accessibilityTraits = traits
     }
 }

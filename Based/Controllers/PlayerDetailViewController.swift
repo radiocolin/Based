@@ -145,6 +145,7 @@ class PlayerDetailViewController: UIViewController {
         headerLabel.numberOfLines = 2
         headerLabel.adjustsFontSizeToFitWidth = true
         headerLabel.minimumScaleFactor = 0.7
+        headerLabel.accessibilityTraits = .header
         contentStack.addArrangedSubview(headerLabel)
 
         bioLabel.text = fallbackBioText
@@ -185,6 +186,7 @@ class PlayerDetailViewController: UIViewController {
         label.font = UIFont(name: bodyFont, size: 16) ?? .systemFont(ofSize: 16)
         label.textColor = pencilColor.withAlphaComponent(0.7)
         label.textAlignment = .center
+        label.accessibilityTraits = .header
         return label
     }
 
@@ -244,18 +246,22 @@ class PlayerDetailViewController: UIViewController {
             itemStack.axis = .vertical
             itemStack.alignment = .center
             itemStack.spacing = 2
+            itemStack.isAccessibilityElement = true
+            itemStack.accessibilityLabel = "\(item.label), \(item.value)"
 
             let valueLabel = UILabel()
             valueLabel.text = item.value
             valueLabel.font = UIFont(name: headerFont, size: fontSize) ?? .systemFont(ofSize: fontSize, weight: .bold)
             valueLabel.textColor = pencilColor
             valueLabel.textAlignment = .center
+            valueLabel.isAccessibilityElement = false
 
             let labelLabel = UILabel()
             labelLabel.text = item.label
             labelLabel.font = UIFont(name: bodyFont, size: 16) ?? .systemFont(ofSize: 16)
             labelLabel.textColor = pencilColor.withAlphaComponent(0.7)
             labelLabel.textAlignment = .center
+            labelLabel.isAccessibilityElement = false
 
             itemStack.addArrangedSubview(valueLabel)
             itemStack.addArrangedSubview(labelLabel)

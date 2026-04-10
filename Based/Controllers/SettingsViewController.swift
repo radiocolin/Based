@@ -48,6 +48,10 @@ class SettingsViewController: UIViewController {
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
     }
+
+    private func favoriteTeamName(for id: Int) -> String {
+        teamMap[id] ?? "Team \(id)"
+    }
     
     private func setupNavigationBar() {
         let font = UIFont(name: "PermanentMarker-Regular", size: 28) ?? .systemFont(ofSize: 28, weight: .bold)
@@ -130,6 +134,9 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
             let footerCell = UITableViewCell(style: .default, reuseIdentifier: "FooterCell")
             footerCell.backgroundColor = .clear
             footerCell.selectionStyle = .none
+            footerCell.isAccessibilityElement = true
+            footerCell.accessibilityTraits = .staticText
+            footerCell.accessibilityLabel = "Made with love in Philadelphia by Colin Weir"
             
             let stack = UIStackView()
             stack.axis = .vertical
@@ -150,6 +157,7 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
             label1.text = "Made with "
             label1.font = font
             label1.textColor = color
+            label1.isAccessibilityElement = false
             
             // Re-reverting to the original SF Symbol implementation
             let heart = UIImageView(image: UIImage(named: "PhiladelphiaLove.symbols")?.withRenderingMode(.alwaysTemplate))
@@ -157,11 +165,13 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
             heart.contentMode = .scaleAspectFit
             heart.setContentHuggingPriority(.required, for: .horizontal)
             heart.setContentCompressionResistancePriority(.required, for: .horizontal)
+            heart.isAccessibilityElement = false
             
             let label2 = UILabel()
             label2.text = " in Philadelphia by Colin Weir"
             label2.font = font
             label2.textColor = color
+            label2.isAccessibilityElement = false
             
             line1.addArrangedSubview(label1)
             line1.addArrangedSubview(heart)
@@ -181,11 +191,18 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
         
         let cell = UITableViewCell(style: .value1, reuseIdentifier: "SettingsCell")
         cell.backgroundColor = .clear
-        cell.selectionStyle = .none
+        cell.selectionStyle = .default
         cell.textLabel?.font = UIFont(name: "PatrickHand-Regular", size: 18)
         cell.detailTextLabel?.font = UIFont(name: "PatrickHand-Regular", size: 16)
         cell.textLabel?.textColor = AppColors.pencil
         cell.detailTextLabel?.textColor = AppColors.pencil.withAlphaComponent(0.6)
+        cell.accessibilityHint = nil
+        cell.accessoryView = nil
+        cell.accessoryType = .none
+        cell.isAccessibilityElement = true
+        cell.accessibilityTraits = .button
+        cell.textLabel?.isAccessibilityElement = false
+        cell.detailTextLabel?.isAccessibilityElement = false
         
         let bg = PencilSectionBackgroundView()
         let rows = tableView.numberOfRows(inSection: indexPath.section)
@@ -217,8 +234,12 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
                 button.showsMenuAsPrimaryAction = true
                 button.titleLabel?.font = cell.detailTextLabel?.font
                 button.tintColor = cell.detailTextLabel?.textColor
+                button.accessibilityLabel = "Appearance"
+                button.accessibilityValue = currentTheme.displayName
+                button.accessibilityHint = "Double tap to choose the app appearance."
                 cell.accessoryView = button
                 button.sizeToFit()
+                cell.isAccessibilityElement = false
             } else {
                 cell.textLabel?.text = "Tint Color"
                 let currentTint = TintService.shared.tintColor
@@ -249,29 +270,43 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
                 button.showsMenuAsPrimaryAction = true
                 button.titleLabel?.font = cell.detailTextLabel?.font
                 button.tintColor = cell.detailTextLabel?.textColor
+                let tintName = currentTeamName ?? (currentTint == nil ? "Pencil" : "Custom")
+                button.accessibilityLabel = "Tint color"
+                button.accessibilityValue = tintName
+                button.accessibilityHint = "Double tap to choose the tint color."
                 cell.accessoryView = button
                 button.sizeToFit()
+                cell.isAccessibilityElement = false
             }
             
         case 1:
             if indexPath.row < favoriteTeamIds.count {
                 let teamId = favoriteTeamIds[indexPath.row]
-                cell.textLabel?.text = teamMap[teamId] ?? "Team \(teamId)"
+                let teamName = favoriteTeamName(for: teamId)
+                cell.textLabel?.text = teamName
                 
                 let removeBtn = UIButton(type: .system)
                 let xImg = UIImage.pencilStyledIcon(named: "xmark", color: .systemRed, size: CGSize(width: 24, height: 24))
                 removeBtn.setImage(xImg, for: .normal)
                 removeBtn.tintColor = .systemRed
+                removeBtn.accessibilityLabel = "Remove \(teamName) from favorites"
+                removeBtn.accessibilityHint = "Double tap to remove this team from favorites."
                 removeBtn.addAction(UIAction { _ in
                     FavoritesService.shared.toggleFavorite(teamId: teamId)
                 }, for: .touchUpInside)
                 removeBtn.sizeToFit()
                 cell.accessoryView = removeBtn
+                cell.accessibilityLabel = teamName
+                cell.accessibilityValue = "Favorite team"
+                cell.accessibilityHint = "Use the remove button to remove this team from favorites."
+                cell.accessibilityTraits = .staticText
             } else {
                 let button = UIButton(type: .system)
                 button.setTitle("Add favorite team...", for: .normal)
                 button.titleLabel?.font = UIFont(name: "PatrickHand-Regular", size: 18)
                 button.contentHorizontalAlignment = .left
+                button.accessibilityLabel = "Add favorite team"
+                button.accessibilityHint = "Double tap to choose a team to favorite."
                 
                 let sorted = teamMap.sorted { $0.value < $1.value }
                 var actions: [UIAction] = []
@@ -294,6 +329,7 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
                     button.topAnchor.constraint(equalTo: cell.contentView.topAnchor),
                     button.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor)
                 ])
+                cell.isAccessibilityElement = false
             }
             
         case 2:
@@ -309,6 +345,9 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
             UIGraphicsEndImageContext()
             cell.imageView?.image = scaledImage
             cell.accessoryType = .disclosureIndicator
+            cell.accessibilityLabel = "Wheelie"
+            cell.accessibilityValue = "Bike Ride Tracking"
+            cell.accessibilityHint = "Double tap to open the App Store page."
             
         default:
             break
@@ -321,21 +360,27 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
         guard section == 1 else { return nil }
         
         let container = UIView()
+        container.isAccessibilityElement = true
+        container.accessibilityTraits = .header
+        container.accessibilityLabel = "Favorite teams. Favorite teams appear first in the schedule."
         let stack = UIStackView()
         stack.axis = .vertical
         stack.spacing = 2
         stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.isAccessibilityElement = false
         container.addSubview(stack)
         
         let titleLabel = UILabel()
         titleLabel.text = "FAVORITE TEAMS"
         titleLabel.font = UIFont(name: "PermanentMarker-Regular", size: 16)
         titleLabel.textColor = AppColors.pencil.withAlphaComponent(0.7)
+        titleLabel.isAccessibilityElement = false
         
         let descLabel = UILabel()
         descLabel.text = "Favorite teams appear first in the schedule."
         descLabel.font = UIFont(name: "PatrickHand-Regular", size: 14)
         descLabel.textColor = AppColors.pencil.withAlphaComponent(0.5)
+        descLabel.isAccessibilityElement = false
         
         stack.addArrangedSubview(titleLabel)
         stack.addArrangedSubview(descLabel)

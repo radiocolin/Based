@@ -23,6 +23,7 @@ class HeroCarouselView: UIView {
         collectionView.isPagingEnabled = true
         collectionView.showsHorizontalScrollIndicator = false
         collectionView.backgroundColor = .clear
+        collectionView.isAccessibilityElement = false
         collectionView.register(TeamHeroCell.self, forCellWithReuseIdentifier: TeamHeroCell.reuseIdentifier)
         collectionView.dataSource = self
         collectionView.delegate = self

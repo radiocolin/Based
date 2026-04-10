@@ -25,16 +25,19 @@ enum GameFooterContent {
             titleLabel.text = group.title
             titleLabel.font = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
             titleLabel.textColor = AppColors.pencil
+            titleLabel.accessibilityTraits = .header
             container.addArrangedSubview(titleLabel)
 
             let headerRow = UIStackView()
             headerRow.axis = .horizontal
             headerRow.spacing = 4
+            headerRow.isAccessibilityElement = false
 
             let nameHeader = UILabel()
             nameHeader.text = "Name"
             nameHeader.font = UIFont(name: "PatrickHand-Regular", size: 12) ?? .systemFont(ofSize: 12, weight: .bold)
             nameHeader.textColor = AppColors.pencil.withAlphaComponent(0.6)
+            nameHeader.isAccessibilityElement = false
             headerRow.addArrangedSubview(nameHeader)
 
             for label in pitcherStatLabels {
@@ -43,6 +46,7 @@ enum GameFooterContent {
                 statLabel.font = UIFont(name: "PatrickHand-Regular", size: 12) ?? .systemFont(ofSize: 12, weight: .bold)
                 statLabel.textColor = AppColors.pencil.withAlphaComponent(0.6)
                 statLabel.textAlignment = .center
+                statLabel.isAccessibilityElement = false
                 statLabel.widthAnchor.constraint(equalToConstant: 30).isActive = true
                 headerRow.addArrangedSubview(statLabel)
             }
@@ -53,17 +57,19 @@ enum GameFooterContent {
                 row.axis = .horizontal
                 row.spacing = 4
                 row.backgroundColor = pitcherIndex % 2 == 1 ? AppColors.alternateRow.withAlphaComponent(0.5) : .clear
+                row.isAccessibilityElement = true
+                if let target, let action {
+                    row.isUserInteractionEnabled = true
+                    row.tag = pitcher.id
+                    let tap = UITapGestureRecognizer(target: target, action: action)
+                    row.addGestureRecognizer(tap)
+                }
 
                 let nameLabel = UILabel()
                 nameLabel.text = pitcher.fullName
                 nameLabel.font = UIFont(name: "PermanentMarker-Regular", size: 14) ?? .systemFont(ofSize: 14)
                 nameLabel.textColor = AppColors.pencil
-                if let target, let action {
-                    nameLabel.isUserInteractionEnabled = true
-                    nameLabel.tag = pitcher.id
-                    let tap = UITapGestureRecognizer(target: target, action: action)
-                    nameLabel.addGestureRecognizer(tap)
-                }
+                nameLabel.isAccessibilityElement = false
                 row.addArrangedSubview(nameLabel)
 
                 let stats = [pitcher.ip, "\(pitcher.h)", "\(pitcher.r)", "\(pitcher.er)", "\(pitcher.bb)", "\(pitcher.k)"]
@@ -73,9 +79,22 @@ enum GameFooterContent {
                     valueLabel.font = UIFont(name: "PermanentMarker-Regular", size: 14) ?? .systemFont(ofSize: 14)
                     valueLabel.textColor = AppColors.pencil
                     valueLabel.textAlignment = .center
+                    valueLabel.isAccessibilityElement = false
                     valueLabel.widthAnchor.constraint(equalToConstant: 30).isActive = true
                     row.addArrangedSubview(valueLabel)
                 }
+
+                row.accessibilityLabel = AccessibilitySupport.joined([
+                    group.title,
+                    pitcher.fullName,
+                    "Innings pitched \(pitcher.ip)",
+                    "Hits \(pitcher.h)",
+                    "Runs \(pitcher.r)",
+                    "Earned runs \(pitcher.er)",
+                    "Walks \(pitcher.bb)",
+                    "Strikeouts \(pitcher.k)"
+                ])
+                row.accessibilityTraits = action == nil ? .staticText : .button
 
                 container.addArrangedSubview(row)
             }

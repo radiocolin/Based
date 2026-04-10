@@ -31,16 +31,22 @@ class TimelineCell: UITableViewCell {
     private func setupUI() {
         backgroundColor = .clear
         selectionStyle = .none
+        isAccessibilityElement = true
+        accessibilityTraits = .button
         pitchTrackView.displayStyle = .compact
+        pitchTrackView.isAccessibilityElement = false
+        diamondView.isAccessibilityElement = false
         
         leftContainer.axis = .vertical
         leftContainer.spacing = 12
         leftContainer.alignment = .center
         leftContainer.translatesAutoresizingMaskIntoConstraints = false
+        leftContainer.isAccessibilityElement = false
         contentView.addSubview(leftContainer)
         
         pitchTrackView.translatesAutoresizingMaskIntoConstraints = false
         diamondContainer.translatesAutoresizingMaskIntoConstraints = false
+        diamondContainer.isAccessibilityElement = false
         diamondView.translatesAutoresizingMaskIntoConstraints = false
         
         leftContainer.addArrangedSubview(pitchTrackView)
@@ -67,12 +73,14 @@ class TimelineCell: UITableViewCell {
         
         [resultLabel, ballsLabel, strikesLabel, outsLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
+            $0.isAccessibilityElement = false
             diamondContainer.addSubview($0)
         }
         
         infoStack.axis = .vertical
         infoStack.spacing = 2
         infoStack.translatesAutoresizingMaskIntoConstraints = false
+        infoStack.isAccessibilityElement = false
         contentView.addSubview(infoStack)
         
         batterLabel.font = UIFont(name: "PermanentMarker-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
@@ -84,6 +92,7 @@ class TimelineCell: UITableViewCell {
         descriptionLabel.font = UIFont(name: "PatrickHand-Regular", size: 15) ?? .systemFont(ofSize: 15)
         descriptionLabel.textColor = AppColors.pencil
         descriptionLabel.numberOfLines = 0
+        [batterLabel, pitcherLabel, descriptionLabel].forEach { $0.isAccessibilityElement = false }
         
         infoStack.addArrangedSubview(batterLabel)
         infoStack.addArrangedSubview(pitcherLabel)
@@ -156,5 +165,7 @@ class TimelineCell: UITableViewCell {
         pitcherLabel.text = "vs \(event.pitcherName)"
         
         descriptionLabel.text = event.description
+        accessibilityLabel = AccessibilitySupport.eventDescription(event, includeMatchup: true)
+        accessibilityHint = "Double tap for at-bat details."
     }
 }

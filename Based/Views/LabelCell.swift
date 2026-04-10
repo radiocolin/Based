@@ -16,8 +16,11 @@ class LabelCell: UICollectionViewCell {
     
     override init(frame: CGRect) {
         super.init(frame: frame)
+        isAccessibilityElement = true
+        accessibilityTraits = .staticText
         contentView.addSubview(label)
         label.translatesAutoresizingMaskIntoConstraints = false
+        label.isAccessibilityElement = false
         
         let leading = label.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 6)
         let trailing = label.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -6)
@@ -48,6 +51,9 @@ class LabelCell: UICollectionViewCell {
         label.font = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16)
         label.textColor = AppColors.pencil
         label.textAlignment = .center
+        accessibilityLabel = nil
+        accessibilityHint = nil
+        accessibilityTraits = .staticText
     }
 
     override func layoutSubviews() {

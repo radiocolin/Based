@@ -64,10 +64,13 @@ class GameHeaderView: UIView {
 
     private func setupUI() {
         backgroundColor = .clear
+        isAccessibilityElement = true
+        accessibilityTraits = .staticText
 
         containerView.translatesAutoresizingMaskIntoConstraints = false
         containerView.backgroundColor = paperColor
         containerView.layer.cornerRadius = 8
+        containerView.isAccessibilityElement = false
         addSubview(containerView)
 
         let headerBackground = UIView()
@@ -86,15 +89,18 @@ class GameHeaderView: UIView {
         venueWeatherLabel.textColor = pencilColor.withAlphaComponent(0.6)
         venueWeatherLabel.textAlignment = .center
         venueWeatherLabel.translatesAutoresizingMaskIntoConstraints = false
+        venueWeatherLabel.isAccessibilityElement = false
         addSubview(venueWeatherLabel)
 
         inningsScrollView.translatesAutoresizingMaskIntoConstraints = false
         inningsScrollView.showsHorizontalScrollIndicator = false
         inningsScrollView.alwaysBounceHorizontal = false
         inningsScrollView.delegate = self
+        inningsScrollView.isAccessibilityElement = false
         containerView.addSubview(inningsScrollView)
 
         inningsContentView.translatesAutoresizingMaskIntoConstraints = false
+        inningsContentView.isAccessibilityElement = false
         inningsScrollView.addSubview(inningsContentView)
 
         [rHeader, hHeader, eHeader, awayR, awayH, awayE, homeR, homeH, homeE].forEach {
@@ -102,6 +108,7 @@ class GameHeaderView: UIView {
             $0.translatesAutoresizingMaskIntoConstraints = false
             $0.textColor = pencilColor
             $0.textAlignment = .center
+            $0.isAccessibilityElement = false
         }
 
         [awayName, homeName].forEach {
@@ -109,6 +116,7 @@ class GameHeaderView: UIView {
             $0.translatesAutoresizingMaskIntoConstraints = false
             $0.textColor = pencilColor
             $0.textAlignment = .left
+            $0.isAccessibilityElement = false
         }
 
         rHeader.text = "R"
@@ -237,6 +245,9 @@ class GameHeaderView: UIView {
             let header = createLabel(text: "\(inning)", font: headerFont, size: 16)
             let away = createLabel(text: "", font: bodyFont, size: 18)
             let home = createLabel(text: "", font: bodyFont, size: 18)
+            header.isAccessibilityElement = false
+            away.isAccessibilityElement = false
+            home.isAccessibilityElement = false
 
             inningHeaders.append(header)
             awayInningLabels.append(away)
@@ -464,6 +475,12 @@ class GameHeaderView: UIView {
             }
         }
         venueWeatherLabel.text = venueWeatherParts.joined(separator: " | ")
+        accessibilityLabel = AccessibilitySupport.joined([
+            "Scoreboard",
+            "\(awayActual), \(awayR.text ?? "-") runs, \(awayH.text ?? "-") hits, \(awayE.text ?? "-") errors",
+            "\(homeActual), \(homeR.text ?? "-") runs, \(homeH.text ?? "-") hits, \(homeE.text ?? "-") errors",
+            venueWeatherLabel.text
+        ])
 
         setNeedsLayout()
         layoutIfNeeded()

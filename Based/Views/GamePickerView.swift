@@ -63,17 +63,22 @@ class GamePickerView: UIView {
         prevButton.setImage(prevImg, for: .normal)
         prevButton.setTitle(nil, for: .normal)
         prevButton.tintColor = pencilColor
+        prevButton.accessibilityLabel = "Previous date"
+        prevButton.accessibilityHint = "Double tap to show the previous date."
         prevButton.addTarget(self, action: #selector(prevDate), for: .touchUpInside)
 
         let nextImg = UIImage.pencilStyledIcon(named: "arrow.right", color: pencilColor, size: iconSize)
         nextButton.setImage(nextImg, for: .normal)
         nextButton.setTitle(nil, for: .normal)
         nextButton.tintColor = pencilColor
+        nextButton.accessibilityLabel = "Next date"
+        nextButton.accessibilityHint = "Double tap to show the next date."
         nextButton.addTarget(self, action: #selector(nextDate), for: .touchUpInside)
 
         dateLabel.font = UIFont(name: headerFont, size: 18) ?? .boldSystemFont(ofSize: 18)
         dateLabel.textColor = pencilColor
         dateLabel.textAlignment = .center
+        dateLabel.isAccessibilityElement = true
 
         // Collection View
         let layout = UICollectionViewFlowLayout()
@@ -86,6 +91,7 @@ class GamePickerView: UIView {
         collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
         collectionView.backgroundColor = .clear
         collectionView.showsHorizontalScrollIndicator = false
+        collectionView.isAccessibilityElement = false
         collectionView.dataSource = self
         collectionView.delegate = self
         collectionView.register(GameCardCell.self, forCellWithReuseIdentifier: GameCardCell.reuseIdentifier)
@@ -96,6 +102,7 @@ class GamePickerView: UIView {
         noGamesLabel.textColor = pencilColor.withAlphaComponent(0.5)
         noGamesLabel.textAlignment = .center
         noGamesLabel.isHidden = true
+        noGamesLabel.accessibilityLabel = "No games scheduled"
 
         // Add subviews
         for v in [prevButton, dateLabel, nextButton, collectionView!, noGamesLabel] {
@@ -158,10 +165,12 @@ class GamePickerView: UIView {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEE, MMM d"
         dateLabel.text = formatter.string(from: date)
+        dateLabel.accessibilityLabel = "Date, \(formatter.string(from: date))"
 
         // Disable next if today or future
         nextButton.isEnabled = !Calendar.current.isDateInToday(date)
         nextButton.alpha = nextButton.isEnabled ? 1.0 : 0.3
+        nextButton.accessibilityHint = nextButton.isEnabled ? "Double tap to show the next date." : "No later dates are available."
     }
 
     // MARK: - Actions
@@ -249,12 +258,16 @@ class GameCardCell: UICollectionViewCell {
 
     override func prepareForReuse() {
         super.prepareForReuse()
+        accessibilityLabel = nil
+        accessibilityHint = nil
     }
 
     private func setupUI() {
         contentView.backgroundColor = paperColor
         contentView.layer.cornerRadius = 8
         contentView.layer.addSublayer(linesLayer)
+        isAccessibilityElement = true
+        accessibilityTraits = .button
 
         awayLabel.font = UIFont(name: headerFont, size: 18) ?? .boldSystemFont(ofSize: 18)
         homeLabel.font = UIFont(name: headerFont, size: 18) ?? .boldSystemFont(ofSize: 18)
@@ -283,6 +296,7 @@ class GameCardCell: UICollectionViewCell {
         for v in [awayLabel, homeLabel, awayScoreLabel, homeScoreLabel, atLabel, statusLabel, venueLabel] {
             contentView.addSubview(v)
             v.translatesAutoresizingMaskIntoConstraints = false
+            v.isAccessibilityElement = false
         }
 
         let pad: CGFloat = 10
@@ -367,6 +381,8 @@ class GameCardCell: UICollectionViewCell {
         contentView.backgroundColor = isSelected ? selectedColor : paperColor
         contentView.layer.borderWidth = isSelected ? 1.5 : 0
         contentView.layer.borderColor = isSelected ? pc.withAlphaComponent(0.4).cgColor : UIColor.clear.cgColor
+        accessibilityLabel = AccessibilitySupport.gameCardDescription(game)
+        accessibilityHint = isSelected ? "Currently selected game." : "Double tap to open or select this game."
 
         setNeedsLayout()
     }

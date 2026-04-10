@@ -136,6 +136,7 @@ class TimelineView: UIView {
     
     private func buildLiveHeader() {
         let container = UIView()
+        container.isAccessibilityElement = false
         
         // "CURRENT AT BAT" label
         let titleLabel = UILabel()
@@ -143,6 +144,7 @@ class TimelineView: UIView {
         titleLabel.font = UIFont(name: "PermanentMarker-Regular", size: 14) ?? .systemFont(ofSize: 14, weight: .bold)
         titleLabel.textColor = AppColors.pencil.withAlphaComponent(0.8)
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        titleLabel.isAccessibilityElement = false
         container.addSubview(titleLabel)
         
         // Background band for the title
@@ -263,6 +265,7 @@ class TimelineView: UIView {
             let umpireLabel = UILabel()
             umpireLabel.numberOfLines = 0
             umpireLabel.attributedText = umpireText
+            umpireLabel.accessibilityLabel = umpireText.string.replacingOccurrences(of: "\n", with: ", ")
             infoRow.addArrangedSubview(umpireLabel)
         }
         
@@ -270,6 +273,7 @@ class TimelineView: UIView {
             let gameInfoView = UILabel()
             gameInfoView.numberOfLines = 0
             gameInfoView.attributedText = gameInfoText
+            gameInfoView.accessibilityLabel = gameInfoText.string.replacingOccurrences(of: "\n", with: ", ")
             let widthConstraint = gameInfoView.widthAnchor.constraint(equalToConstant: 200)
             widthConstraint.priority = .defaultHigh // Allow it to shrink on small screens
             widthConstraint.isActive = true
@@ -328,12 +332,16 @@ extension TimelineView: UITableViewDelegate, UITableViewDataSource {
     func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
         let container = UIView()
         container.backgroundColor = AppColors.header.withAlphaComponent(0.95)
+        container.isAccessibilityElement = true
+        container.accessibilityTraits = .header
+        container.accessibilityLabel = groups[section].title
         
         let label = UILabel()
         label.text = groups[section].title
         label.font = UIFont(name: "PermanentMarker-Regular", size: 14) ?? .systemFont(ofSize: 14, weight: .bold)
         label.textColor = AppColors.pencil.withAlphaComponent(0.8)
         label.translatesAutoresizingMaskIntoConstraints = false
+        label.isAccessibilityElement = false
         container.addSubview(label)
         
         let line = UIView()

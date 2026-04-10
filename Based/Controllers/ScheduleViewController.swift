@@ -75,12 +75,15 @@ class ScheduleViewController: UIViewController {
         prevButton.setImage(prevImg, for: .normal)
         prevButton.setTitle(nil, for: .normal)
         prevButton.tintColor = pencilColor
+        prevButton.accessibilityLabel = "Previous day"
         prevButton.addTarget(self, action: #selector(prevDate), for: .touchUpInside)
         
         let nextImg = UIImage.pencilStyledIcon(named: "arrow.right", color: pencilColor, size: arrowSize)
         nextButton.setImage(nextImg, for: .normal)
         nextButton.setTitle(nil, for: .normal)
         nextButton.tintColor = pencilColor
+        nextButton.accessibilityLabel = "Next day"
+        nextButton.accessibilityHint = "Double tap and hold to jump to today."
         nextButton.addTarget(self, action: #selector(nextDate), for: .touchUpInside)
         
         let longPress = UILongPressGestureRecognizer(target: self, action: #selector(jumpToToday(_:)))
@@ -90,6 +93,8 @@ class ScheduleViewController: UIViewController {
         dateLabel.textColor = pencilColor
         dateLabel.textAlignment = .center
         dateLabel.isUserInteractionEnabled = true
+        dateLabel.accessibilityTraits = [.staticText, .button]
+        dateLabel.accessibilityHint = "Double tap to choose a date."
         let tap = UITapGestureRecognizer(target: self, action: #selector(showDatePicker))
         dateLabel.addGestureRecognizer(tap)
         
@@ -285,11 +290,13 @@ class ScheduleViewController: UIViewController {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE, MMMM d"
         dateLabel.text = formatter.string(from: currentDate)
+        dateLabel.accessibilityLabel = "Schedule for \(formatter.string(from: currentDate))"
         
         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
         let isTomorrow = Calendar.current.isDate(currentDate, inSameDayAs: tomorrow)
         nextButton.isEnabled = !isTomorrow
         nextButton.alpha = nextButton.isEnabled ? 1.0 : 0.3
+        nextButton.accessibilityHint = isTomorrow ? "No later games are available." : "Double tap and hold to jump to today."
     }
 
     private enum ScheduleStatusPriority: Int {

@@ -70,7 +70,11 @@ class CurrentStateView: UIView {
     
     private func setupUI() {
         backgroundColor = paperColor
+        isAccessibilityElement = true
+        accessibilityTraits = .button
         pitchTrackView.displayStyle = .compact
+        diamondView.isAccessibilityElement = false
+        pitchTrackView.isAccessibilityElement = false
         
         addSubview(contentContainer)
         contentContainer.translatesAutoresizingMaskIntoConstraints = false
@@ -123,10 +127,12 @@ class CurrentStateView: UIView {
         // Add Subviews
         [diamondView, pitchTrackView, inningContainer, countLabel, batterLabel, pitcherLabel, pitchCountLabel, teamStatusLabel, weatherLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
+            $0.isAccessibilityElement = false
             contentContainer.addSubview($0)
         }
 
         inningLabel.translatesAutoresizingMaskIntoConstraints = false
+        inningLabel.isAccessibilityElement = false
         inningContainer.addSubview(inningLabel)
         
         // --- Constraints ---
@@ -314,6 +320,34 @@ class CurrentStateView: UIView {
             weatherLabel.text = weatherParts.isEmpty ? "" : weatherParts.joined(separator: " • ")
         }
         
+        let visibleBases = BasesReached(
+            first: isBreak ? false : (linescore.offense?.first != nil),
+            second: isBreak ? false : (linescore.offense?.second != nil),
+            third: isBreak ? false : (linescore.offense?.third != nil),
+            home: false,
+            lineToFirst: nil,
+            lineToSecond: nil,
+            lineToThird: nil,
+            lineToHome: nil,
+            outAtFirst: nil,
+            outAtSecond: nil,
+            outAtThird: nil,
+            outAtHome: nil,
+            annotations: nil
+        )
+        accessibilityLabel = AccessibilitySupport.joined([
+            inningLabel.text,
+            batterLabel.text,
+            pitcherLabel.text,
+            countLabel.text.map { "Count \($0)" },
+            pitchCountLabel.text,
+            teamStatusLabel.text,
+            weatherLabel.text,
+            AccessibilitySupport.basesDescription(visibleBases)
+        ])
+        accessibilityTraits = hasActiveAtBat ? .button : .staticText
+        accessibilityHint = hasActiveAtBat ? "Double tap for at-bat details." : nil
+
         let bases = BasesReached(
             first: isBreak ? false : (linescore.offense?.first != nil),
             second: isBreak ? false : (linescore.offense?.second != nil),

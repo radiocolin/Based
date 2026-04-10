@@ -187,16 +187,19 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         
         backBtn.configuration = config
         backBtn.tintColor = pencilColor
+        backBtn.accessibilityLabel = "Back"
         backBtn.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
         navigationItem.leftBarButtonItem = UIBarButtonItem(customView: backBtn)
         
         let iconSize = CGSize(width: 32, height: 32)
         let shareImg = UIImage.pencilStyledIcon(named: "square.and.arrow.up", color: pencilColor, size: iconSize, offset: CGPoint(x: -0.5, y: 0), scaleMultiplier: 0.9)
         let shareItem = UIBarButtonItem(image: shareImg, style: .plain, target: self, action: #selector(shareScorecard))
+        shareItem.accessibilityLabel = "Share scorecard"
         
         let timelineSymbol = isTimelineMode ? "square.grid.3x2" : "calendar.day.timeline.left"
         let timelineImg = UIImage.pencilStyledIcon(named: timelineSymbol, color: pencilColor, size: iconSize, offset: CGPoint(x: 1.5, y: 1.0))
         let timelineItem = UIBarButtonItem(image: timelineImg, style: .plain, target: self, action: #selector(toggleTimelineMode))
+        timelineItem.accessibilityLabel = isTimelineMode ? "Show scorecard" : "Show timeline"
         
         navigationItem.rightBarButtonItems = [shareItem, timelineItem]
         
@@ -377,6 +380,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         
         advisoryCloseBtn.setTitle("✕", for: .normal)
         advisoryCloseBtn.tintColor = .red
+        advisoryCloseBtn.accessibilityLabel = "Dismiss advisory"
         advisoryCloseBtn.addTarget(self, action: #selector(closeAdvisory), for: .touchUpInside)
         advisoryCloseBtn.translatesAutoresizingMaskIntoConstraints = false
         advisoryBanner.addSubview(advisoryCloseBtn)
@@ -389,6 +393,10 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         timelineView.isHidden = true
         timelineView.alpha = 0
         timelineView.delegate = self
+        stickyHeaderContainer.isAccessibilityElement = false
+        topLeftLabel.isAccessibilityElement = false
+        horizontalScrollView.isAccessibilityElement = false
+        rightHeaderStack.isAccessibilityElement = false
         
         // Sticky Header Setup
         stickyHeaderContainer.backgroundColor = AppColors.paper
@@ -456,6 +464,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         let font = UIFont(name: "PatrickHand-Regular", size: 18) ?? .systemFont(ofSize: 18)
         
         teamSegmentedControl.selectedSegmentIndex = 0
+        teamSegmentedControl.accessibilityLabel = "Batting team"
+        teamSegmentedControl.accessibilityHint = "Choose the away or home scorecard."
         teamSegmentedControl.addTarget(self, action: #selector(teamChanged), for: .valueChanged)
         let segTap = UITapGestureRecognizer(target: self, action: #selector(segmentTapped))
         segTap.cancelsTouchesInView = false
@@ -598,6 +608,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             label.font = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
             label.textColor = AppColors.pencil
             label.backgroundColor = AppColors.header
+            label.isAccessibilityElement = false
             label.layer.borderWidth = 0.5
             label.layer.borderColor = AppColors.grid.cgColor
             
@@ -616,6 +627,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             label.font = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
             label.textColor = AppColors.pencil
             label.backgroundColor = AppColors.header
+            label.isAccessibilityElement = false
             label.layer.borderWidth = 0.5
             label.layer.borderColor = AppColors.grid.cgColor
             
@@ -788,6 +800,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             self.segmentedOverlay.setNeedsLayout()
             self.segmentedOverlay.layoutIfNeeded()
         }
+        teamSegmentedControl.accessibilityValue = teamSegmentedControl.selectedSegmentIndex == 0 ? awayName : homeName
     }
     
     @objc private func closeAdvisory() {
