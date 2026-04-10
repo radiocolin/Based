@@ -191,42 +191,30 @@ class ScheduleViewController: UIViewController {
     }
 
     private func setupNavigationBar() {        title = "Based"
-        
-        let font = AppFont.permanent(28, textStyle: .largeTitle, compatibleWith: traitCollection)
+
+        let titleFont = BarAppearanceSupport.titleFont(for: traitCollection)
+        let buttonFont = BarAppearanceSupport.buttonFont(for: traitCollection)
         let appearance = UINavigationBarAppearance()
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = AppColors.paper
-        appearance.titleTextAttributes = [.font: font, .foregroundColor: pencilColor]
+        appearance.titleTextAttributes = [.font: titleFont, .foregroundColor: pencilColor]
+        appearance.largeTitleTextAttributes = [.font: titleFont, .foregroundColor: pencilColor]
         appearance.shadowColor = .clear
-        configurePlainBarButtonAppearance(appearance.buttonAppearance, color: pencilColor)
-        configurePlainBarButtonAppearance(appearance.backButtonAppearance, color: pencilColor)
+        configurePlainBarButtonAppearance(appearance.buttonAppearance, font: buttonFont, color: pencilColor)
+        configurePlainBarButtonAppearance(appearance.backButtonAppearance, font: buttonFont, color: pencilColor)
         
         if let navigationBar = navigationController?.navigationBar {
             navigationBar.standardAppearance = appearance
             navigationBar.scrollEdgeAppearance = appearance
             navigationBar.compactAppearance = appearance
             navigationBar.tintColor = pencilColor
+            navigationBar.setNeedsLayout()
+            navigationBar.layoutIfNeeded()
         }
     }
 
-    private func configurePlainBarButtonAppearance(_ appearance: UIBarButtonItemAppearance, color: UIColor) {
-        let normalState = appearance.normal
-        normalState.backgroundImage = UIImage()
-
-        let highlightedState = appearance.highlighted
-        highlightedState.backgroundImage = UIImage()
-
-        let focusedState = appearance.focused
-        focusedState.backgroundImage = UIImage()
-
-        let disabledState = appearance.disabled
-        disabledState.backgroundImage = UIImage()
-
-        let attributes: [NSAttributedString.Key: Any] = [.foregroundColor: color]
-        appearance.normal.titleTextAttributes = attributes
-        appearance.highlighted.titleTextAttributes = attributes
-        appearance.focused.titleTextAttributes = attributes
-        appearance.disabled.titleTextAttributes = attributes
+    private func configurePlainBarButtonAppearance(_ appearance: UIBarButtonItemAppearance, font: UIFont, color: UIColor) {
+        BarAppearanceSupport.applyPlainBarButtonAppearance(appearance, font: font, color: color)
     }
     
     private func setupDatePickerOverlay() {

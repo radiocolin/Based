@@ -62,16 +62,23 @@ class SettingsViewController: UIViewController {
     }
     
     private func setupNavigationBar() {
-        let font = AppFont.permanent(28, textStyle: .largeTitle, compatibleWith: traitCollection)
+        let titleFont = BarAppearanceSupport.titleFont(for: traitCollection)
+        let buttonFont = BarAppearanceSupport.buttonFont(for: traitCollection)
         let appearance = UINavigationBarAppearance()
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = AppColors.paper
-        appearance.titleTextAttributes = [.font: font, .foregroundColor: AppColors.pencil]
+        appearance.titleTextAttributes = [.font: titleFont, .foregroundColor: AppColors.pencil]
+        appearance.largeTitleTextAttributes = [.font: titleFont, .foregroundColor: AppColors.pencil]
         appearance.shadowColor = .clear
+        BarAppearanceSupport.applyPlainBarButtonAppearance(appearance.buttonAppearance, font: buttonFont, color: AppColors.pencil)
+        BarAppearanceSupport.applyPlainBarButtonAppearance(appearance.backButtonAppearance, font: buttonFont, color: AppColors.pencil)
         
         navigationController?.navigationBar.standardAppearance = appearance
         navigationController?.navigationBar.scrollEdgeAppearance = appearance
+        navigationController?.navigationBar.compactAppearance = appearance
         navigationController?.navigationBar.tintColor = AppColors.pencil
+        navigationController?.navigationBar.setNeedsLayout()
+        navigationController?.navigationBar.layoutIfNeeded()
     }
     
     private func loadData() {

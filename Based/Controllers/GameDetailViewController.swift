@@ -127,6 +127,13 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
                 self.scorecardView.configure(with: scorecard)
             }
         }
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: GameDetailViewController, _) in
+            self.setupNavigationBar()
+            self.updateStickyHeaders()
+            self.timelineView.reloadInputViews()
+            self.view.setNeedsLayout()
+            self.view.layoutIfNeeded()
+        }
         
         // Apply saved view mode without animation
         if isTimelineMode {
@@ -164,14 +171,14 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private func setupNavigationBar() {
         navigationItem.hidesBackButton = true
         
-        let font = UIFont(name: "PermanentMarker-Regular", size: 18) ?? .systemFont(ofSize: 18)
+        let titleFont = BarAppearanceSupport.titleFont(for: traitCollection)
+        let buttonFont = BarAppearanceSupport.buttonFont(for: traitCollection)
         let pencilColor = AppColors.pencil
 
         // Custom Back Button with wobbly chevron
         let backBtn = UIButton(type: .system)
-        let chevronImg = UIImage.pencilStyledIcon(named: "chevron.backward", color: pencilColor, size: CGSize(width: 20, height: 20))
-        
-        let backFont = UIFont(name: "PatrickHand-Regular", size: 20) ?? .systemFont(ofSize: 20)
+        let chevronSize = BarAppearanceSupport.iconSize(for: traitCollection, base: 18, maximum: 20)
+        let chevronImg = UIImage.pencilStyledIcon(named: "chevron.backward", color: pencilColor, size: chevronSize)
         
         var config = UIButton.Configuration.plain()
         config.image = chevronImg
@@ -181,7 +188,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         
         config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
             var outgoing = incoming
-            outgoing.font = backFont
+            outgoing.font = buttonFont
             return outgoing
         }
         
@@ -191,7 +198,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         backBtn.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
         navigationItem.leftBarButtonItem = UIBarButtonItem(customView: backBtn)
         
-        let iconSize = CGSize(width: 32, height: 32)
+        let iconSize = BarAppearanceSupport.iconSize(for: traitCollection, base: 24, maximum: 26)
         let shareImg = UIImage.pencilStyledIcon(named: "square.and.arrow.up", color: pencilColor, size: iconSize, offset: CGPoint(x: -0.5, y: 0), scaleMultiplier: 0.9)
         let shareItem = UIBarButtonItem(image: shareImg, style: .plain, target: self, action: #selector(shareScorecard))
         shareItem.accessibilityLabel = "Share scorecard"
@@ -207,12 +214,16 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = AppColors.paper
         appearance.shadowColor = .clear
-        configurePlainBarButtonAppearance(appearance.buttonAppearance, font: font, color: pencilColor)
-        configurePlainBarButtonAppearance(appearance.backButtonAppearance, font: font, color: pencilColor)
+        appearance.titleTextAttributes = [.font: titleFont, .foregroundColor: pencilColor]
+        appearance.largeTitleTextAttributes = [.font: titleFont, .foregroundColor: pencilColor]
+        configurePlainBarButtonAppearance(appearance.buttonAppearance, font: buttonFont, color: pencilColor)
+        configurePlainBarButtonAppearance(appearance.backButtonAppearance, font: buttonFont, color: pencilColor)
         navigationController?.navigationBar.standardAppearance = appearance
         navigationController?.navigationBar.scrollEdgeAppearance = appearance
         navigationController?.navigationBar.compactAppearance = appearance
         navigationController?.navigationBar.tintColor = pencilColor
+        navigationController?.navigationBar.setNeedsLayout()
+        navigationController?.navigationBar.layoutIfNeeded()
     }
     
     @objc private func backTapped() {
@@ -312,28 +323,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     private func configurePlainBarButtonAppearance(_ appearance: UIBarButtonItemAppearance, font: UIFont, color: UIColor) {
-        let normalAttributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
-        let highlightedAttributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color.withAlphaComponent(0.5)]
-        let normalState = appearance.normal
-        normalState.backgroundImage = UIImage()
-        normalState.titlePositionAdjustment = .zero
-
-        let highlightedState = appearance.highlighted
-        highlightedState.backgroundImage = UIImage()
-        highlightedState.titlePositionAdjustment = .zero
-
-        let focusedState = appearance.focused
-        focusedState.backgroundImage = UIImage()
-        focusedState.titlePositionAdjustment = .zero
-
-        let disabledState = appearance.disabled
-        disabledState.backgroundImage = UIImage()
-        disabledState.titlePositionAdjustment = .zero
-
-        appearance.normal.titleTextAttributes = normalAttributes
-        appearance.highlighted.titleTextAttributes = highlightedAttributes
-        appearance.focused.titleTextAttributes = normalAttributes
-        appearance.disabled.titleTextAttributes = normalAttributes
+        BarAppearanceSupport.applyPlainBarButtonAppearance(appearance, font: font, color: color)
     }
     
     // MARK: - GameUpdateDelegate
