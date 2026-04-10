@@ -625,13 +625,13 @@ private extension ScheduleViewController {
         switch direction {
         case .left:
             let previousDate = currentDate
-            prevDate()
+            nextDate()
             guard !Calendar.current.isDate(previousDate, inSameDayAs: currentDate) else { return false }
             UIAccessibility.post(notification: .pageScrolled, argument: dateLabel.accessibilityLabel)
             return true
         case .right:
             let previousDate = currentDate
-            nextDate()
+            prevDate()
             guard !Calendar.current.isDate(previousDate, inSameDayAs: currentDate) else { return false }
             UIAccessibility.post(notification: .pageScrolled, argument: dateLabel.accessibilityLabel)
             return true

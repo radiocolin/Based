@@ -1,6 +1,29 @@
 import UIKit
 
 enum AccessibilitySupport {
+    private static let accessibilityGameDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter
+    }()
+
+    private static func gameDate(from isoDate: String) -> Date? {
+        let fractionalFormatter = ISO8601DateFormatter()
+        fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractionalFormatter.date(from: isoDate) {
+            return date
+        }
+
+        let formatter = ISO8601DateFormatter()
+        return formatter.date(from: isoDate)
+    }
+
+    static func spokenGameTime(_ isoDate: String) -> String? {
+        guard let date = gameDate(from: isoDate) else { return nil }
+        return accessibilityGameDateFormatter.string(from: date)
+    }
+
     static func joined(_ parts: [String?]) -> String {
         parts
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -178,7 +201,9 @@ enum AccessibilitySupport {
         if shouldSpeakScore {
             let awayScore = game.teams.away.score.map(String.init) ?? "0"
             let homeScore = game.teams.home.score.map(String.init) ?? "0"
-            parts.append("Score \(awayScore) to \(homeScore)")
+            parts.append("Score, \(awayName) \(awayScore), \(homeName) \(homeScore)")
+        } else if let spokenTime = spokenGameTime(game.gameDate) {
+            parts.append("First pitch \(spokenTime)")
         }
 
         parts.append(status)
