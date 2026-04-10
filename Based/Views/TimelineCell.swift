@@ -131,7 +131,7 @@ class TimelineCell: UITableViewCell {
             topRow.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12),
             topRow.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -12),
             
-            pitchTrackView.widthAnchor.constraint(equalToConstant: 78),
+            pitchTrackView.widthAnchor.constraint(equalTo: diamondContainer.widthAnchor),
             pitchTrackView.heightAnchor.constraint(equalToConstant: 92),
             
             diamondContainer.widthAnchor.constraint(equalToConstant: 88),
