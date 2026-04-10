@@ -476,7 +476,7 @@ class PitchCell: UITableViewCell {
 
             subtitleLabel.leadingAnchor.constraint(equalTo: descLabel.leadingAnchor),
             subtitleLabel.topAnchor.constraint(equalTo: descLabel.bottomAnchor, constant: 2),
-            subtitleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: 0),
+            subtitleLabel.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: 0),
             subtitleLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8)
         ]
 
