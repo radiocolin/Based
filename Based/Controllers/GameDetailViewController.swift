@@ -1098,7 +1098,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
     private func configurePlayerDetailSheet(_ vc: UIViewController) {
         if let sheet = vc.sheetPresentationController {
-            sheet.detents = [.medium()]
+            sheet.detents = [.medium(), .large()]
             sheet.prefersGrabberVisible = true
         }
     }

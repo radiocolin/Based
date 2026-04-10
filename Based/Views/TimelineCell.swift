@@ -186,7 +186,7 @@ class TimelineCell: UITableViewCell {
         outsLabel.textColor = presentation.primaryColor
         
         batterLabel.text = event.batterName
-        pitcherLabel.text = "vs \(event.pitcherName)"
+        pitcherLabel.text = "vs. \(event.pitcherName)"
         
         descriptionLabel.text = event.description
         accessibilityLabel = AccessibilitySupport.eventDescription(event, includeMatchup: true)

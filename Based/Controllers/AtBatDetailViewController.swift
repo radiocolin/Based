@@ -425,7 +425,8 @@ class PitchCell: UITableViewCell {
         typeLabel.font = AppFont.permanent(18, textStyle: .body)
         typeLabel.textColor = AppColors.pencil
         typeLabel.textAlignment = .right
-        typeLabel.numberOfLines = 0
+        typeLabel.numberOfLines = 2
+        typeLabel.lineBreakMode = .byWordWrapping
         typeLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         typeLabel.setContentHuggingPriority(.required, for: .horizontal)
 
@@ -445,7 +446,7 @@ class PitchCell: UITableViewCell {
             speedLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             typeLabel.trailingAnchor.constraint(equalTo: speedLabel.trailingAnchor),
             typeLabel.topAnchor.constraint(equalTo: descLabel.topAnchor),
-            typeLabel.widthAnchor.constraint(equalToConstant: 96),
+            typeLabel.widthAnchor.constraint(equalToConstant: 116),
 
             speedLabel.trailingAnchor.constraint(equalTo: typeLabel.trailingAnchor),
             speedLabel.topAnchor.constraint(equalTo: typeLabel.bottomAnchor, constant: 2),

@@ -27,6 +27,7 @@ class PlayerDetailViewController: UIViewController {
     private let seasonStatsLinesLayer = CAShapeLayer()
     private weak var gameStatsContentView: UIView?
     private weak var seasonStatsContentView: UIView?
+    private var seasonStatsHeightConstraint: NSLayoutConstraint?
 
     private let paperColor = AppColors.paper
     private var pencilColor: UIColor { AppColors.pencil }
@@ -67,9 +68,10 @@ class PlayerDetailViewController: UIViewController {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        gameStatsContainer.layoutIfNeeded()
+        seasonStatsContainer.layoutIfNeeded()
         drawPencilLines()
     }
-
 
 
     private var playerID: Int {
@@ -185,10 +187,11 @@ class PlayerDetailViewController: UIViewController {
         loadingIndicator.startAnimating()
         seasonStatsContainer.addSubview(loadingIndicator)
 
+        seasonStatsHeightConstraint = seasonStatsContainer.heightAnchor.constraint(equalToConstant: 80)
         NSLayoutConstraint.activate([
             loadingIndicator.centerXAnchor.constraint(equalTo: seasonStatsContainer.centerXAnchor),
             loadingIndicator.centerYAnchor.constraint(equalTo: seasonStatsContainer.centerYAnchor),
-            seasonStatsContainer.heightAnchor.constraint(equalToConstant: 80)
+            seasonStatsHeightConstraint!
         ])
     }
 
@@ -225,11 +228,8 @@ class PlayerDetailViewController: UIViewController {
         seasonTitleText = title
         seasonTitleLabel.text = title
 
-        seasonStatsContainer.constraints.forEach { constraint in
-            if constraint.firstAttribute == .height {
-                seasonStatsContainer.removeConstraint(constraint)
-            }
-        }
+        seasonStatsHeightConstraint?.isActive = false
+        seasonStatsHeightConstraint = nil
 
         let stackView = createStatsRow(items: items, fontSize: 28, preferredColumns: columns)
         seasonStatsContainer.addSubview(stackView)
@@ -291,11 +291,8 @@ class PlayerDetailViewController: UIViewController {
 
         let itemStack = UIStackView()
         itemStack.axis = .vertical
-        itemStack.alignment = .fill
-        itemStack.distribution = .fill
+        itemStack.alignment = .center
         itemStack.spacing = 2
-        itemStack.layoutMargins = UIEdgeInsets(top: 8, left: 6, bottom: 8, right: 6)
-        itemStack.isLayoutMarginsRelativeArrangement = true
         itemStack.translatesAutoresizingMaskIntoConstraints = false
 
         let valueLabel = UILabel()
@@ -305,9 +302,6 @@ class PlayerDetailViewController: UIViewController {
         valueLabel.textAlignment = .center
         valueLabel.isAccessibilityElement = false
         valueLabel.adjustsFontForContentSizeCategory = true
-        valueLabel.numberOfLines = 0
-        valueLabel.setContentCompressionResistancePriority(.required, for: .vertical)
-        valueLabel.setContentHuggingPriority(.required, for: .vertical)
 
         let labelLabel = UILabel()
         labelLabel.text = item.label
@@ -316,19 +310,15 @@ class PlayerDetailViewController: UIViewController {
         labelLabel.textAlignment = .center
         labelLabel.isAccessibilityElement = false
         labelLabel.adjustsFontForContentSizeCategory = true
-        labelLabel.numberOfLines = 0
-        labelLabel.setContentCompressionResistancePriority(.required, for: .vertical)
 
         itemStack.addArrangedSubview(valueLabel)
         itemStack.addArrangedSubview(labelLabel)
         container.addSubview(itemStack)
 
         NSLayoutConstraint.activate([
-            itemStack.topAnchor.constraint(greaterThanOrEqualTo: container.topAnchor),
-            itemStack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            itemStack.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            itemStack.bottomAnchor.constraint(lessThanOrEqualTo: container.bottomAnchor),
-            itemStack.centerYAnchor.constraint(equalTo: container.centerYAnchor)
+            itemStack.topAnchor.constraint(equalTo: container.topAnchor, constant: 8),
+            itemStack.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            itemStack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -8)
         ])
 
         return container
