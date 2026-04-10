@@ -113,6 +113,7 @@ struct PlayEventDetails: Codable, Sendable {
     let code: String?
     let ballColor: String?
     let trailColor: String?
+    let type: CodeDescription?
 }
 
 struct CodeDescription: Codable, Sendable {

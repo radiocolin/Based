@@ -55,20 +55,20 @@ class TimelineCell: UITableViewCell {
         
         // Diamond Labels
         let pencilColor = AppColors.pencil
-        let dataFont = "PermanentMarker-Regular"
-        let legibilityFont = "PatrickHand-Regular"
         
-        resultLabel.font = UIFont(name: dataFont, size: 20) ?? .systemFont(ofSize: 20, weight: .bold)
+        resultLabel.font = AppFont.permanent(20, textStyle: .title3, compatibleWith: traitCollection)
         resultLabel.textColor = pencilColor
         resultLabel.textAlignment = .center
         resultLabel.numberOfLines = 0
         resultLabel.adjustsFontSizeToFitWidth = true
         resultLabel.minimumScaleFactor = 0.5
+        resultLabel.adjustsFontForContentSizeCategory = true
         
         [ballsLabel, strikesLabel, outsLabel].forEach {
-            $0.font = UIFont(name: legibilityFont, size: 12) ?? .systemFont(ofSize: 12)
+            $0.font = AppFont.patrick(12, textStyle: .caption2, compatibleWith: traitCollection)
             $0.textColor = pencilColor
             $0.textAlignment = .center
+            $0.adjustsFontForContentSizeCategory = true
         }
         
         [resultLabel, ballsLabel, strikesLabel, outsLabel].forEach {
@@ -83,15 +83,20 @@ class TimelineCell: UITableViewCell {
         infoStack.isAccessibilityElement = false
         contentView.addSubview(infoStack)
         
-        batterLabel.font = UIFont(name: "PermanentMarker-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
+        batterLabel.font = AppFont.permanent(16, textStyle: .headline, compatibleWith: traitCollection)
         batterLabel.textColor = AppColors.pencil
+        batterLabel.adjustsFontForContentSizeCategory = true
+        batterLabel.numberOfLines = 0
         
-        pitcherLabel.font = UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14)
+        pitcherLabel.font = AppFont.patrick(14, textStyle: .subheadline, compatibleWith: traitCollection)
         pitcherLabel.textColor = AppColors.pencil.withAlphaComponent(0.7)
+        pitcherLabel.adjustsFontForContentSizeCategory = true
+        pitcherLabel.numberOfLines = 0
         
-        descriptionLabel.font = UIFont(name: "PatrickHand-Regular", size: 15) ?? .systemFont(ofSize: 15)
+        descriptionLabel.font = AppFont.patrick(15, textStyle: .body, compatibleWith: traitCollection)
         descriptionLabel.textColor = AppColors.pencil
         descriptionLabel.numberOfLines = 0
+        descriptionLabel.adjustsFontForContentSizeCategory = true
         [batterLabel, pitcherLabel, descriptionLabel].forEach { $0.isAccessibilityElement = false }
         
         infoStack.addArrangedSubview(batterLabel)

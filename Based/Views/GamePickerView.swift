@@ -45,6 +45,11 @@ class GamePickerView: UIView {
             self.collectionView.reloadData()
             self.setNeedsLayout()
         }
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: GamePickerView, _) in
+            self.applyTypography()
+            self.updateLayoutMetrics()
+            self.collectionView.reloadData()
+        }
     }
 
     required init?(coder: NSCoder) {
@@ -75,10 +80,11 @@ class GamePickerView: UIView {
         nextButton.accessibilityHint = "Double tap to show the next date."
         nextButton.addTarget(self, action: #selector(nextDate), for: .touchUpInside)
 
-        dateLabel.font = UIFont(name: headerFont, size: 18) ?? .boldSystemFont(ofSize: 18)
+        dateLabel.font = AppFont.permanent(18, textStyle: .headline, compatibleWith: traitCollection)
         dateLabel.textColor = pencilColor
         dateLabel.textAlignment = .center
         dateLabel.isAccessibilityElement = true
+        dateLabel.adjustsFontForContentSizeCategory = true
 
         // Collection View
         let layout = UICollectionViewFlowLayout()
@@ -98,11 +104,13 @@ class GamePickerView: UIView {
 
         // No Games Label
         noGamesLabel.text = "No games scheduled"
-        noGamesLabel.font = UIFont(name: bodyFont, size: 16) ?? .systemFont(ofSize: 16)
+        noGamesLabel.font = AppFont.patrick(16, textStyle: .body, compatibleWith: traitCollection)
         noGamesLabel.textColor = pencilColor.withAlphaComponent(0.5)
         noGamesLabel.textAlignment = .center
+        noGamesLabel.numberOfLines = 0
         noGamesLabel.isHidden = true
         noGamesLabel.accessibilityLabel = "No games scheduled"
+        noGamesLabel.adjustsFontForContentSizeCategory = true
 
         // Add subviews
         for v in [prevButton, dateLabel, nextButton, collectionView!, noGamesLabel] {
@@ -135,8 +143,11 @@ class GamePickerView: UIView {
             // No Games Label
             noGamesLabel.centerXAnchor.constraint(equalTo: collectionView.centerXAnchor),
             noGamesLabel.centerYAnchor.constraint(equalTo: collectionView.centerYAnchor),
+            noGamesLabel.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 24),
+            noGamesLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -24),
         ])
 
+        updateLayoutMetrics()
         setDate(Date())
     }
 
@@ -192,6 +203,7 @@ class GamePickerView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        updateLayoutMetrics()
         let b = bounds
         let path = UIBezierPath()
         path.append(UIBezierPath.pencilLine(from: CGPoint(x: 0, y: b.maxY), to: CGPoint(x: b.maxX, y: b.maxY)))
@@ -199,6 +211,24 @@ class GamePickerView: UIView {
         borderLayer.strokeColor = pencilColor.withAlphaComponent(0.3).cgColor
         borderLayer.lineWidth = 0.75
         borderLayer.fillColor = UIColor.clear.cgColor
+    }
+}
+
+private extension GamePickerView {
+    func applyTypography() {
+        dateLabel.font = AppFont.permanent(18, textStyle: .headline, compatibleWith: traitCollection)
+        noGamesLabel.font = AppFont.patrick(16, textStyle: .body, compatibleWith: traitCollection)
+    }
+
+    func updateLayoutMetrics() {
+        guard let layout = collectionView?.collectionViewLayout as? UICollectionViewFlowLayout else { return }
+        let itemSize = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+            ? CGSize(width: 140, height: 96)
+            : CGSize(width: 100, height: 78)
+        if layout.itemSize != itemSize {
+            layout.itemSize = itemSize
+            layout.invalidateLayout()
+        }
     }
 }
 
@@ -269,29 +299,50 @@ class GameCardCell: UICollectionViewCell {
         isAccessibilityElement = true
         accessibilityTraits = .button
 
-        awayLabel.font = UIFont(name: headerFont, size: 18) ?? .boldSystemFont(ofSize: 18)
-        homeLabel.font = UIFont(name: headerFont, size: 18) ?? .boldSystemFont(ofSize: 18)
+        awayLabel.font = AppFont.permanent(18, textStyle: .headline)
+        homeLabel.font = AppFont.permanent(18, textStyle: .headline)
+        awayLabel.adjustsFontForContentSizeCategory = true
+        homeLabel.adjustsFontForContentSizeCategory = true
+        awayLabel.numberOfLines = 1
+        homeLabel.numberOfLines = 1
+        awayLabel.adjustsFontSizeToFitWidth = true
+        homeLabel.adjustsFontSizeToFitWidth = true
+        awayLabel.minimumScaleFactor = 0.6
+        homeLabel.minimumScaleFactor = 0.6
+        awayLabel.lineBreakMode = .byClipping
+        homeLabel.lineBreakMode = .byClipping
 
-        awayScoreLabel.font = UIFont(name: bodyFont, size: 22) ?? .systemFont(ofSize: 22)
+        awayScoreLabel.font = AppFont.patrick(22, textStyle: .title3)
         awayScoreLabel.textColor = pencilColor
         awayScoreLabel.textAlignment = .right
+        awayScoreLabel.adjustsFontForContentSizeCategory = true
+        awayScoreLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        awayScoreLabel.setContentHuggingPriority(.required, for: .horizontal)
 
-        homeScoreLabel.font = UIFont(name: bodyFont, size: 22) ?? .systemFont(ofSize: 22)
+        homeScoreLabel.font = AppFont.patrick(22, textStyle: .title3)
         homeScoreLabel.textColor = pencilColor
         homeScoreLabel.textAlignment = .right
+        homeScoreLabel.adjustsFontForContentSizeCategory = true
+        homeScoreLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        homeScoreLabel.setContentHuggingPriority(.required, for: .horizontal)
 
         atLabel.text = "@"
-        atLabel.font = UIFont(name: "PermanentMarker-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
+        atLabel.font = AppFont.permanent(16, textStyle: .caption1)
         atLabel.textColor = pencilColor.withAlphaComponent(0.3)
         atLabel.textAlignment = .center
+        atLabel.adjustsFontForContentSizeCategory = true
 
-        statusLabel.font = UIFont(name: bodyFont, size: 13) ?? .systemFont(ofSize: 13)
+        statusLabel.font = AppFont.patrick(13, textStyle: .caption1)
         statusLabel.textColor = pencilColor.withAlphaComponent(0.7)
         statusLabel.textAlignment = .center
+        statusLabel.numberOfLines = 2
+        statusLabel.adjustsFontForContentSizeCategory = true
         
-        venueLabel.font = UIFont(name: bodyFont, size: 11) ?? .systemFont(ofSize: 11)
+        venueLabel.font = AppFont.patrick(11, textStyle: .caption2)
         venueLabel.textColor = pencilColor.withAlphaComponent(0.5)
         venueLabel.textAlignment = .center
+        venueLabel.numberOfLines = 2
+        venueLabel.adjustsFontForContentSizeCategory = true
 
         for v in [awayLabel, homeLabel, awayScoreLabel, homeScoreLabel, atLabel, statusLabel, venueLabel] {
             contentView.addSubview(v)
@@ -301,29 +352,25 @@ class GameCardCell: UICollectionViewCell {
 
         let pad: CGFloat = 10
         NSLayoutConstraint.activate([
-            // Away team row
+            awayScoreLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 30),
+            homeScoreLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 30),
             awayLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: pad),
             awayLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             awayLabel.trailingAnchor.constraint(lessThanOrEqualTo: awayScoreLabel.leadingAnchor, constant: -4),
 
             awayScoreLabel.centerYAnchor.constraint(equalTo: awayLabel.centerYAnchor),
             awayScoreLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -pad),
-            awayScoreLabel.widthAnchor.constraint(equalToConstant: 30),
 
-            // @ separator
             atLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor, constant: -8),
             atLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
 
-            // Home team row
             homeLabel.bottomAnchor.constraint(equalTo: statusLabel.topAnchor, constant: -2),
             homeLabel.leadingAnchor.constraint(equalTo: awayLabel.leadingAnchor),
             homeLabel.trailingAnchor.constraint(lessThanOrEqualTo: homeScoreLabel.leadingAnchor, constant: -4),
 
             homeScoreLabel.centerYAnchor.constraint(equalTo: homeLabel.centerYAnchor),
             homeScoreLabel.trailingAnchor.constraint(equalTo: awayScoreLabel.trailingAnchor),
-            homeScoreLabel.widthAnchor.constraint(equalToConstant: 30),
 
-            // Status
             statusLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: pad),
             {
                 let c = statusLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -pad)
@@ -332,14 +379,13 @@ class GameCardCell: UICollectionViewCell {
             }(),
             statusLabel.bottomAnchor.constraint(equalTo: venueLabel.topAnchor, constant: -2),
             
-            // Venue
             venueLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: pad),
             {
                 let c = venueLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -pad)
                 c.priority = UILayoutPriority(999)
                 return c
             }(),
-            venueLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -4),
+            venueLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -4)
         ])
     }
 
@@ -372,6 +418,7 @@ class GameCardCell: UICollectionViewCell {
         atLabel.textColor = pc.withAlphaComponent(0.3)
         statusLabel.textColor = pc.withAlphaComponent(0.7)
         venueLabel.textColor = pc.withAlphaComponent(0.5)
+        atLabel.isHidden = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
 
         // Status & Venue
         statusLabel.text = formatStatus(game)

@@ -23,9 +23,10 @@ enum GameFooterContent {
         for (groupIndex, group) in visibleGroups.enumerated() {
             let titleLabel = UILabel()
             titleLabel.text = group.title
-            titleLabel.font = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
+            titleLabel.font = AppFont.patrick(16, textStyle: .headline)
             titleLabel.textColor = AppColors.pencil
             titleLabel.accessibilityTraits = .header
+            titleLabel.adjustsFontForContentSizeCategory = true
             container.addArrangedSubview(titleLabel)
 
             let headerRow = UIStackView()
@@ -35,18 +36,20 @@ enum GameFooterContent {
 
             let nameHeader = UILabel()
             nameHeader.text = "Name"
-            nameHeader.font = UIFont(name: "PatrickHand-Regular", size: 12) ?? .systemFont(ofSize: 12, weight: .bold)
+            nameHeader.font = AppFont.patrick(12, textStyle: .caption1)
             nameHeader.textColor = AppColors.pencil.withAlphaComponent(0.6)
             nameHeader.isAccessibilityElement = false
+            nameHeader.adjustsFontForContentSizeCategory = true
             headerRow.addArrangedSubview(nameHeader)
 
             for label in pitcherStatLabels {
                 let statLabel = UILabel()
                 statLabel.text = label
-                statLabel.font = UIFont(name: "PatrickHand-Regular", size: 12) ?? .systemFont(ofSize: 12, weight: .bold)
+                statLabel.font = AppFont.patrick(12, textStyle: .caption1)
                 statLabel.textColor = AppColors.pencil.withAlphaComponent(0.6)
                 statLabel.textAlignment = .center
                 statLabel.isAccessibilityElement = false
+                statLabel.adjustsFontForContentSizeCategory = true
                 statLabel.widthAnchor.constraint(equalToConstant: 30).isActive = true
                 headerRow.addArrangedSubview(statLabel)
             }
@@ -67,19 +70,21 @@ enum GameFooterContent {
 
                 let nameLabel = UILabel()
                 nameLabel.text = pitcher.fullName
-                nameLabel.font = UIFont(name: "PermanentMarker-Regular", size: 14) ?? .systemFont(ofSize: 14)
+                nameLabel.font = AppFont.permanent(14, textStyle: .body)
                 nameLabel.textColor = AppColors.pencil
                 nameLabel.isAccessibilityElement = false
+                nameLabel.adjustsFontForContentSizeCategory = true
                 row.addArrangedSubview(nameLabel)
 
                 let stats = [pitcher.ip, "\(pitcher.h)", "\(pitcher.r)", "\(pitcher.er)", "\(pitcher.bb)", "\(pitcher.k)"]
                 for value in stats {
                     let valueLabel = UILabel()
                     valueLabel.text = value
-                    valueLabel.font = UIFont(name: "PermanentMarker-Regular", size: 14) ?? .systemFont(ofSize: 14)
+                    valueLabel.font = AppFont.permanent(14, textStyle: .body)
                     valueLabel.textColor = AppColors.pencil
                     valueLabel.textAlignment = .center
                     valueLabel.isAccessibilityElement = false
+                    valueLabel.adjustsFontForContentSizeCategory = true
                     valueLabel.widthAnchor.constraint(equalToConstant: 30).isActive = true
                     row.addArrangedSubview(valueLabel)
                 }
@@ -113,17 +118,17 @@ enum GameFooterContent {
         guard !umpires.isEmpty else { return nil }
 
         let attributedText = NSMutableAttributedString(string: "UMPIRES\n", attributes: [
-            .font: UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold),
+            .font: AppFont.patrick(16, textStyle: .headline),
             .foregroundColor: AppColors.pencil
         ])
 
         for (index, umpire) in umpires.enumerated() {
             let roleAttributes: [NSAttributedString.Key: Any] = [
-                .font: UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14),
+                .font: AppFont.patrick(14, textStyle: .footnote),
                 .foregroundColor: AppColors.pencil.withAlphaComponent(0.7)
             ]
             let nameAttributes: [NSAttributedString.Key: Any] = [
-                .font: UIFont(name: "PermanentMarker-Regular", size: 14) ?? .systemFont(ofSize: 14),
+                .font: AppFont.permanent(14, textStyle: .body),
                 .foregroundColor: AppColors.pencil
             ]
             attributedText.append(NSAttributedString(string: "\(umpire.type): ", attributes: roleAttributes))
@@ -134,6 +139,11 @@ enum GameFooterContent {
         }
 
         return attributedText
+    }
+
+    static func makeUmpireAccessibilityLabel(_ umpires: [ScorecardUmpire]) -> String? {
+        guard !umpires.isEmpty else { return nil }
+        return AccessibilitySupport.umpiresDescription(umpires)
     }
 
     static func makeGameInfoText(gameInfoItems: [GameInfoItem], weather: Weather?) -> NSAttributedString? {
@@ -147,16 +157,16 @@ enum GameFooterContent {
 
         let labelMap = ["First pitch": "First Pitch", "T": "Duration", "Att": "Attendance"]
         let attributedText = NSMutableAttributedString(string: "GAME INFO\n", attributes: [
-            .font: UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold),
+            .font: AppFont.patrick(16, textStyle: .headline),
             .foregroundColor: AppColors.pencil
         ])
 
         let labelAttributes: [NSAttributedString.Key: Any] = [
-            .font: UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14),
+            .font: AppFont.patrick(14, textStyle: .footnote),
             .foregroundColor: AppColors.pencil.withAlphaComponent(0.7)
         ]
         let valueAttributes: [NSAttributedString.Key: Any] = [
-            .font: UIFont(name: "PermanentMarker-Regular", size: 14) ?? .systemFont(ofSize: 14),
+            .font: AppFont.permanent(14, textStyle: .body),
             .foregroundColor: AppColors.pencil
         ]
 

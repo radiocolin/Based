@@ -8,6 +8,10 @@ class MainTabBarController: UITabBarController {
         updateAppearance()
         
         NotificationCenter.default.addObserver(self, selector: #selector(tintDidChange), name: TintService.tintDidChangeNotification, object: nil)
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: MainTabBarController, _) in
+            self.updateTabIcons()
+            self.updateAppearance()
+        }
     }
     
     private func setupTabs() {
@@ -29,8 +33,19 @@ class MainTabBarController: UITabBarController {
     private func updateTabIcons() {
         guard let vcs = viewControllers, vcs.count >= 2 else { return }
         
-        let baseballImg = UIImage.pencilStyledIcon(named: "baseball", color: AppColors.pencil, size: CGSize(width: 30, height: 30))
-        let gearImg = UIImage.pencilStyledIcon(named: "gear", color: AppColors.pencil, size: CGSize(width: 30, height: 30))
+        let category = traitCollection.preferredContentSizeCategory
+        let iconSide: CGFloat
+        if category.isAccessibilityCategory {
+            iconSide = 38
+        } else if category == .extraExtraExtraLarge || category == .extraExtraLarge {
+            iconSide = 34
+        } else {
+            iconSide = 30
+        }
+        let iconSize = CGSize(width: iconSide, height: iconSide)
+        
+        let baseballImg = UIImage.pencilStyledIcon(named: "baseball", color: AppColors.pencil, size: iconSize)
+        let gearImg = UIImage.pencilStyledIcon(named: "gear", color: AppColors.pencil, size: iconSize)
         
         vcs[0].tabBarItem = UITabBarItem(title: "Games", image: baseballImg, selectedImage: nil)
         vcs[1].tabBarItem = UITabBarItem(title: "Settings", image: gearImg, selectedImage: nil)
@@ -41,19 +56,25 @@ class MainTabBarController: UITabBarController {
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = AppColors.paper
         
-        let font = UIFont(name: "PatrickHand-Regular", size: 12) ?? .systemFont(ofSize: 12)
+        let font = AppFont.patrick(12, textStyle: .caption2, compatibleWith: traitCollection)
         let pencilColor = AppColors.pencil
-        
-        appearance.stackedLayoutAppearance.normal.titleTextAttributes = [
-            .font: font, 
-            .foregroundColor: pencilColor.withAlphaComponent(0.6)
-        ]
-        appearance.stackedLayoutAppearance.selected.titleTextAttributes = [
-            .font: font, 
-            .foregroundColor: pencilColor
-        ]
-        appearance.stackedLayoutAppearance.normal.iconColor = pencilColor.withAlphaComponent(0.6)
-        appearance.stackedLayoutAppearance.selected.iconColor = pencilColor
+
+        for itemAppearance in [
+            appearance.stackedLayoutAppearance,
+            appearance.inlineLayoutAppearance,
+            appearance.compactInlineLayoutAppearance
+        ] {
+            itemAppearance.normal.titleTextAttributes = [
+                .font: font,
+                .foregroundColor: pencilColor.withAlphaComponent(0.6)
+            ]
+            itemAppearance.selected.titleTextAttributes = [
+                .font: font,
+                .foregroundColor: pencilColor
+            ]
+            itemAppearance.normal.iconColor = pencilColor.withAlphaComponent(0.6)
+            itemAppearance.selected.iconColor = pencilColor
+        }
         
         tabBar.standardAppearance = appearance
         tabBar.scrollEdgeAppearance = appearance

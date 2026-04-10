@@ -1,30 +1,27 @@
-Please test this build with VoiceOver enabled.
+Please focus this build on accessibility and Dynamic Type.
 
-Focus areas:
+VoiceOver
+- Turn VoiceOver on and move through the main tabs.
+- Confirm the tab bar labels and icons are readable and understandable.
+- On Schedule, swipe through game cards and confirm scheduled games do not announce fake scores.
+- On Schedule, open the date picker and confirm focus moves into the calendar and back out correctly when dismissed.
+- On Schedule, try the VoiceOver three-finger left and right swipe to move between days.
+- Open a game and review the header, live state, timeline, footer, and scorecard.
+- On the scorecard, confirm each cell gives enough context to understand the batter row, inning, and current location in the table.
+- Open an at-bat detail view and confirm the sheet reads in a sensible order.
+- In the at-bat pitch list, confirm pitch type, speed, and result are all spoken clearly.
+- Open pitcher and batter detail sheets and confirm positions, handedness, and stat names are spoken naturally.
+- In Settings, confirm rows, pickers, remove buttons, and the attribution footer all read cleanly.
 
-- Schedule screen
-  Open several games and confirm each game card reads clearly with teams, score, status, and venue.
-  Check the previous/next day controls and date picker announcement behavior.
+Dynamic Type
+- Test with larger text sizes, especially the largest Accessibility sizes in Settings > Accessibility > Display & Text Size > Larger Text.
+- On Schedule, confirm cards grow enough to avoid team-name overlap or clipping at very large sizes.
+- On Settings, confirm headers, descriptive copy, selector rows, and the Philadelphia LOVE attribution wrap correctly.
+- Open the Appearance, Tint Color, and Add Favorite Team pickers and confirm text scales and remains readable.
+- Open a player detail sheet and confirm both stat tables stay aligned without strange reflow or overflow.
+- Open an at-bat detail sheet and confirm the sheet scrolls all the way to the pitch sequence at large sizes.
+- In the at-bat pitch sequence, confirm large text switches to a readable wrapped layout with pitch type above speed.
 
-- Game detail screen
-  Move through the header, team picker, advisory banner, scorecard, timeline, and live at-bat panel.
-  Confirm controls are announced clearly and activate as expected.
-
-- Scorecard
-  Swipe through batter rows and inning cells.
-  Make sure VoiceOver explains which batter row you are on, which inning/plate appearance you are on, and whether a cell is the current live at-bat, an empty slot, or a totals/stat cell.
-  Try both away and home scorecards.
-
-- Timeline and live game state
-  Check that each timeline item reads as one coherent summary instead of separate fragments.
-  Confirm the current at-bat panel gives useful game context and opens details when activated.
-
-- At-bat and player detail screens
-  Open multiple at-bats and player cards.
-  Verify the result, description, pitch sequence, and tappable player/pitcher names are announced correctly.
-
-- Settings
-  Test appearance, tint color, favorites management, and the attribution/footer area with VoiceOver.
-  Confirm menu buttons, add/remove favorite actions, and row summaries are understandable.
-
-Please report anything that is confusing, repetitive, missing context, or difficult to activate with VoiceOver.
+General
+- Report any place where text truncates, overlaps, becomes unreachable, or sounds unnatural in VoiceOver.
+- Report any spot where focus lands in the wrong place, a control is announced as interactive but does nothing, or layout breaks at large text sizes.

@@ -9,7 +9,8 @@ class PlayerDetailViewController: UIViewController {
 
     private let subject: Subject
     private var playerInfo: PlayerInfo?
-    private var seasonColumns = 5
+    private var gameGridMetrics = GridMetrics(columns: 6, rows: 1)
+    private var seasonGridMetrics = GridMetrics(columns: 5, rows: 1)
     private var seasonTitleText = "SEASON"
 
     private let scrollView = UIScrollView()
@@ -32,6 +33,11 @@ class PlayerDetailViewController: UIViewController {
     private let headerFont = "PermanentMarker-Regular"
     private let bodyFont = "PatrickHand-Regular"
 
+    private struct GridMetrics {
+        let columns: Int
+        let rows: Int
+    }
+
     init(batter: ScorecardBatter, gameStats: PlayerGameStats? = nil) {
         self.subject = .batter(batter, gameStats)
         super.init(nibName: nil, bundle: nil)
@@ -51,6 +57,10 @@ class PlayerDetailViewController: UIViewController {
         setupUI()
         fetchPlayerInfo()
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: PlayerDetailViewController, _) in
+            self.view.setNeedsLayout()
+        }
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: PlayerDetailViewController, _) in
+            self.applyTypography()
             self.view.setNeedsLayout()
         }
     }
@@ -83,9 +93,9 @@ class PlayerDetailViewController: UIViewController {
     private var fallbackBioText: String {
         switch subject {
         case let .batter(batter, _):
-            return batter.position
+            return AccessibilitySupport.positionDescription(batter.position)
         case .pitcher:
-            return "P"
+            return "Pitcher"
         }
     }
 
@@ -139,20 +149,20 @@ class PlayerDetailViewController: UIViewController {
         ])
 
         headerLabel.text = playerName
-        headerLabel.font = UIFont(name: headerFont, size: 28) ?? .systemFont(ofSize: 28, weight: .bold)
+        headerLabel.font = AppFont.permanent(28, textStyle: .largeTitle, compatibleWith: traitCollection)
         headerLabel.textColor = pencilColor
         headerLabel.textAlignment = .center
         headerLabel.numberOfLines = 2
-        headerLabel.adjustsFontSizeToFitWidth = true
-        headerLabel.minimumScaleFactor = 0.7
+        headerLabel.adjustsFontForContentSizeCategory = true
         headerLabel.accessibilityTraits = .header
         contentStack.addArrangedSubview(headerLabel)
 
         bioLabel.text = fallbackBioText
-        bioLabel.font = UIFont(name: bodyFont, size: 16) ?? .systemFont(ofSize: 16)
+        bioLabel.font = AppFont.patrick(16, textStyle: .body, compatibleWith: traitCollection)
         bioLabel.textColor = pencilColor.withAlphaComponent(0.7)
         bioLabel.textAlignment = .center
         bioLabel.numberOfLines = 0
+        bioLabel.adjustsFontForContentSizeCategory = true
         contentStack.addArrangedSubview(bioLabel)
 
         gameTitleLabel.text = "Today's Game"
@@ -183,10 +193,11 @@ class PlayerDetailViewController: UIViewController {
     }
 
     private func createSectionTitleLabel(from label: UILabel) -> UILabel {
-        label.font = UIFont(name: bodyFont, size: 16) ?? .systemFont(ofSize: 16)
+        label.font = AppFont.patrick(16, textStyle: .headline, compatibleWith: traitCollection)
         label.textColor = pencilColor.withAlphaComponent(0.7)
         label.textAlignment = .center
         label.accessibilityTraits = .header
+        label.adjustsFontForContentSizeCategory = true
         return label
     }
 
@@ -210,7 +221,7 @@ class PlayerDetailViewController: UIViewController {
         loadingIndicator.removeFromSuperview()
         seasonStatsContentView?.removeFromSuperview()
 
-        seasonColumns = columns
+        seasonGridMetrics = gridMetrics(for: items.count, preferredColumns: columns)
         seasonTitleText = title
         seasonTitleLabel.text = title
 
@@ -220,7 +231,7 @@ class PlayerDetailViewController: UIViewController {
             }
         }
 
-        let stackView = createStatsRow(items: items, fontSize: 28)
+        let stackView = createStatsRow(items: items, fontSize: 28, preferredColumns: columns)
         seasonStatsContainer.addSubview(stackView)
         seasonStatsContentView = stackView
 
@@ -234,41 +245,108 @@ class PlayerDetailViewController: UIViewController {
         view.setNeedsLayout()
     }
 
-    private func createStatsRow(items: [(label: String, value: String)], fontSize: CGFloat = 32) -> UIStackView {
-        let stackView = UIStackView()
-        stackView.axis = .horizontal
-        stackView.distribution = .fillEqually
-        stackView.spacing = 0
-        stackView.translatesAutoresizingMaskIntoConstraints = false
+    private func createStatsRow(items: [(label: String, value: String)], fontSize: CGFloat = 32, preferredColumns: Int? = nil) -> UIStackView {
+        let metrics = gridMetrics(for: items.count, preferredColumns: preferredColumns ?? items.count)
+        let rootStack = UIStackView()
+        rootStack.axis = .vertical
+        rootStack.distribution = .fillEqually
+        rootStack.spacing = 0
+        rootStack.translatesAutoresizingMaskIntoConstraints = false
 
-        for item in items {
-            let itemStack = UIStackView()
-            itemStack.axis = .vertical
-            itemStack.alignment = .center
-            itemStack.spacing = 2
-            itemStack.isAccessibilityElement = true
-            itemStack.accessibilityLabel = "\(item.label), \(item.value)"
+        let columns = max(metrics.columns, 1)
+        let rows = max(metrics.rows, 1)
 
-            let valueLabel = UILabel()
-            valueLabel.text = item.value
-            valueLabel.font = UIFont(name: headerFont, size: fontSize) ?? .systemFont(ofSize: fontSize, weight: .bold)
-            valueLabel.textColor = pencilColor
-            valueLabel.textAlignment = .center
-            valueLabel.isAccessibilityElement = false
+        for rowIndex in 0..<rows {
+            let rowStack = UIStackView()
+            rowStack.axis = .horizontal
+            rowStack.distribution = .fillEqually
+            rowStack.spacing = 0
 
-            let labelLabel = UILabel()
-            labelLabel.text = item.label
-            labelLabel.font = UIFont(name: bodyFont, size: 16) ?? .systemFont(ofSize: 16)
-            labelLabel.textColor = pencilColor.withAlphaComponent(0.7)
-            labelLabel.textAlignment = .center
-            labelLabel.isAccessibilityElement = false
+            for columnIndex in 0..<columns {
+                let itemIndex = rowIndex * columns + columnIndex
+                if itemIndex < items.count {
+                    rowStack.addArrangedSubview(makeStatItemView(items[itemIndex], fontSize: fontSize))
+                } else {
+                    let spacer = UIView()
+                    rowStack.addArrangedSubview(spacer)
+                }
+            }
 
-            itemStack.addArrangedSubview(valueLabel)
-            itemStack.addArrangedSubview(labelLabel)
-            stackView.addArrangedSubview(itemStack)
+            rootStack.addArrangedSubview(rowStack)
         }
 
-        return stackView
+        if fontSize >= 32 {
+            gameGridMetrics = metrics
+        } else {
+            seasonGridMetrics = metrics
+        }
+
+        return rootStack
+    }
+
+    private func makeStatItemView(_ item: (label: String, value: String), fontSize: CGFloat) -> UIView {
+        let container = UIView()
+        container.isAccessibilityElement = true
+        container.accessibilityLabel = "\(AccessibilitySupport.statName(for: item.label)), \(item.value)"
+
+        let itemStack = UIStackView()
+        itemStack.axis = .vertical
+        itemStack.alignment = .fill
+        itemStack.distribution = .fill
+        itemStack.spacing = 2
+        itemStack.layoutMargins = UIEdgeInsets(top: 8, left: 6, bottom: 8, right: 6)
+        itemStack.isLayoutMarginsRelativeArrangement = true
+        itemStack.translatesAutoresizingMaskIntoConstraints = false
+
+        let valueLabel = UILabel()
+        valueLabel.text = item.value
+        valueLabel.font = AppFont.permanent(fontSize, textStyle: fontSize >= 32 ? .title2 : .title3, compatibleWith: traitCollection)
+        valueLabel.textColor = pencilColor
+        valueLabel.textAlignment = .center
+        valueLabel.isAccessibilityElement = false
+        valueLabel.adjustsFontForContentSizeCategory = true
+        valueLabel.numberOfLines = 0
+        valueLabel.setContentCompressionResistancePriority(.required, for: .vertical)
+        valueLabel.setContentHuggingPriority(.required, for: .vertical)
+
+        let labelLabel = UILabel()
+        labelLabel.text = item.label
+        labelLabel.font = AppFont.patrick(16, textStyle: .caption1, compatibleWith: traitCollection)
+        labelLabel.textColor = pencilColor.withAlphaComponent(0.7)
+        labelLabel.textAlignment = .center
+        labelLabel.isAccessibilityElement = false
+        labelLabel.adjustsFontForContentSizeCategory = true
+        labelLabel.numberOfLines = 0
+        labelLabel.setContentCompressionResistancePriority(.required, for: .vertical)
+
+        itemStack.addArrangedSubview(valueLabel)
+        itemStack.addArrangedSubview(labelLabel)
+        container.addSubview(itemStack)
+
+        NSLayoutConstraint.activate([
+            itemStack.topAnchor.constraint(greaterThanOrEqualTo: container.topAnchor),
+            itemStack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            itemStack.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            itemStack.bottomAnchor.constraint(lessThanOrEqualTo: container.bottomAnchor),
+            itemStack.centerYAnchor.constraint(equalTo: container.centerYAnchor)
+        ])
+
+        return container
+    }
+
+    private func gridMetrics(for itemCount: Int, preferredColumns: Int) -> GridMetrics {
+        let isAccessibility = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+        let maxColumns: Int
+        if isAccessibility {
+            maxColumns = itemCount >= 6 ? 3 : 2
+        } else if traitCollection.preferredContentSizeCategory == .extraExtraExtraLarge {
+            maxColumns = min(preferredColumns, itemCount >= 6 ? 4 : 3)
+        } else {
+            maxColumns = preferredColumns
+        }
+        let columns = max(1, min(preferredColumns, maxColumns))
+        let rows = Int(ceil(Double(itemCount) / Double(columns)))
+        return GridMetrics(columns: columns, rows: rows)
     }
 
     private func fetchPlayerInfo() {
@@ -316,6 +394,15 @@ class PlayerDetailViewController: UIViewController {
             bioText += (bioText.isEmpty ? "" : "\n") + bioLine2.joined(separator: " • ")
         }
         bioLabel.text = bioText.isEmpty ? fallbackBioText : bioText
+        bioLabel.accessibilityLabel = AccessibilitySupport.playerBioDescription(
+            number: info.primaryNumber,
+            position: info.primaryPosition?.abbreviation ?? info.primaryPosition?.name,
+            team: info.currentTeam?.name,
+            height: info.height,
+            weight: info.weight,
+            batSide: info.batSide?.code,
+            throwSide: info.pitchHand?.code
+        )
 
         switch subject {
         case .batter:
@@ -369,10 +456,11 @@ class PlayerDetailViewController: UIViewController {
 
         let errorLabel = UILabel()
         errorLabel.text = "Stats unavailable"
-        errorLabel.font = UIFont(name: bodyFont, size: 16) ?? .systemFont(ofSize: 16)
+        errorLabel.font = AppFont.patrick(16, textStyle: .body, compatibleWith: traitCollection)
         errorLabel.textColor = pencilColor.withAlphaComponent(0.7)
         errorLabel.textAlignment = .center
         errorLabel.translatesAutoresizingMaskIntoConstraints = false
+        errorLabel.adjustsFontForContentSizeCategory = true
         seasonStatsContainer.addSubview(errorLabel)
         seasonStatsContentView = errorLabel
 
@@ -383,11 +471,11 @@ class PlayerDetailViewController: UIViewController {
     }
 
     private func drawPencilLines() {
-        drawBoxLines(for: gameStatsContainer, layer: gameStatsLinesLayer, columns: gameStatsItems.count)
-        drawBoxLines(for: seasonStatsContainer, layer: seasonStatsLinesLayer, columns: seasonColumns)
+        drawBoxLines(for: gameStatsContainer, layer: gameStatsLinesLayer, metrics: gameGridMetrics)
+        drawBoxLines(for: seasonStatsContainer, layer: seasonStatsLinesLayer, metrics: seasonGridMetrics)
     }
 
-    private func drawBoxLines(for container: UIView, layer: CAShapeLayer, columns: Int) {
+    private func drawBoxLines(for container: UIView, layer: CAShapeLayer, metrics: GridMetrics) {
         let b = container.bounds
         guard b.width > 0, b.height > 0 else { return }
 
@@ -397,10 +485,17 @@ class PlayerDetailViewController: UIViewController {
         path.append(UIBezierPath.pencilLine(from: CGPoint(x: b.width, y: b.height), to: CGPoint(x: 0, y: b.height)))
         path.append(UIBezierPath.pencilLine(from: CGPoint(x: 0, y: b.height), to: .zero))
 
-        let colWidth = b.width / CGFloat(max(columns, 1))
+        let columns = max(metrics.columns, 1)
+        let rows = max(metrics.rows, 1)
+        let colWidth = b.width / CGFloat(columns)
         for i in 1..<columns {
             let x = colWidth * CGFloat(i)
             path.append(UIBezierPath.pencilLine(from: CGPoint(x: x, y: 0), to: CGPoint(x: x, y: b.height)))
+        }
+        let rowHeight = b.height / CGFloat(rows)
+        for i in 1..<rows {
+            let y = rowHeight * CGFloat(i)
+            path.append(UIBezierPath.pencilLine(from: CGPoint(x: 0, y: y), to: CGPoint(x: b.width, y: y)))
         }
 
         layer.path = path.cgPath
@@ -409,5 +504,16 @@ class PlayerDetailViewController: UIViewController {
         layer.fillColor = UIColor.clear.cgColor
         layer.lineCap = .round
         layer.lineJoin = .round
+    }
+
+    private func applyTypography() {
+        headerLabel.font = AppFont.permanent(28, textStyle: .largeTitle, compatibleWith: traitCollection)
+        bioLabel.font = AppFont.patrick(16, textStyle: .body, compatibleWith: traitCollection)
+        gameTitleLabel.font = AppFont.patrick(16, textStyle: .headline, compatibleWith: traitCollection)
+        seasonTitleLabel.font = AppFont.patrick(16, textStyle: .headline, compatibleWith: traitCollection)
+        setupGameStatsGrid()
+        if let info = playerInfo {
+            updateWithPlayerInfo(info)
+        }
     }
 }

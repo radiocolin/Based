@@ -14,7 +14,62 @@ enum AccessibilitySupport {
         case "R": return "runs"
         case "H": return "hits"
         case "RBI": return "runs batted in"
+        case "BB": return "walks"
+        case "K": return "strikeouts"
+        case "ER": return "earned runs"
+        case "IP": return "innings pitched"
+        case "AVG": return "batting average"
+        case "HR": return "home runs"
+        case "SB": return "stolen bases"
+        case "OPS": return "OPS"
+        case "ERA": return "earned run average"
+        case "W": return "wins"
+        case "L": return "losses"
         default: return code
+        }
+    }
+
+    static func positionDescription(_ code: String) -> String {
+        switch code.uppercased() {
+        case "P":
+            return "Pitcher"
+        case "C":
+            return "Catcher"
+        case "1B":
+            return "First base"
+        case "2B":
+            return "Second base"
+        case "3B":
+            return "Third base"
+        case "SS":
+            return "Shortstop"
+        case "LF":
+            return "Left field"
+        case "CF":
+            return "Center field"
+        case "RF":
+            return "Right field"
+        case "DH":
+            return "Designated hitter"
+        case "PH":
+            return "Pinch hitter"
+        case "PR":
+            return "Pinch runner"
+        default:
+            return code
+        }
+    }
+
+    static func handednessDescription(_ code: String) -> String {
+        switch code.uppercased() {
+        case "R":
+            return "right-handed"
+        case "L":
+            return "left-handed"
+        case "S":
+            return "switch hitter"
+        default:
+            return code
         }
     }
 
@@ -113,13 +168,71 @@ enum AccessibilitySupport {
     static func gameCardDescription(_ game: ScheduleGame) -> String {
         let awayName = game.teams.away.team.name ?? "Away"
         let homeName = game.teams.home.team.name ?? "Home"
-        let awayScore = game.teams.away.score.map(String.init) ?? "-"
-        let homeScore = game.teams.home.score.map(String.init) ?? "-"
-        return joined([
-            "\(awayName) at \(homeName)",
-            "Score \(awayScore) to \(homeScore)",
-            game.status.detailedState,
-            game.venue?.name
-        ])
+        var parts = ["\(awayName) at \(homeName)"]
+
+        let status = game.status.detailedState
+        let shouldSpeakScore = !["Scheduled", "Pre-Game"].contains(status)
+            && game.teams.away.score != nil
+            && game.teams.home.score != nil
+
+        if shouldSpeakScore {
+            let awayScore = game.teams.away.score.map(String.init) ?? "0"
+            let homeScore = game.teams.home.score.map(String.init) ?? "0"
+            parts.append("Score \(awayScore) to \(homeScore)")
+        }
+
+        parts.append(status)
+        parts.append(game.venue?.name ?? "")
+        return joined(parts)
+    }
+
+    static func umpireRoleDescription(_ code: String) -> String {
+        switch code.uppercased() {
+        case "HP":
+            return "Home plate"
+        case "1B":
+            return "First base"
+        case "2B":
+            return "Second base"
+        case "3B":
+            return "Third base"
+        default:
+            return code
+        }
+    }
+
+    static func umpiresDescription(_ umpires: [ScorecardUmpire]) -> String {
+        let parts = umpires.map { umpire in
+            "\(umpireRoleDescription(umpire.type)): \(umpire.fullName)"
+        }
+        return joined(["Umpires", parts.joined(separator: ", ")])
+    }
+
+    static func playerBioDescription(number: String?, position: String?, team: String?, height: String?, weight: Int?, batSide: String?, throwSide: String?) -> String {
+        var parts: [String] = []
+
+        if let number, !number.isEmpty {
+            parts.append("Number \(number)")
+        }
+        if let position, !position.isEmpty {
+            parts.append(positionDescription(position))
+        }
+        if let team, !team.isEmpty {
+            parts.append(team)
+        }
+        if let height, !height.isEmpty {
+            parts.append(height)
+        }
+        if let weight {
+            parts.append("\(weight) pounds")
+        }
+        if let batSide, !batSide.isEmpty {
+            parts.append("Bats \(handednessDescription(batSide))")
+        }
+        if let throwSide, !throwSide.isEmpty {
+            parts.append("Throws \(handednessDescription(throwSide))")
+        }
+
+        return joined(parts)
     }
 }

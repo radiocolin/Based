@@ -7,6 +7,7 @@ class ScheduleViewController: UIViewController {
     private let prevButton = UIButton(type: .system)
     private let nextButton = UIButton(type: .system)
     private let dateLabel = UILabel()
+    private var dateHeaderHeightConstraint: NSLayoutConstraint?
     
     private var collectionView: UICollectionView!
     private var currentGames: [ScheduleGame] = []
@@ -14,7 +15,9 @@ class ScheduleViewController: UIViewController {
     
     // Date Picker Pop-up Overlay
     private let datePickerOverlay = UIView()
+    private let datePickerContainer = UIView()
     private let datePicker = UIDatePicker()
+    private let datePickerDoneButton = UIButton(type: .system)
     
     private let noGamesLabel: UILabel = {
         let label = UILabel()
@@ -22,6 +25,7 @@ class ScheduleViewController: UIViewController {
         label.font = UIFont(name: "PatrickHand-Regular", size: 20) ?? .systemFont(ofSize: 20)
         label.textColor = AppColors.pencil.withAlphaComponent(0.5)
         label.textAlignment = .center
+        label.numberOfLines = 0
         label.isHidden = true
         return label
     }()
@@ -30,6 +34,14 @@ class ScheduleViewController: UIViewController {
     private var pencilColor: UIColor { AppColors.pencil }
     private let headerFont = "PermanentMarker-Regular"
     private let bodyFont = "PatrickHand-Regular"
+
+    override func loadView() {
+        let rootView = ScheduleRootView()
+        rootView.onAccessibilityScroll = { [weak self] direction in
+            self?.handleAccessibilityScroll(direction) ?? false
+        }
+        view = rootView
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -40,6 +52,12 @@ class ScheduleViewController: UIViewController {
         NotificationCenter.default.addObserver(self, selector: #selector(tintDidChange), name: TintService.tintDidChangeNotification, object: nil)
         
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: ScheduleViewController, _) in
+            self.setupNavigationBar()
+            self.collectionView.reloadData()
+        }
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: ScheduleViewController, _) in
+            self.applyTypography()
+            self.updateCollectionLayout()
             self.setupNavigationBar()
             self.collectionView.reloadData()
         }
@@ -59,6 +77,11 @@ class ScheduleViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         setupNavigationBar()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        updateCollectionLayout()
     }
 
 
@@ -89,12 +112,13 @@ class ScheduleViewController: UIViewController {
         let longPress = UILongPressGestureRecognizer(target: self, action: #selector(jumpToToday(_:)))
         nextButton.addGestureRecognizer(longPress)
         
-        dateLabel.font = UIFont(name: headerFont, size: 20) ?? .boldSystemFont(ofSize: 20)
+        dateLabel.font = AppFont.permanent(20, textStyle: .title2, compatibleWith: traitCollection)
         dateLabel.textColor = pencilColor
         dateLabel.textAlignment = .center
         dateLabel.isUserInteractionEnabled = true
         dateLabel.accessibilityTraits = [.staticText, .button]
         dateLabel.accessibilityHint = "Double tap to choose a date."
+        dateLabel.adjustsFontForContentSizeCategory = true
         let tap = UITapGestureRecognizer(target: self, action: #selector(showDatePicker))
         dateLabel.addGestureRecognizer(tap)
         
@@ -110,16 +134,12 @@ class ScheduleViewController: UIViewController {
         layout.minimumInteritemSpacing = 12
         layout.sectionInset = UIEdgeInsets(top: 16, left: 16, bottom: 32, right: 16)
         
-        let padding: CGFloat = 16 * 2 + 12
-        let screenWidth = view.window?.windowScene?.screen.bounds.width ?? view.frame.width
-        let width = max((screenWidth - padding) / 2, 100)
-        layout.itemSize = CGSize(width: width, height: 120) 
-        
         collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
         collectionView.backgroundColor = .clear
         collectionView.delegate = self
         collectionView.dataSource = self
         collectionView.register(GameCardCell.self, forCellWithReuseIdentifier: GameCardCell.reuseIdentifier)
+        collectionView.isAccessibilityElement = false
         
         let gameLongPress = UILongPressGestureRecognizer(target: self, action: #selector(handleGameLongPress(_:)))
         collectionView.addGestureRecognizer(gameLongPress)
@@ -128,29 +148,32 @@ class ScheduleViewController: UIViewController {
             $0.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview($0)
         }
+        noGamesLabel.adjustsFontForContentSizeCategory = true
 
         NSLayoutConstraint.activate([
             // Date Header
             dateHeaderView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             dateHeaderView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             dateHeaderView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            dateHeaderView.heightAnchor.constraint(equalToConstant: 50),
 
             prevButton.leadingAnchor.constraint(equalTo: dateHeaderView.leadingAnchor, constant: 20),
-            prevButton.centerYAnchor.constraint(equalTo: dateHeaderView.centerYAnchor),
+            prevButton.topAnchor.constraint(greaterThanOrEqualTo: dateHeaderView.topAnchor, constant: 8),
+            prevButton.centerYAnchor.constraint(equalTo: dateLabel.centerYAnchor),
             prevButton.widthAnchor.constraint(equalToConstant: 32),
 
             nextButton.trailingAnchor.constraint(equalTo: dateHeaderView.trailingAnchor, constant: -20),
-            nextButton.centerYAnchor.constraint(equalTo: dateHeaderView.centerYAnchor),
+            nextButton.topAnchor.constraint(greaterThanOrEqualTo: dateHeaderView.topAnchor, constant: 8),
+            nextButton.centerYAnchor.constraint(equalTo: dateLabel.centerYAnchor),
             nextButton.widthAnchor.constraint(equalToConstant: 32),
 
-            dateLabel.leadingAnchor.constraint(equalTo: prevButton.trailingAnchor),
+            dateLabel.leadingAnchor.constraint(equalTo: prevButton.trailingAnchor, constant: 12),
             {
-                let c = dateLabel.trailingAnchor.constraint(equalTo: nextButton.leadingAnchor)
+                let c = dateLabel.trailingAnchor.constraint(equalTo: nextButton.leadingAnchor, constant: -12)
                 c.priority = UILayoutPriority(999)
                 return c
             }(),
-            dateLabel.centerYAnchor.constraint(equalTo: dateHeaderView.centerYAnchor),
+            dateLabel.topAnchor.constraint(equalTo: dateHeaderView.topAnchor, constant: 8),
+            dateLabel.bottomAnchor.constraint(equalTo: dateHeaderView.bottomAnchor, constant: -8),
 
             // Collection View
             collectionView.topAnchor.constraint(equalTo: dateHeaderView.bottomAnchor),
@@ -161,11 +184,15 @@ class ScheduleViewController: UIViewController {
             noGamesLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             noGamesLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
-        }
+        dateHeaderHeightConstraint = dateHeaderView.heightAnchor.constraint(greaterThanOrEqualToConstant: 50)
+        dateHeaderHeightConstraint?.isActive = true
+        applyTypography()
+        updateCollectionLayout()
+    }
 
     private func setupNavigationBar() {        title = "Based"
         
-        let font = UIFont(name: "PermanentMarker-Regular", size: 28) ?? .systemFont(ofSize: 28, weight: .bold)
+        let font = AppFont.permanent(28, textStyle: .largeTitle, compatibleWith: traitCollection)
         let appearance = UINavigationBarAppearance()
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = AppColors.paper
@@ -205,30 +232,35 @@ class ScheduleViewController: UIViewController {
     private func setupDatePickerOverlay() {
         datePickerOverlay.backgroundColor = UIColor.black.withAlphaComponent(0.4)
         datePickerOverlay.isHidden = true
+        datePickerOverlay.isAccessibilityElement = false
+        datePickerOverlay.accessibilityViewIsModal = true
         datePickerOverlay.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(datePickerOverlay)
         
-        let container = UIView()
-        container.backgroundColor = AppColors.paper
-        container.layer.cornerRadius = 16
-        container.translatesAutoresizingMaskIntoConstraints = false
-        datePickerOverlay.addSubview(container)
+        datePickerContainer.backgroundColor = AppColors.paper
+        datePickerContainer.layer.cornerRadius = 16
+        datePickerContainer.translatesAutoresizingMaskIntoConstraints = false
+        datePickerContainer.shouldGroupAccessibilityChildren = true
+        datePickerOverlay.addSubview(datePickerContainer)
         
         datePicker.datePickerMode = .date
         datePicker.preferredDatePickerStyle = .inline
         datePicker.maximumDate = Calendar.current.date(byAdding: .day, value: 1, to: Date())
         datePicker.tintColor = pencilColor
+        datePicker.accessibilityLabel = "Schedule date picker"
+        datePicker.accessibilityHint = "Swipe up or down to adjust the selected date."
         datePicker.translatesAutoresizingMaskIntoConstraints = false
         datePicker.addTarget(self, action: #selector(dateChanged(_:)), for: .valueChanged)
-        container.addSubview(datePicker)
+        datePickerContainer.addSubview(datePicker)
         
-        let doneButton = UIButton(type: .system)
-        doneButton.setTitle("DONE", for: .normal)
-        doneButton.titleLabel?.font = UIFont(name: headerFont, size: 18)
-        doneButton.tintColor = pencilColor
-        doneButton.addTarget(self, action: #selector(hideDatePicker), for: .touchUpInside)
-        doneButton.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(doneButton)
+        datePickerDoneButton.setTitle("DONE", for: .normal)
+        datePickerDoneButton.titleLabel?.font = AppFont.permanent(18, textStyle: .headline, compatibleWith: traitCollection)
+        datePickerDoneButton.titleLabel?.adjustsFontForContentSizeCategory = true
+        datePickerDoneButton.tintColor = pencilColor
+        datePickerDoneButton.accessibilityHint = "Double tap to close the calendar and show the selected schedule."
+        datePickerDoneButton.addTarget(self, action: #selector(hideDatePicker), for: .touchUpInside)
+        datePickerDoneButton.translatesAutoresizingMaskIntoConstraints = false
+        datePickerContainer.addSubview(datePickerDoneButton)
         
         NSLayoutConstraint.activate([
             datePickerOverlay.topAnchor.constraint(equalTo: view.topAnchor),
@@ -236,17 +268,17 @@ class ScheduleViewController: UIViewController {
             datePickerOverlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             datePickerOverlay.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             
-            container.centerXAnchor.constraint(equalTo: datePickerOverlay.centerXAnchor),
-            container.centerYAnchor.constraint(equalTo: datePickerOverlay.centerYAnchor),
-            container.widthAnchor.constraint(equalTo: datePickerOverlay.widthAnchor, multiplier: 0.85),
+            datePickerContainer.centerXAnchor.constraint(equalTo: datePickerOverlay.centerXAnchor),
+            datePickerContainer.centerYAnchor.constraint(equalTo: datePickerOverlay.centerYAnchor),
+            datePickerContainer.widthAnchor.constraint(equalTo: datePickerOverlay.widthAnchor, multiplier: 0.85),
             
-            datePicker.topAnchor.constraint(equalTo: container.topAnchor, constant: 16),
-            datePicker.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-            datePicker.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            datePicker.topAnchor.constraint(equalTo: datePickerContainer.topAnchor, constant: 16),
+            datePicker.leadingAnchor.constraint(equalTo: datePickerContainer.leadingAnchor, constant: 16),
+            datePicker.trailingAnchor.constraint(equalTo: datePickerContainer.trailingAnchor, constant: -16),
             
-            doneButton.topAnchor.constraint(equalTo: datePicker.bottomAnchor, constant: 8),
-            doneButton.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-            doneButton.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16)
+            datePickerDoneButton.topAnchor.constraint(equalTo: datePicker.bottomAnchor, constant: 8),
+            datePickerDoneButton.centerXAnchor.constraint(equalTo: datePickerContainer.centerXAnchor),
+            datePickerDoneButton.bottomAnchor.constraint(equalTo: datePickerContainer.bottomAnchor, constant: -16)
         ])
         
         let tap = UITapGestureRecognizer(target: self, action: #selector(hideDatePickerWithoutUpdate))
@@ -262,8 +294,13 @@ class ScheduleViewController: UIViewController {
         datePicker.date = currentDate
         datePickerOverlay.alpha = 0
         datePickerOverlay.isHidden = false
+        dateHeaderView.accessibilityElementsHidden = true
+        collectionView.accessibilityElementsHidden = true
+        noGamesLabel.accessibilityElementsHidden = true
         UIView.animate(withDuration: 0.3) {
             self.datePickerOverlay.alpha = 1.0
+        } completion: { _ in
+            UIAccessibility.post(notification: .screenChanged, argument: self.datePicker)
         }
     }
     
@@ -275,6 +312,10 @@ class ScheduleViewController: UIViewController {
             self.datePickerOverlay.alpha = 0
         }) { _ in
             self.datePickerOverlay.isHidden = true
+            self.dateHeaderView.accessibilityElementsHidden = false
+            self.collectionView.accessibilityElementsHidden = false
+            self.noGamesLabel.accessibilityElementsHidden = false
+            UIAccessibility.post(notification: .screenChanged, argument: self.dateLabel)
         }
     }
     
@@ -283,6 +324,10 @@ class ScheduleViewController: UIViewController {
             self.datePickerOverlay.alpha = 0
         }) { _ in
             self.datePickerOverlay.isHidden = true
+            self.dateHeaderView.accessibilityElementsHidden = false
+            self.collectionView.accessibilityElementsHidden = false
+            self.noGamesLabel.accessibilityElementsHidden = false
+            UIAccessibility.post(notification: .screenChanged, argument: self.dateLabel)
         }
     }
     
@@ -521,7 +566,7 @@ extension ScheduleViewController: UICollectionViewDataSource, UICollectionViewDe
         detailVC.hidesBottomBarWhenPushed = true
         
         // Setup handwriting back button for the detail view
-        let font = UIFont(name: "PermanentMarker-Regular", size: 18) ?? .systemFont(ofSize: 18)
+        let font = AppFont.permanent(18, textStyle: .headline, compatibleWith: traitCollection)
         let backItem = UIBarButtonItem(title: "< BACK", style: .plain, target: nil, action: nil)
         backItem.setTitleTextAttributes([.font: font, .foregroundColor: AppColors.pencil], for: .normal)
         navigationItem.backBarButtonItem = backItem
@@ -530,9 +575,83 @@ extension ScheduleViewController: UICollectionViewDataSource, UICollectionViewDe
     }
 }
 
+private extension ScheduleViewController {
+    func applyTypography() {
+        noGamesLabel.font = AppFont.patrick(20, textStyle: .title3, compatibleWith: traitCollection)
+        dateLabel.numberOfLines = traitCollection.preferredContentSizeCategory.isAccessibilityCategory ? 2 : 1
+    }
+
+    func updateCollectionLayout() {
+        guard let layout = collectionView?.collectionViewLayout as? UICollectionViewFlowLayout else { return }
+        let category = traitCollection.preferredContentSizeCategory
+        let singleColumnCategories: Set<UIContentSizeCategory> = [
+            .accessibilityMedium, .accessibilityLarge, .accessibilityExtraLarge,
+            .accessibilityExtraExtraLarge, .accessibilityExtraExtraExtraLarge,
+            .extraExtraExtraLarge, .extraExtraLarge
+        ]
+        let columns: CGFloat = singleColumnCategories.contains(category) ? 1 : 2
+        let availableWidth = max(view.bounds.width - 32 - (columns > 1 ? 12 : 0), 100)
+        let width = floor(availableWidth / columns)
+        let height: CGFloat
+        if category == .accessibilityExtraExtraExtraLarge {
+            height = 250
+        } else if category == .accessibilityExtraExtraLarge {
+            height = 230
+        } else if category == .accessibilityExtraLarge {
+            height = 210
+        } else if category == .accessibilityLarge {
+            height = 190
+        } else if category == .accessibilityMedium {
+            height = 175
+        } else if category == .extraExtraExtraLarge {
+            height = 150
+        } else if category == .extraExtraLarge {
+            height = 142
+        } else if category == .extraLarge {
+            height = 132
+        } else {
+            height = 120
+        }
+        let size = CGSize(width: width, height: height)
+        if layout.itemSize != size {
+            layout.itemSize = size
+            layout.invalidateLayout()
+        }
+    }
+
+    func handleAccessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
+        guard datePickerOverlay.isHidden else { return false }
+
+        switch direction {
+        case .left:
+            let previousDate = currentDate
+            prevDate()
+            guard !Calendar.current.isDate(previousDate, inSameDayAs: currentDate) else { return false }
+            UIAccessibility.post(notification: .pageScrolled, argument: dateLabel.accessibilityLabel)
+            return true
+        case .right:
+            let previousDate = currentDate
+            nextDate()
+            guard !Calendar.current.isDate(previousDate, inSameDayAs: currentDate) else { return false }
+            UIAccessibility.post(notification: .pageScrolled, argument: dateLabel.accessibilityLabel)
+            return true
+        default:
+            return false
+        }
+    }
+}
+
 extension ScheduleViewController: UIGestureRecognizerDelegate {
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         // Prevent dismissal if we tap on the picker container
         return touch.view == datePickerOverlay
+    }
+}
+
+private final class ScheduleRootView: UIView {
+    var onAccessibilityScroll: ((UIAccessibilityScrollDirection) -> Bool)?
+
+    override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
+        onAccessibilityScroll?(direction) ?? false
     }
 }

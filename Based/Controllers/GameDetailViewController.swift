@@ -908,6 +908,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         self.currentUmpires = umpires
 
         umpireLabel.attributedText = GameFooterContent.makeUmpireText(umpires)
+        umpireLabel.accessibilityLabel = GameFooterContent.makeUmpireAccessibilityLabel(umpires)
     }
 
     private func updatePitcherList() {

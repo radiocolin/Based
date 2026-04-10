@@ -33,6 +33,14 @@ class TimelineView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         setupUI()
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: TimelineView, _) in
+            self.rebuildFooter()
+            self.tableView.reloadData()
+            if self.isLiveStateVisible {
+                self.buildLiveHeader()
+                self.tableView.tableHeaderView = self.liveHeaderContainer
+            }
+        }
     }
     
     required init?(coder: NSCoder) {
@@ -141,10 +149,11 @@ class TimelineView: UIView {
         // "CURRENT AT BAT" label
         let titleLabel = UILabel()
         titleLabel.text = "CURRENT AT BAT"
-        titleLabel.font = UIFont(name: "PermanentMarker-Regular", size: 14) ?? .systemFont(ofSize: 14, weight: .bold)
+        titleLabel.font = AppFont.permanent(14, textStyle: .headline, compatibleWith: traitCollection)
         titleLabel.textColor = AppColors.pencil.withAlphaComponent(0.8)
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.isAccessibilityElement = false
+        titleLabel.adjustsFontForContentSizeCategory = true
         container.addSubview(titleLabel)
         
         // Background band for the title
@@ -265,7 +274,8 @@ class TimelineView: UIView {
             let umpireLabel = UILabel()
             umpireLabel.numberOfLines = 0
             umpireLabel.attributedText = umpireText
-            umpireLabel.accessibilityLabel = umpireText.string.replacingOccurrences(of: "\n", with: ", ")
+            umpireLabel.accessibilityLabel = GameFooterContent.makeUmpireAccessibilityLabel(umpires)
+            umpireLabel.adjustsFontForContentSizeCategory = true
             infoRow.addArrangedSubview(umpireLabel)
         }
         
@@ -274,6 +284,7 @@ class TimelineView: UIView {
             gameInfoView.numberOfLines = 0
             gameInfoView.attributedText = gameInfoText
             gameInfoView.accessibilityLabel = gameInfoText.string.replacingOccurrences(of: "\n", with: ", ")
+            gameInfoView.adjustsFontForContentSizeCategory = true
             let widthConstraint = gameInfoView.widthAnchor.constraint(equalToConstant: 200)
             widthConstraint.priority = .defaultHigh // Allow it to shrink on small screens
             widthConstraint.isActive = true
@@ -338,10 +349,11 @@ extension TimelineView: UITableViewDelegate, UITableViewDataSource {
         
         let label = UILabel()
         label.text = groups[section].title
-        label.font = UIFont(name: "PermanentMarker-Regular", size: 14) ?? .systemFont(ofSize: 14, weight: .bold)
+        label.font = AppFont.permanent(14, textStyle: .headline, compatibleWith: traitCollection)
         label.textColor = AppColors.pencil.withAlphaComponent(0.8)
         label.translatesAutoresizingMaskIntoConstraints = false
         label.isAccessibilityElement = false
+        label.adjustsFontForContentSizeCategory = true
         container.addSubview(label)
         
         let line = UIView()

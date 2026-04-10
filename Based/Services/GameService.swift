@@ -923,7 +923,7 @@ class GameService {
                 description: event.details?.description ?? "",
                 outcome: event.details?.call?.description ?? "",
                 speed: event.pitchData?.startSpeed,
-                pitchType: event.pitchType?.code ?? event.pitchType?.description,
+                pitchType: event.details?.type?.description ?? event.pitchType?.description ?? event.details?.type?.code ?? event.pitchType?.code,
                 balls: event.count?.balls,
                 strikes: event.count?.strikes,
                 x: event.pitchData?.coordinates?.pX,
