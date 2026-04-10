@@ -10,12 +10,13 @@ class TimelineCell: UITableViewCell {
     private let strikesLabel = UILabel()
     private let outsLabel = UILabel()
     
-    private let infoStack = UIStackView()
+    private let topRow = UIStackView()
+    private let bottomRow = UIStackView()
+    private let matchupStack = UIStackView()
     private let batterLabel = UILabel()
     private let pitcherLabel = UILabel()
     private let descriptionLabel = UILabel()
     
-    private let leftContainer = UIStackView()
     private let diamondContainer = UIView()
     private var accentColor: UIColor = AppColors.pencil
     
@@ -37,20 +38,27 @@ class TimelineCell: UITableViewCell {
         pitchTrackView.isAccessibilityElement = false
         diamondView.isAccessibilityElement = false
         
-        leftContainer.axis = .vertical
-        leftContainer.spacing = 12
-        leftContainer.alignment = .center
-        leftContainer.translatesAutoresizingMaskIntoConstraints = false
-        leftContainer.isAccessibilityElement = false
-        contentView.addSubview(leftContainer)
+        topRow.axis = .horizontal
+        topRow.spacing = 16
+        topRow.alignment = .top
+        topRow.translatesAutoresizingMaskIntoConstraints = false
+        topRow.isAccessibilityElement = false
+        contentView.addSubview(topRow)
+
+        bottomRow.axis = .horizontal
+        bottomRow.spacing = 16
+        bottomRow.alignment = .top
+        bottomRow.translatesAutoresizingMaskIntoConstraints = false
+        bottomRow.isAccessibilityElement = false
+        contentView.addSubview(bottomRow)
         
         pitchTrackView.translatesAutoresizingMaskIntoConstraints = false
         diamondContainer.translatesAutoresizingMaskIntoConstraints = false
         diamondContainer.isAccessibilityElement = false
         diamondView.translatesAutoresizingMaskIntoConstraints = false
         
-        leftContainer.addArrangedSubview(pitchTrackView)
-        leftContainer.addArrangedSubview(diamondContainer)
+        topRow.addArrangedSubview(pitchTrackView)
+        bottomRow.addArrangedSubview(diamondContainer)
         diamondContainer.addSubview(diamondView)
         
         // Diamond Labels
@@ -77,11 +85,11 @@ class TimelineCell: UITableViewCell {
             diamondContainer.addSubview($0)
         }
         
-        infoStack.axis = .vertical
-        infoStack.spacing = 2
-        infoStack.translatesAutoresizingMaskIntoConstraints = false
-        infoStack.isAccessibilityElement = false
-        contentView.addSubview(infoStack)
+        matchupStack.axis = .vertical
+        matchupStack.spacing = 2
+        matchupStack.alignment = .fill
+        matchupStack.translatesAutoresizingMaskIntoConstraints = false
+        matchupStack.isAccessibilityElement = false
         
         batterLabel.font = AppFont.permanent(16, textStyle: .headline, compatibleWith: traitCollection)
         batterLabel.textColor = AppColors.pencil
@@ -98,25 +106,41 @@ class TimelineCell: UITableViewCell {
         descriptionLabel.numberOfLines = 0
         descriptionLabel.adjustsFontForContentSizeCategory = true
         [batterLabel, pitcherLabel, descriptionLabel].forEach { $0.isAccessibilityElement = false }
-        
-        infoStack.addArrangedSubview(batterLabel)
-        infoStack.addArrangedSubview(pitcherLabel)
-        infoStack.addArrangedSubview(descriptionLabel)
-        
-        let infoTrailing = infoStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -12)
-        infoTrailing.priority = UILayoutPriority(999)
+
+        batterLabel.setContentCompressionResistancePriority(.required, for: .vertical)
+        batterLabel.setContentHuggingPriority(.required, for: .vertical)
+        pitcherLabel.setContentCompressionResistancePriority(.required, for: .vertical)
+        pitcherLabel.setContentHuggingPriority(.required, for: .vertical)
+        matchupStack.setContentCompressionResistancePriority(.required, for: .vertical)
+        matchupStack.setContentHuggingPriority(.required, for: .vertical)
+        descriptionLabel.setContentCompressionResistancePriority(.required, for: .vertical)
+        descriptionLabel.setContentHuggingPriority(.required, for: .vertical)
+
+        matchupStack.addArrangedSubview(batterLabel)
+        matchupStack.addArrangedSubview(pitcherLabel)
+        topRow.addArrangedSubview(matchupStack)
+        bottomRow.addArrangedSubview(descriptionLabel)
+
+        matchupStack.setContentCompressionResistancePriority(.required, for: .horizontal)
+        descriptionLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        pitchTrackView.setContentCompressionResistancePriority(.required, for: .horizontal)
+        diamondContainer.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         NSLayoutConstraint.activate([
-            leftContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 12),
-            leftContainer.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12),
-            leftContainer.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -12),
-            leftContainer.widthAnchor.constraint(equalToConstant: 88),
+            topRow.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 12),
+            topRow.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12),
+            topRow.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -12),
             
             pitchTrackView.widthAnchor.constraint(equalToConstant: 78),
             pitchTrackView.heightAnchor.constraint(equalToConstant: 92),
             
             diamondContainer.widthAnchor.constraint(equalToConstant: 88),
             diamondContainer.heightAnchor.constraint(equalToConstant: 80),
+
+            bottomRow.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 12),
+            bottomRow.topAnchor.constraint(equalTo: topRow.bottomAnchor, constant: 12),
+            bottomRow.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -12),
+            bottomRow.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12),
             
             diamondView.centerXAnchor.constraint(equalTo: diamondContainer.centerXAnchor),
             diamondView.centerYAnchor.constraint(equalTo: diamondContainer.centerYAnchor),
@@ -134,12 +158,7 @@ class TimelineCell: UITableViewCell {
             strikesLabel.trailingAnchor.constraint(equalTo: diamondContainer.trailingAnchor, constant: -4),
             
             outsLabel.bottomAnchor.constraint(equalTo: diamondContainer.bottomAnchor, constant: -4),
-            outsLabel.trailingAnchor.constraint(equalTo: diamondContainer.trailingAnchor, constant: -4),
-            
-            infoStack.leadingAnchor.constraint(equalTo: leftContainer.trailingAnchor, constant: 16),
-            infoTrailing,
-            infoStack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12),
-            infoStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12)
+            outsLabel.trailingAnchor.constraint(equalTo: diamondContainer.trailingAnchor, constant: -4)
         ])
     }
     

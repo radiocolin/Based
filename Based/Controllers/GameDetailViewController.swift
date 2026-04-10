@@ -177,7 +177,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
         // Custom Back Button with wobbly chevron
         let backBtn = UIButton(type: .system)
-        let chevronSize = BarAppearanceSupport.iconSize(for: traitCollection, base: 18, maximum: 20)
+        let chevronSize = BarAppearanceSupport.iconSize(for: traitCollection, base: 18, maximum: 22)
         let chevronImg = UIImage.pencilStyledIcon(named: "chevron.backward", color: pencilColor, size: chevronSize)
         
         var config = UIButton.Configuration.plain()
@@ -198,7 +198,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         backBtn.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
         navigationItem.leftBarButtonItem = UIBarButtonItem(customView: backBtn)
         
-        let iconSize = BarAppearanceSupport.iconSize(for: traitCollection, base: 24, maximum: 26)
+        let iconSize = BarAppearanceSupport.iconSize(for: traitCollection, base: 32, maximum: 32)
         let shareImg = UIImage.pencilStyledIcon(named: "square.and.arrow.up", color: pencilColor, size: iconSize, offset: CGPoint(x: -0.5, y: 0), scaleMultiplier: 0.9)
         let shareItem = UIBarButtonItem(image: shareImg, style: .plain, target: self, action: #selector(shareScorecard))
         shareItem.accessibilityLabel = "Share scorecard"
