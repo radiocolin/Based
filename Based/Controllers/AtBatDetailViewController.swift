@@ -11,11 +11,10 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
     // UI Elements
     private let scrollView = UIScrollView()
     private let containerView = UIView()
-    private let titleStack = UIStackView()
+    private let matchupStack = UIStackView()
     private let batterLabel = UILabel()
-    private let resultLabel = UILabel()
     private let subHeaderLabel = UILabel()
-    
+
     private let atBatGraphicView = AtBatGraphicView()
     private let descriptionLabel = UILabel()
     private let pitchesTableView = UITableView()
@@ -23,7 +22,12 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
     private let pitchSequenceHeaderLabel = UILabel()
     private var pitchTrackHeightConstraint: NSLayoutConstraint?
     private var atBatGraphicHeightConstraint: NSLayoutConstraint?
+    private var atBatGraphicWidthConstraint: NSLayoutConstraint?
+    private var pitchTrackWidthConstraint: NSLayoutConstraint?
     private var pitchesTableHeightConstraint: NSLayoutConstraint?
+
+    private var regularConstraints: [NSLayoutConstraint] = []
+    private var accessibilityLayoutConstraints: [NSLayoutConstraint] = []
 
     var onBatterTap: (() -> Void)?
     var onPitcherTap: (() -> Void)?
@@ -63,7 +67,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         batterLabel.text = self.batterName
         applyPitcherHeader()
         applyEventPresentation()
-        
+
         if let pitches = event.pitches {
             pitchTrackView.configure(with: pitches)
         } else {
@@ -72,7 +76,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         atBatGraphicView.configure(with: event, accentColor: self.accentColor)
         pitchesTableView.reloadData()
         updatePitchesTableHeight()
-        
+
         view.setNeedsLayout()
     }
     
@@ -89,6 +93,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         }
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: AtBatDetailViewController, _) in
             self.applyTypography()
+            self.updateLayoutForCurrentSettings()
             self.pitchesTableView.reloadData()
         }
     }
@@ -108,83 +113,72 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         view.backgroundColor = paperColor
         pitchTrackView.isAccessibilityElement = false
         atBatGraphicView.isAccessibilityElement = false
-        
+
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(scrollView)
-        
+
         containerView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.addSubview(containerView)
-        
+
         NSLayoutConstraint.activate([
             scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            
+
             containerView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
             containerView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
             containerView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
             containerView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
             containerView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor)
         ])
-        
-        // intentional Title Layout (Stacked if needed)
-        titleStack.axis = .vertical
-        titleStack.alignment = .center
-        titleStack.spacing = 4
-        titleStack.translatesAutoresizingMaskIntoConstraints = false
-        containerView.addSubview(titleStack)
-        
+
+        // --- Matchup ---
+        matchupStack.axis = .vertical
+        matchupStack.alignment = .leading
+        matchupStack.spacing = 2
+        matchupStack.translatesAutoresizingMaskIntoConstraints = false
+        matchupStack.isAccessibilityElement = true
+        matchupStack.accessibilityTraits = .header
+        containerView.addSubview(matchupStack)
+
         batterLabel.text = batterName
-        batterLabel.font = AppFont.permanent(24, textStyle: .title1, compatibleWith: traitCollection)
+        batterLabel.font = AppFont.permanent(32, textStyle: .title1, compatibleWith: traitCollection)
         batterLabel.textColor = pencilColor
-        batterLabel.textAlignment = .center
         batterLabel.numberOfLines = 0
         batterLabel.adjustsFontForContentSizeCategory = true
         batterLabel.isUserInteractionEnabled = true
-        batterLabel.accessibilityTraits = .button
-        batterLabel.accessibilityHint = "Double tap for player details."
-        
-        resultLabel.font = AppFont.permanent(32, textStyle: .largeTitle, compatibleWith: traitCollection)
-        resultLabel.textColor = pencilColor
-        resultLabel.adjustsFontForContentSizeCategory = true
-        resultLabel.numberOfLines = 0
-        resultLabel.textAlignment = .center
-        
-        titleStack.addArrangedSubview(batterLabel)
-        titleStack.addArrangedSubview(resultLabel)
-        
-        // SubHeader (Pitcher Name)
+        batterLabel.isAccessibilityElement = false // Container handles it
+
         applyPitcherHeader()
-        subHeaderLabel.textAlignment = .center
-        subHeaderLabel.translatesAutoresizingMaskIntoConstraints = false
         subHeaderLabel.numberOfLines = 0
         subHeaderLabel.isUserInteractionEnabled = true
-        subHeaderLabel.accessibilityTraits = .button
-        subHeaderLabel.accessibilityHint = "Double tap for pitcher details."
-        containerView.addSubview(subHeaderLabel)
-        
-        // Top Container Views
-        pitchTrackView.translatesAutoresizingMaskIntoConstraints = false
-        if let pitches = event.pitches {
-            pitchTrackView.configure(with: pitches)
-        }
-        containerView.addSubview(pitchTrackView)
-        
-        atBatGraphicView.translatesAutoresizingMaskIntoConstraints = false
-        atBatGraphicView.configure(with: event, accentColor: accentColor)
-        containerView.addSubview(atBatGraphicView)
-        
-        // Description
+        subHeaderLabel.isAccessibilityElement = false // Container handles it
+
+        matchupStack.addArrangedSubview(batterLabel)
+        matchupStack.addArrangedSubview(subHeaderLabel)
+
         descriptionLabel.font = AppFont.patrick(18, textStyle: .body, compatibleWith: traitCollection)
         descriptionLabel.textColor = pencilColor.withAlphaComponent(0.8)
         descriptionLabel.textAlignment = .left
         descriptionLabel.numberOfLines = 0
         descriptionLabel.translatesAutoresizingMaskIntoConstraints = false
         descriptionLabel.adjustsFontForContentSizeCategory = true
+        descriptionLabel.setContentCompressionResistancePriority(.required, for: .vertical)
         containerView.addSubview(descriptionLabel)
-        
-        // Pitches Table
+
+        // --- Right Column / Stacked Graphics ---
+        atBatGraphicView.translatesAutoresizingMaskIntoConstraints = false
+        atBatGraphicView.configure(with: event, accentColor: accentColor)
+        containerView.addSubview(atBatGraphicView)
+
+        pitchTrackView.translatesAutoresizingMaskIntoConstraints = false
+        if let pitches = event.pitches {
+            pitchTrackView.configure(with: pitches)
+        }
+        containerView.addSubview(pitchTrackView)
+
+        // --- Pitch Sequence Table ---
         pitchesTableView.backgroundColor = .clear
         pitchesTableView.separatorStyle = .none
         pitchesTableView.dataSource = self
@@ -201,77 +195,116 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         pitchSequenceHeaderLabel.textColor = pencilColor
         pitchSequenceHeaderLabel.adjustsFontForContentSizeCategory = true
         pitchSequenceHeaderLabel.accessibilityTraits = .header
-        
-        // Layout
-        let topHeight: CGFloat = traitCollection.preferredContentSizeCategory.isAccessibilityCategory ? 140 : 180
-        
-        NSLayoutConstraint.activate([
-            titleStack.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 20),
-            titleStack.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
-            titleStack.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
-            
-            subHeaderLabel.topAnchor.constraint(equalTo: titleStack.bottomAnchor, constant: 4),
-            subHeaderLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
-            subHeaderLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
-            
-            // Top Section (Left: Pitch Track, Right: Result Graphic)
-            pitchTrackView.topAnchor.constraint(equalTo: subHeaderLabel.bottomAnchor, constant: 16),
-            pitchTrackView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
-            pitchTrackView.trailingAnchor.constraint(equalTo: containerView.centerXAnchor, constant: -10),
-            
-            atBatGraphicView.topAnchor.constraint(equalTo: pitchTrackView.topAnchor),
-            atBatGraphicView.leadingAnchor.constraint(equalTo: containerView.centerXAnchor, constant: 10),
+
+        let sideColumnWidth: CGFloat = 160
+        let horizontalSpacing: CGFloat = 20
+        let verticalSpacing: CGFloat = 12
+
+        // Initialize reusable constraints
+        atBatGraphicWidthConstraint = atBatGraphicView.widthAnchor.constraint(equalToConstant: sideColumnWidth)
+        atBatGraphicHeightConstraint = atBatGraphicView.heightAnchor.constraint(equalToConstant: sideColumnWidth)
+        pitchTrackWidthConstraint = pitchTrackView.widthAnchor.constraint(equalToConstant: sideColumnWidth)
+        pitchTrackHeightConstraint = pitchTrackView.heightAnchor.constraint(equalToConstant: 180)
+        pitchesTableHeightConstraint = pitchesTableView.heightAnchor.constraint(equalToConstant: 0)
+        pitchesTableHeightConstraint?.isActive = true
+
+        // Regular 2-Column Constraints
+        let descriptionCenterY = descriptionLabel.centerYAnchor.constraint(equalTo: pitchTrackView.centerYAnchor)
+        descriptionCenterY.priority = .defaultHigh
+
+        regularConstraints = [
+            atBatGraphicView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 20),
             atBatGraphicView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
-            
-            // Description
-            descriptionLabel.topAnchor.constraint(equalTo: pitchTrackView.bottomAnchor, constant: 16),
-            descriptionLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 30),
-            descriptionLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -30),
-            
-            // Table
-            pitchesTableView.topAnchor.constraint(equalTo: descriptionLabel.bottomAnchor, constant: 16),
+            atBatGraphicWidthConstraint!,
+            atBatGraphicHeightConstraint!,
+
+            matchupStack.centerYAnchor.constraint(equalTo: atBatGraphicView.centerYAnchor),
+            matchupStack.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
+            matchupStack.trailingAnchor.constraint(equalTo: atBatGraphicView.leadingAnchor, constant: -horizontalSpacing),
+
+            pitchTrackView.topAnchor.constraint(greaterThanOrEqualTo: matchupStack.bottomAnchor, constant: verticalSpacing),
+            pitchTrackView.topAnchor.constraint(greaterThanOrEqualTo: atBatGraphicView.bottomAnchor, constant: verticalSpacing),
+            pitchTrackView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
+            pitchTrackWidthConstraint!,
+            pitchTrackHeightConstraint!,
+
+            descriptionCenterY,
+            descriptionLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
+            descriptionLabel.trailingAnchor.constraint(equalTo: pitchTrackView.leadingAnchor, constant: -horizontalSpacing),
+            descriptionLabel.topAnchor.constraint(greaterThanOrEqualTo: matchupStack.bottomAnchor, constant: verticalSpacing),
+            descriptionLabel.topAnchor.constraint(greaterThanOrEqualTo: atBatGraphicView.bottomAnchor, constant: verticalSpacing),
+
+            pitchesTableView.topAnchor.constraint(greaterThanOrEqualTo: descriptionLabel.bottomAnchor, constant: 12),
+            pitchesTableView.topAnchor.constraint(greaterThanOrEqualTo: pitchTrackView.bottomAnchor, constant: 12)
+        ]
+
+        // Accessibility Single-Column Constraints
+        accessibilityLayoutConstraints = [
+            matchupStack.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 20),
+            matchupStack.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
+            matchupStack.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
+
+            atBatGraphicView.topAnchor.constraint(equalTo: matchupStack.bottomAnchor, constant: verticalSpacing),
+            atBatGraphicView.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
+            atBatGraphicWidthConstraint!,
+            atBatGraphicHeightConstraint!,
+
+            descriptionLabel.topAnchor.constraint(equalTo: atBatGraphicView.bottomAnchor, constant: verticalSpacing),
+            descriptionLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
+            descriptionLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
+
+            pitchTrackView.topAnchor.constraint(equalTo: descriptionLabel.bottomAnchor, constant: verticalSpacing),
+            pitchTrackView.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
+            pitchTrackWidthConstraint!,
+            pitchTrackHeightConstraint!,
+
+            pitchesTableView.topAnchor.constraint(equalTo: pitchTrackView.bottomAnchor, constant: 16)
+        ]
+
+        NSLayoutConstraint.activate([
             pitchesTableView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
             pitchesTableView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
             pitchesTableView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -20)
         ])
-        pitchTrackHeightConstraint = pitchTrackView.heightAnchor.constraint(equalToConstant: topHeight)
-        pitchTrackHeightConstraint?.isActive = true
-        atBatGraphicHeightConstraint = atBatGraphicView.heightAnchor.constraint(equalToConstant: topHeight)
-        atBatGraphicHeightConstraint?.isActive = true
-        pitchesTableHeightConstraint = pitchesTableView.heightAnchor.constraint(equalToConstant: 0)
-        pitchesTableHeightConstraint?.isActive = true
-        
+
+        updateLayoutForCurrentSettings()
         containerView.layer.addSublayer(linesLayer)
 
         let batterTap = UITapGestureRecognizer(target: self, action: #selector(handleBatterTap))
-        batterLabel.addGestureRecognizer(batterTap)
+        matchupStack.addGestureRecognizer(batterTap)
+    }
 
-        let pitcherTap = UITapGestureRecognizer(target: self, action: #selector(handlePitcherTap))
-        subHeaderLabel.addGestureRecognizer(pitcherTap)
+    private func updateLayoutForCurrentSettings() {
+        let isAccessibility = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+        NSLayoutConstraint.deactivate(regularConstraints + accessibilityLayoutConstraints)
+        
+        if isAccessibility {
+            NSLayoutConstraint.activate(accessibilityLayoutConstraints)
+        } else {
+            NSLayoutConstraint.activate(regularConstraints)
+        }
+        
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
+        updateAccessibilityOrder()
     }
 
     private func applyEventPresentation() {
         let presentation = AtBatPresentation(event: event, teamAccentColor: accentColor)
-        resultLabel.text = presentation.displayResult
-        resultLabel.transform = presentation.resultTransform
         descriptionLabel.text = presentation.displayDescription
-        resultLabel.accessibilityLabel = "Result, \(presentation.displayResult)"
         descriptionLabel.accessibilityLabel = "Play description, \(presentation.displayDescription)"
-        view.accessibilityLabel = AccessibilitySupport.joined([
-            batterLabel.text,
-            resultLabel.accessibilityLabel,
-            subHeaderLabel.accessibilityLabel,
-            descriptionLabel.accessibilityLabel
-        ])
+        
+        matchupStack.accessibilityLabel = "\(batterName) versus \(pitcherName.capitalized)"
+        matchupStack.accessibilityHint = "Double tap for player details."
     }
 
     private func applyPitcherHeader() {
         let prefixAttributes: [NSAttributedString.Key: Any] = [
-            .font: AppFont.patrick(16, textStyle: .headline, compatibleWith: traitCollection),
+            .font: AppFont.patrick(20, textStyle: .headline, compatibleWith: traitCollection),
             .foregroundColor: pencilColor.withAlphaComponent(0.7)
         ]
         let pitcherAttributes: [NSAttributedString.Key: Any] = [
-            .font: AppFont.patrick(16, textStyle: .headline, compatibleWith: traitCollection),
+            .font: AppFont.patrick(20, textStyle: .headline, compatibleWith: traitCollection),
             .foregroundColor: pencilColor
         ]
         let text = NSMutableAttributedString(string: "vs. ", attributes: prefixAttributes)
@@ -289,22 +322,8 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
     }
     
     private func drawPencilLines() {
-        let path = UIBezierPath()
-        
-        // Line under Header
-        let headerY = subHeaderLabel.frame.maxY + 10
-        path.append(UIBezierPath.pencilLine(from: CGPoint(x: 20, y: headerY), to: CGPoint(x: containerView.bounds.width - 20, y: headerY)))
-        
-        // Line under Description
-        let descY = descriptionLabel.frame.maxY + 10
-        path.append(UIBezierPath.pencilLine(from: CGPoint(x: 20, y: descY), to: CGPoint(x: containerView.bounds.width - 20, y: descY)))
-        
-        linesLayer.path = path.cgPath
-        linesLayer.strokeColor = pencilColor.cgColor
-        linesLayer.lineWidth = 1.0
-        linesLayer.fillColor = UIColor.clear.cgColor
-        linesLayer.lineCap = .round
-        linesLayer.lineJoin = .round
+        // Separators removed for cleaner layout as requested
+        linesLayer.path = nil
     }
     
     // MARK: - TableView DataSource
@@ -349,22 +368,23 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
 
     private func updateAccessibilityOrder() {
         view.accessibilityElements = [
-            batterLabel as Any,
-            resultLabel as Any,
-            subHeaderLabel as Any,
+            matchupStack as Any,
             descriptionLabel as Any,
             pitchesTableView as Any
         ]
     }
 
     private func applyTypography() {
-        batterLabel.font = AppFont.permanent(24, textStyle: .title1, compatibleWith: traitCollection)
-        resultLabel.font = AppFont.permanent(32, textStyle: .largeTitle, compatibleWith: traitCollection)
+        batterLabel.font = AppFont.permanent(32, textStyle: .title1, compatibleWith: traitCollection)
         descriptionLabel.font = AppFont.patrick(18, textStyle: .body, compatibleWith: traitCollection)
         pitchSequenceHeaderLabel.font = AppFont.patrick(16, textStyle: .headline, compatibleWith: traitCollection)
-        let topHeight: CGFloat = traitCollection.preferredContentSizeCategory.isAccessibilityCategory ? 140 : 180
-        pitchTrackHeightConstraint?.constant = topHeight
-        atBatGraphicHeightConstraint?.constant = topHeight
+        
+        let sideColumnWidth: CGFloat = 160
+        atBatGraphicWidthConstraint?.constant = sideColumnWidth
+        atBatGraphicHeightConstraint?.constant = sideColumnWidth
+        pitchTrackWidthConstraint?.constant = sideColumnWidth
+        pitchTrackHeightConstraint?.constant = 180
+        
         applyPitcherHeader()
         updatePitchesTableHeight()
     }
@@ -376,104 +396,107 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
 }
 
 class PitchCell: UITableViewCell {
-    
+
     private let numLabel = UILabel()
     private let descLabel = UILabel()
-    private let speedLabel = UILabel()
-    private let typeLabel = UILabel()
-    private let outcomeLabel = UILabel()
+    private let detailLabel = UILabel()
+    private let subtitleLabel = UILabel()
+    private let separatorLayer = CAShapeLayer()
     private var compactConstraints: [NSLayoutConstraint] = []
     private var accessibilityConstraints: [NSLayoutConstraint] = []
-    
+
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
         setup()
     }
-    
+
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let y = contentView.bounds.maxY
+        let inset: CGFloat = 0
+        separatorLayer.path = UIBezierPath.pencilLine(
+            from: CGPoint(x: inset, y: y),
+            to: CGPoint(x: contentView.bounds.width - inset, y: y),
+            jitter: 0.4
+        ).cgPath
+        separatorLayer.strokeColor = AppColors.pencil.withAlphaComponent(0.15).cgColor
+    }
+
     private func setup() {
         backgroundColor = .clear
         selectionStyle = .none
         isAccessibilityElement = true
         accessibilityTraits = .staticText
-        
-        [numLabel, descLabel, speedLabel, typeLabel, outcomeLabel].forEach {
+
+        separatorLayer.lineWidth = 0.75
+        separatorLayer.fillColor = UIColor.clear.cgColor
+        contentView.layer.addSublayer(separatorLayer)
+
+        [numLabel, descLabel, detailLabel, subtitleLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             contentView.addSubview($0)
             $0.textColor = AppColors.pencil
-            $0.font = AppFont.patrick(18, textStyle: .body)
             $0.isAccessibilityElement = false
             $0.adjustsFontForContentSizeCategory = true
         }
-        
+
         numLabel.font = AppFont.permanent(16, textStyle: .headline)
         numLabel.textColor = .gray
+
         descLabel.font = AppFont.permanent(18, textStyle: .body)
         descLabel.numberOfLines = 0
-        outcomeLabel.numberOfLines = 0
-        
-        speedLabel.textAlignment = .right
-        speedLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
-        speedLabel.setContentHuggingPriority(.required, for: .horizontal)
-        speedLabel.numberOfLines = 0
-        speedLabel.font = AppFont.patrick(14, textStyle: .footnote)
-        speedLabel.textColor = AppColors.pencil.withAlphaComponent(0.7)
+        descLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        typeLabel.font = AppFont.permanent(18, textStyle: .body)
-        typeLabel.textColor = AppColors.pencil
-        typeLabel.textAlignment = .right
-        typeLabel.numberOfLines = 2
-        typeLabel.lineBreakMode = .byWordWrapping
-        typeLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
-        typeLabel.setContentHuggingPriority(.required, for: .horizontal)
+        detailLabel.font = AppFont.patrick(16, textStyle: .subheadline)
+        detailLabel.textColor = AppColors.pencil.withAlphaComponent(0.7)
+        detailLabel.textAlignment = .right
+        detailLabel.numberOfLines = 0
+        detailLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        detailLabel.setContentHuggingPriority(.required, for: .horizontal)
+
+        subtitleLabel.font = AppFont.patrick(14, textStyle: .footnote)
+        subtitleLabel.textColor = .gray
+        subtitleLabel.numberOfLines = 0
 
         compactConstraints = [
-            numLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 4),
+            numLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 0),
             numLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
-            numLabel.widthAnchor.constraint(equalToConstant: 32),
-            
+            numLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 32),
+
             descLabel.leadingAnchor.constraint(equalTo: numLabel.trailingAnchor, constant: 8),
             descLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
-            descLabel.trailingAnchor.constraint(lessThanOrEqualTo: speedLabel.leadingAnchor, constant: -8),
-            
-            outcomeLabel.leadingAnchor.constraint(equalTo: descLabel.leadingAnchor),
-            outcomeLabel.topAnchor.constraint(equalTo: descLabel.bottomAnchor, constant: 2),
-            outcomeLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
-            
-            speedLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            typeLabel.trailingAnchor.constraint(equalTo: speedLabel.trailingAnchor),
-            typeLabel.topAnchor.constraint(equalTo: descLabel.topAnchor),
-            typeLabel.widthAnchor.constraint(equalToConstant: 116),
+            descLabel.trailingAnchor.constraint(lessThanOrEqualTo: detailLabel.leadingAnchor, constant: -8),
 
-            speedLabel.trailingAnchor.constraint(equalTo: typeLabel.trailingAnchor),
-            speedLabel.topAnchor.constraint(equalTo: typeLabel.bottomAnchor, constant: 2),
-            typeLabel.widthAnchor.constraint(equalTo: speedLabel.widthAnchor)
+            detailLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: 0),
+            detailLabel.firstBaselineAnchor.constraint(equalTo: descLabel.firstBaselineAnchor),
+
+            subtitleLabel.leadingAnchor.constraint(equalTo: descLabel.leadingAnchor),
+            subtitleLabel.topAnchor.constraint(equalTo: descLabel.bottomAnchor, constant: 2),
+            subtitleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: 0),
+            subtitleLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8)
         ]
 
         accessibilityConstraints = [
-            numLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 4),
+            numLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 0),
             numLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
-            numLabel.widthAnchor.constraint(equalToConstant: 32),
+            numLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: 0),
 
-            descLabel.leadingAnchor.constraint(equalTo: numLabel.trailingAnchor, constant: 8),
-            descLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
-            descLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            descLabel.leadingAnchor.constraint(equalTo: numLabel.leadingAnchor),
+            descLabel.topAnchor.constraint(equalTo: numLabel.bottomAnchor, constant: 4),
+            descLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: 0),
 
-            outcomeLabel.leadingAnchor.constraint(equalTo: descLabel.leadingAnchor),
-            outcomeLabel.topAnchor.constraint(equalTo: descLabel.bottomAnchor, constant: 2),
-            outcomeLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            detailLabel.leadingAnchor.constraint(equalTo: descLabel.leadingAnchor),
+            detailLabel.topAnchor.constraint(equalTo: descLabel.bottomAnchor, constant: 8),
+            detailLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: 0),
 
-            typeLabel.leadingAnchor.constraint(equalTo: descLabel.leadingAnchor),
-            typeLabel.topAnchor.constraint(equalTo: outcomeLabel.bottomAnchor, constant: 4),
-            typeLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-
-            speedLabel.leadingAnchor.constraint(equalTo: descLabel.leadingAnchor),
-            speedLabel.topAnchor.constraint(equalTo: typeLabel.bottomAnchor, constant: 2),
-            speedLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            speedLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8)
+            subtitleLabel.leadingAnchor.constraint(equalTo: descLabel.leadingAnchor),
+            subtitleLabel.topAnchor.constraint(equalTo: detailLabel.bottomAnchor, constant: 4),
+            subtitleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: 0),
+            subtitleLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8)
         ]
 
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: PitchCell, _) in
@@ -481,18 +504,26 @@ class PitchCell: UITableViewCell {
         }
         updateLayoutForCurrentContentSizeCategory()
     }
-    
+
     func configure(with pitch: PitchEvent) {
         numLabel.text = "\(pitch.pitchNumber)."
         descLabel.text = pitch.description
-        outcomeLabel.font = AppFont.patrick(14, textStyle: .footnote)
-        outcomeLabel.textColor = .gray
-        outcomeLabel.text = subtitleText(for: pitch)
-        outcomeLabel.isHidden = outcomeLabel.text?.isEmpty ?? true
-        
-        speedLabel.text = speedText(for: pitch)
-        typeLabel.text = pitch.pitchType?.trimmingCharacters(in: .whitespacesAndNewlines)
-        typeLabel.isHidden = typeLabel.text?.isEmpty ?? true
+
+        // Build detail string: "Type • Speed" or just one
+        var detailParts: [String] = []
+        if let type = pitch.pitchType?.trimmingCharacters(in: .whitespacesAndNewlines), !type.isEmpty {
+            detailParts.append(type)
+        }
+        if let speed = pitch.speed {
+            detailParts.append(String(format: "%.0f mph", speed))
+        }
+        detailLabel.text = detailParts.joined(separator: " • ")
+        detailLabel.isHidden = detailParts.isEmpty
+
+        let subtitle = subtitleText(for: pitch)
+        subtitleLabel.text = subtitle
+        subtitleLabel.isHidden = subtitle.isEmpty
+
         updateLayoutForCurrentContentSizeCategory()
         accessibilityLabel = AccessibilitySupport.pitchDescription(pitch)
     }
@@ -501,12 +532,10 @@ class PitchCell: UITableViewCell {
         let isAccessibility = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
         NSLayoutConstraint.deactivate(compactConstraints + accessibilityConstraints)
         if isAccessibility {
-            speedLabel.textAlignment = .left
-            typeLabel.textAlignment = .left
+            detailLabel.textAlignment = .left
             NSLayoutConstraint.activate(accessibilityConstraints)
         } else {
-            speedLabel.textAlignment = .right
-            typeLabel.textAlignment = .right
+            detailLabel.textAlignment = .right
             NSLayoutConstraint.activate(compactConstraints)
         }
     }
@@ -523,16 +552,5 @@ class PitchCell: UITableViewCell {
         }
 
         return pitch.outcome
-    }
-
-    private func speedText(for pitch: PitchEvent) -> String {
-        let speed = pitch.speed.map { String(format: "%.0f mph", $0) }
-
-        switch speed {
-        case let speed?:
-            return speed
-        default:
-            return ""
-        }
     }
 }
