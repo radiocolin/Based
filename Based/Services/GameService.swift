@@ -90,7 +90,24 @@ class GameService {
         let hasLivePitches = play.playEvents?.contains(where: { $0.isPitch == true }) == true
 
         guard type == "atBat", !isStatusOnlyPlay(play) else { return false }
-        if isComplete { return hasEvent }
+        
+        if isComplete {
+            // Filter out at-bats that ended due to a runner being out (CS, pickoff) 
+            // where the batter wasn't the one who was out. These are NOT completed at-bats
+            // for the current batter — they will lead off the next inning.
+            let eventType = play.result?.eventType ?? ""
+            if eventType.contains("caught_stealing") || eventType.contains("pickoff") {
+                let batterId = play.matchup?.batter?.id
+                let batterWasOut = play.runners?.contains(where: { 
+                    $0.details?.runner?.id == batterId && $0.movement?.isOut == true 
+                }) ?? false
+                if !batterWasOut {
+                    return false
+                }
+            }
+            return hasEvent
+        }
+        
         if includeLive && isLive { return hasEvent || hasLivePitches }
         return false
     }
