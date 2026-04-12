@@ -1,3 +1,9 @@
+New Features: Auto-Entry & Manual Priority
+- Added "Automatically enter live games" toggle for each favorite team.
+- The app now automatically navigates to the highest-priority live game for a favorite team on launch or after returning from the background (5-minute runway).
+- Favorite teams can now be manually reordered in Settings to prioritize them on the Schedule and for auto-entry selection.
+- Updated Settings UI for favorites to a reorderable list with new per-team option sheets and plain ellipsis indicators.
+
 Please focus this build on accessibility and Dynamic Type.
 
 VoiceOver

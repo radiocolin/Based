@@ -12,6 +12,8 @@ class ScheduleViewController: UIViewController {
     private var collectionView: UICollectionView!
     private var currentGames: [ScheduleGame] = []
     private var currentDate: Date = Date()
+    private var hasAttemptedAutoEntry = false
+    private var backgroundTime: Date?
     
     // Date Picker Pop-up Overlay
     private let datePickerOverlay = UIView()
@@ -47,9 +49,11 @@ class ScheduleViewController: UIViewController {
         super.viewDidLoad()
         setupUI()
         setupDatePickerOverlay()
-        loadSchedule(for: currentDate)
+        loadSchedule(for: currentDate, triggerAutoEntry: true)
         
         NotificationCenter.default.addObserver(self, selector: #selector(tintDidChange), name: TintService.tintDidChangeNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(appDidBecomeActive), name: UIApplication.didBecomeActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(appDidEnterBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
         
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: ScheduleViewController, _) in
             self.setupNavigationBar()
@@ -72,6 +76,23 @@ class ScheduleViewController: UIViewController {
         dateLabel.textColor = pc
         noGamesLabel.textColor = pc.withAlphaComponent(0.5)
         collectionView.reloadData()
+    }
+
+    @objc private func appDidBecomeActive() {
+        let now = Date()
+        let timeInBackground = now.timeIntervalSince(backgroundTime ?? .distantPast)
+        
+        // Only reset the auto-entry flag and trigger auto-entry if we've been in the background for at least 5 minutes
+        let shouldTrigger = timeInBackground > 300
+        if shouldTrigger {
+            hasAttemptedAutoEntry = false
+        }
+        
+        loadSchedule(for: currentDate, triggerAutoEntry: shouldTrigger)
+    }
+
+    @objc private func appDidEnterBackground() {
+        backgroundTime = Date()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -348,10 +369,24 @@ class ScheduleViewController: UIViewController {
     }
 
     private func sortedGames(_ games: [ScheduleGame]) -> [ScheduleGame] {
-        games.sorted { lhs, rhs in
-            let lhsFavorite = isFavoriteGame(lhs)
-            let rhsFavorite = isFavoriteGame(rhs)
-            if lhsFavorite != rhsFavorite { return lhsFavorite && !rhsFavorite }
+        let favoriteIds = FavoritesService.shared.getFavoriteTeamIds()
+        
+        return games.sorted { lhs, rhs in
+            let lhsAwayId = lhs.teams.away.team.id ?? 0
+            let lhsHomeId = lhs.teams.home.team.id ?? 0
+            let rhsAwayId = rhs.teams.away.team.id ?? 0
+            let rhsHomeId = rhs.teams.home.team.id ?? 0
+            
+            let lhsFavoriteIndex = favoriteIds.firstIndex { $0 == lhsAwayId || $0 == lhsHomeId }
+            let rhsFavoriteIndex = favoriteIds.firstIndex { $0 == rhsAwayId || $0 == rhsHomeId }
+            
+            if let lIndex = lhsFavoriteIndex, let rIndex = rhsFavoriteIndex {
+                if lIndex != rIndex { return lIndex < rIndex }
+            } else if lhsFavoriteIndex != nil {
+                return true
+            } else if rhsFavoriteIndex != nil {
+                return false
+            }
 
             let lhsStart = scheduleDate(from: lhs.gameDate)
             let rhsStart = scheduleDate(from: rhs.gameDate)
@@ -452,7 +487,7 @@ class ScheduleViewController: UIViewController {
         return digits.reduce(0) { ($0 * 10) + $1 }
     }
 
-    private func loadSchedule(for date: Date) {
+    private func loadSchedule(for date: Date, triggerAutoEntry: Bool = false) {
         currentDate = date
         updateDateLabel()
 
@@ -463,6 +498,9 @@ class ScheduleViewController: UIViewController {
                 await MainActor.run {
                     self.noGamesLabel.isHidden = !games.isEmpty
                     self.collectionView.reloadData()
+                    if triggerAutoEntry {
+                        self.checkForAutoEntry()
+                    }
                 }
             } catch {
                 print("Error schedule: \(error)")
@@ -567,6 +605,45 @@ private extension ScheduleViewController {
     func applyTypography() {
         noGamesLabel.font = AppFont.patrick(20, textStyle: .title3, compatibleWith: traitCollection)
         dateLabel.numberOfLines = traitCollection.preferredContentSizeCategory.isAccessibilityCategory ? 2 : 1
+    }
+
+    func checkForAutoEntry() {
+        guard !hasAttemptedAutoEntry else { return }
+        guard Calendar.current.isDateInToday(currentDate) else { return }
+        
+        // Ensure we are on the visible tab and the top of the stack
+        guard let nav = navigationController,
+              nav.tabBarController?.selectedViewController === nav,
+              nav.topViewController === self else {
+            return
+        }
+
+        let autoEnterGames = currentGames.filter { game in
+            let detailedState = game.status.detailedState.lowercased()
+            guard isLiveState(detailedState) else { return false }
+            
+            let awayId = game.teams.away.team.id ?? 0
+            let homeId = game.teams.home.team.id ?? 0
+            
+            let awayAuto = FavoritesService.shared.isFavorite(teamId: awayId) && FavoritesService.shared.isAutoEnterEnabled(for: awayId)
+            let homeAuto = FavoritesService.shared.isFavorite(teamId: homeId) && FavoritesService.shared.isAutoEnterEnabled(for: homeId)
+            
+            return awayAuto || homeAuto
+        }
+
+        if let gameToEnter = autoEnterGames.first {
+            hasAttemptedAutoEntry = true
+            
+            let detailVC = GameDetailViewController(gamePk: gameToEnter.gamePk, games: currentGames)
+            detailVC.hidesBottomBarWhenPushed = true
+            
+            let font = AppFont.permanent(18, textStyle: .headline, compatibleWith: traitCollection)
+            let backItem = UIBarButtonItem(title: "< BACK", style: .plain, target: nil, action: nil)
+            backItem.setTitleTextAttributes([.font: font, .foregroundColor: AppColors.pencil], for: .normal)
+            navigationItem.backBarButtonItem = backItem
+            
+            navigationController?.pushViewController(detailVC, animated: true)
+        }
     }
 
     func updateCollectionLayout() {

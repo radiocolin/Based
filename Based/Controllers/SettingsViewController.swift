@@ -28,6 +28,8 @@ class SettingsViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "SettingsCell")
+        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "FooterCell")
         setupUI()
         loadData()
         
@@ -54,6 +56,8 @@ class SettingsViewController: UIViewController {
         tableView.estimatedRowHeight = 56
         tableView.sectionHeaderHeight = UITableView.automaticDimension
         tableView.estimatedSectionHeaderHeight = 60
+        tableView.setEditing(true, animated: false)
+        tableView.allowsSelectionDuringEditing = true
         tableView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(tableView)
         
@@ -217,6 +221,37 @@ class SettingsViewController: UIViewController {
         presentSelectionSheet(title: "Add Favorite Team", sections: sections)
     }
 
+    private func presentFavoriteTeamOptions(teamId: Int) {
+        let teamName = favoriteTeamName(for: teamId)
+        let isAutoEnter = FavoritesService.shared.isAutoEnterEnabled(for: teamId)
+
+        let sections = [
+            SettingsSelectionSection(
+                title: nil,
+                options: [
+                    SettingsSelectionOption(
+                        title: "Automatically enter live games",
+                        showToggle: true,
+                        isToggleOn: isAutoEnter,
+                        toggleAction: { isOn in
+                            FavoritesService.shared.setAutoEnterEnabled(isOn, for: teamId)
+                        }
+                    ),
+                    SettingsSelectionOption(
+                        title: "Remove favorite",
+                        isDestructive: true,
+                        action: { [weak self] in
+                            FavoritesService.shared.toggleFavorite(teamId: teamId)
+                            self?.dismiss(animated: true)
+                        }
+                    )
+                ]
+            )
+        ]
+
+        presentSelectionSheet(title: teamName, sections: sections)
+    }
+
     private func presentSelectionSheet(title: String, sections: [SettingsSelectionSection]) {
         let controller = SettingsSelectionViewController(titleText: title, sections: sections)
         let navigationController = UINavigationController(rootViewController: controller)
@@ -254,7 +289,8 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         if indexPath.section == 3 {
-            let footerCell = UITableViewCell(style: .default, reuseIdentifier: "FooterCell")
+            let footerCell = tableView.dequeueReusableCell(withIdentifier: "FooterCell", for: indexPath)
+            footerCell.contentView.subviews.forEach { $0.removeFromSuperview() }
             footerCell.backgroundColor = .clear
             footerCell.selectionStyle = .none
             footerCell.isAccessibilityElement = true
@@ -307,6 +343,9 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
             stack.addArrangedSubview(line1)
             stack.addArrangedSubview(label2)
             
+            let bottomConstraint = stack.bottomAnchor.constraint(equalTo: footerCell.contentView.bottomAnchor, constant: -32)
+            bottomConstraint.priority = UILayoutPriority(999)
+            
             NSLayoutConstraint.activate([
                 heart.heightAnchor.constraint(equalToConstant: symbolHeight),
                 heart.widthAnchor.constraint(equalToConstant: symbolWidth),
@@ -314,12 +353,15 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
                 stack.leadingAnchor.constraint(greaterThanOrEqualTo: footerCell.contentView.leadingAnchor, constant: 20),
                 stack.trailingAnchor.constraint(lessThanOrEqualTo: footerCell.contentView.trailingAnchor, constant: -20),
                 stack.topAnchor.constraint(equalTo: footerCell.contentView.topAnchor, constant: 16),
-                stack.bottomAnchor.constraint(equalTo: footerCell.contentView.bottomAnchor, constant: -32)
+                bottomConstraint
             ])
             return footerCell
         }
         
-        let cell = UITableViewCell(style: .value1, reuseIdentifier: "SettingsCell")
+        // Dequeue standard cell
+        let cell = tableView.dequeueReusableCell(withIdentifier: "SettingsCell", for: indexPath)
+        
+        // Reset cell to clean state
         cell.backgroundColor = .clear
         cell.selectionStyle = .default
         cell.textLabel?.font = AppFont.patrick(18, textStyle: .body, compatibleWith: traitCollection)
@@ -334,11 +376,14 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
         cell.detailTextLabel?.lineBreakMode = .byWordWrapping
         cell.accessibilityHint = nil
         cell.accessoryView = nil
+        cell.editingAccessoryView = nil
         cell.accessoryType = .none
+        cell.editingAccessoryType = .none
         cell.isAccessibilityElement = true
         cell.accessibilityTraits = .button
         cell.textLabel?.isAccessibilityElement = false
         cell.detailTextLabel?.isAccessibilityElement = false
+        cell.imageView?.image = nil
         
         let bg = PencilSectionBackgroundView()
         let rows = tableView.numberOfRows(inSection: indexPath.section)
@@ -359,7 +404,14 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
                 let currentTheme = ThemeService.shared.theme
                 cell.textLabel?.text = "Appearance"
                 cell.detailTextLabel?.text = currentTheme.displayName
-                cell.accessoryType = .disclosureIndicator
+                
+                let config = UIImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+                let ellipsisImg = UIImage(systemName: "ellipsis", withConfiguration: config)
+                let ellipsisView = UIImageView(image: ellipsisImg)
+                ellipsisView.tintColor = AppColors.pencil.withAlphaComponent(0.6)
+                cell.accessoryView = ellipsisView
+                cell.editingAccessoryView = ellipsisView
+                
                 cell.accessibilityLabel = "Appearance"
                 cell.accessibilityValue = currentTheme.displayName
                 cell.accessibilityHint = "Double tap to choose the app appearance."
@@ -376,7 +428,14 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
                 let tintName = currentTeamName ?? (currentTint == nil ? "Pencil" : "Custom")
                 cell.textLabel?.text = "Tint Color"
                 cell.detailTextLabel?.text = tintName
-                cell.accessoryType = .disclosureIndicator
+                
+                let config = UIImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+                let ellipsisImg = UIImage(systemName: "ellipsis", withConfiguration: config)
+                let ellipsisView = UIImageView(image: ellipsisImg)
+                ellipsisView.tintColor = AppColors.pencil.withAlphaComponent(0.6)
+                cell.accessoryView = ellipsisView
+                cell.editingAccessoryView = ellipsisView
+                
                 cell.accessibilityLabel = "Tint color"
                 cell.accessibilityValue = tintName
                 cell.accessibilityHint = "Double tap to choose the tint color."
@@ -387,31 +446,31 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
                 let teamId = favoriteTeamIds[indexPath.row]
                 let teamName = favoriteTeamName(for: teamId)
                 cell.textLabel?.text = teamName
+                cell.detailTextLabel?.text = nil
                 
-                let removeBtn = UIButton(type: .system)
-                let xImg = UIImage.pencilStyledIcon(named: "xmark", color: .systemRed, size: CGSize(width: 24, height: 24))
-                removeBtn.setImage(xImg, for: .normal)
-                removeBtn.tintColor = .systemRed
-                removeBtn.accessibilityLabel = "Remove \(teamName) from favorites"
-                removeBtn.accessibilityHint = "Double tap to remove this team from favorites."
-                removeBtn.addAction(UIAction { _ in
-                    FavoritesService.shared.toggleFavorite(teamId: teamId)
-                }, for: .touchUpInside)
-                removeBtn.sizeToFit()
-                cell.accessoryView = removeBtn
+                let config = UIImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+                let ellipsisImg = UIImage(systemName: "ellipsis", withConfiguration: config)
+                let ellipsisView = UIImageView(image: ellipsisImg)
+                ellipsisView.tintColor = AppColors.pencil.withAlphaComponent(0.6)
+                cell.editingAccessoryView = ellipsisView
+                
                 cell.accessibilityLabel = teamName
                 cell.accessibilityValue = "Favorite team"
-                cell.accessibilityHint = "Use the remove button to remove this team from favorites."
-                cell.accessibilityTraits = .staticText
+                cell.accessibilityHint = "Double tap to manage options for this team."
+                cell.accessibilityTraits = .button
+                cell.showsReorderControl = true
+                cell.selectionStyle = .default
             } else {
                 let hasAvailableTeams = teamMap.keys.contains { !favoriteTeamIds.contains($0) }
                 cell.textLabel?.text = hasAvailableTeams ? "Add Favorite Team" : "All Teams Added"
                 cell.detailTextLabel?.text = nil
                 cell.accessoryType = hasAvailableTeams ? .disclosureIndicator : .none
+                cell.editingAccessoryType = hasAvailableTeams ? .disclosureIndicator : .none
                 cell.selectionStyle = hasAvailableTeams ? .default : .none
                 cell.accessibilityLabel = hasAvailableTeams ? "Add favorite team" : "All teams added"
                 cell.accessibilityHint = hasAvailableTeams ? "Double tap to choose a team to favorite." : nil
                 cell.accessibilityTraits = hasAvailableTeams ? .button : .staticText
+                cell.showsReorderControl = false
             }
             
         case 2:
@@ -427,6 +486,7 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
             UIGraphicsEndImageContext()
             cell.imageView?.image = scaledImage
             cell.accessoryType = .disclosureIndicator
+            cell.editingAccessoryType = .disclosureIndicator
             cell.accessibilityLabel = "Wheelie"
             cell.accessibilityValue = "Bike Ride Tracking"
             cell.accessibilityHint = "Double tap to open the App Store page."
@@ -436,6 +496,30 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
         }
         
         return cell
+    }
+    
+    func tableView(_ tableView: UITableView, editingStyleForRowAt indexPath: IndexPath) -> UITableViewCell.EditingStyle {
+        return .none
+    }
+
+    func tableView(_ tableView: UITableView, shouldIndentWhileEditingRowAt indexPath: IndexPath) -> Bool {
+        return false
+    }
+
+    func tableView(_ tableView: UITableView, canMoveRowAt indexPath: IndexPath) -> Bool {
+        return indexPath.section == 1 && indexPath.row < favoriteTeamIds.count
+    }
+
+    func tableView(_ tableView: UITableView, moveRowAt sourceIndexPath: IndexPath, to destinationIndexPath: IndexPath) {
+        guard sourceIndexPath.section == 1, destinationIndexPath.section == 1,
+              sourceIndexPath.row < favoriteTeamIds.count, destinationIndexPath.row < favoriteTeamIds.count else {
+            tableView.reloadData()
+            return
+        }
+        
+        let movedId = favoriteTeamIds.remove(at: sourceIndexPath.row)
+        favoriteTeamIds.insert(movedId, at: destinationIndexPath.row)
+        FavoritesService.shared.setFavoriteTeamIds(favoriteTeamIds)
     }
     
     func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
@@ -508,6 +592,8 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
             presentAppearanceSelector()
         } else if indexPath.section == 0 && indexPath.row == 1 {
             presentTintSelector()
+        } else if indexPath.section == 1 && indexPath.row < favoriteTeamIds.count {
+            presentFavoriteTeamOptions(teamId: favoriteTeamIds[indexPath.row])
         } else if indexPath.section == 1 && indexPath.row == favoriteTeamIds.count
             && teamMap.keys.contains(where: { !favoriteTeamIds.contains($0) }) {
             presentFavoriteTeamSelector()
@@ -522,16 +608,34 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
 private struct SettingsSelectionOption {
     let title: String
     let isSelected: Bool
+    let isDestructive: Bool
+    let showToggle: Bool
+    let isToggleOn: Bool
     let accessibilityValue: String?
     let displayColor: UIColor?
     let action: () -> Void
+    let toggleAction: ((Bool) -> Void)?
 
-    init(title: String, isSelected: Bool = false, accessibilityValue: String? = nil, displayColor: UIColor? = nil, action: @escaping () -> Void) {
+    init(
+        title: String,
+        isSelected: Bool = false,
+        isDestructive: Bool = false,
+        showToggle: Bool = false,
+        isToggleOn: Bool = false,
+        accessibilityValue: String? = nil,
+        displayColor: UIColor? = nil,
+        action: @escaping () -> Void = {},
+        toggleAction: ((Bool) -> Void)? = nil
+    ) {
         self.title = title
         self.isSelected = isSelected
+        self.isDestructive = isDestructive
+        self.showToggle = showToggle
+        self.isToggleOn = isToggleOn
         self.accessibilityValue = accessibilityValue
         self.displayColor = displayColor
         self.action = action
+        self.toggleAction = toggleAction
     }
 }
 
@@ -609,18 +713,46 @@ private final class SettingsSelectionViewController: UITableViewController {
         cell.backgroundColor = .clear
         cell.textLabel?.text = option.title
         cell.textLabel?.font = AppFont.patrick(18, textStyle: .body, compatibleWith: traitCollection)
-        cell.textLabel?.textColor = option.displayColor ?? neutralPencilColor
+        
+        let textColor: UIColor
+        if option.isDestructive {
+            textColor = .systemRed
+        } else {
+            textColor = option.displayColor ?? neutralPencilColor
+        }
+        
+        cell.textLabel?.textColor = textColor
         cell.textLabel?.numberOfLines = 0
         cell.textLabel?.adjustsFontForContentSizeCategory = true
-        cell.accessoryType = option.isSelected ? .checkmark : .none
-        cell.tintColor = option.displayColor ?? neutralPencilColor
+        
+        if option.showToggle {
+            let toggle = UISwitch()
+            toggle.isOn = option.isToggleOn
+            toggle.onTintColor = AppColors.pencil
+            toggle.addAction(UIAction { action in
+                if let toggle = action.sender as? UISwitch {
+                    option.toggleAction?(toggle.isOn)
+                }
+            }, for: .valueChanged)
+            cell.accessoryView = toggle
+            cell.selectionStyle = .none
+        } else {
+            cell.accessoryType = option.isSelected ? .checkmark : .none
+            cell.accessoryView = nil
+            cell.selectionStyle = .default
+        }
+        
+        cell.tintColor = textColor
         cell.accessibilityLabel = option.title
-        cell.accessibilityValue = option.accessibilityValue
+        cell.accessibilityValue = option.showToggle ? (option.isToggleOn ? "On" : "Off") : option.accessibilityValue
         return cell
     }
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        tableView.deselectRow(at: indexPath, animated: true)
-        sections[indexPath.section].options[indexPath.row].action()
+        let option = sections[indexPath.section].options[indexPath.row]
+        if !option.showToggle {
+            tableView.deselectRow(at: indexPath, animated: true)
+            option.action()
+        }
     }
 }
