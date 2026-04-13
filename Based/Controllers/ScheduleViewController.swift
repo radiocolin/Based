@@ -34,7 +34,11 @@ class ScheduleViewController: UIViewController {
     
     // Loading & error state
     private let loadingIndicator = UIActivityIndicatorView(style: .medium)
-    private let errorContainer = UIView()
+    private let errorContainer: UIView = {
+        let view = UIView()
+        view.accessibilityElements = [] // children set after subviews added
+        return view
+    }()
     private let errorLabel: UILabel = {
         let label = UILabel()
         label.text = "Couldn't load schedule"
@@ -49,6 +53,8 @@ class ScheduleViewController: UIViewController {
         button.setTitle("Tap to retry", for: .normal)
         button.titleLabel?.font = UIFont(name: "PatrickHand-Regular", size: 18) ?? .systemFont(ofSize: 18)
         button.tintColor = AppColors.pencil
+        button.accessibilityLabel = "Retry loading schedule"
+        button.accessibilityHint = "Double tap to try loading the schedule again."
         return button
     }()
     private var isLoading = false
@@ -198,6 +204,7 @@ class ScheduleViewController: UIViewController {
         // Loading indicator
         loadingIndicator.hidesWhenStopped = true
         loadingIndicator.color = AppColors.pencil
+        loadingIndicator.accessibilityLabel = "Loading schedule"
         
         // Error container (label + retry button stacked vertically)
         errorContainer.isHidden = true
@@ -207,6 +214,7 @@ class ScheduleViewController: UIViewController {
             $0.translatesAutoresizingMaskIntoConstraints = false
             errorContainer.addSubview($0)
         }
+        errorContainer.accessibilityElements = [errorLabel, retryButton]
         
         [collectionView, noGamesLabel, loadingIndicator, errorContainer].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
@@ -585,6 +593,7 @@ class ScheduleViewController: UIViewController {
                 if self.currentGames.isEmpty {
                     self.errorContainer.isHidden = false
                     self.noGamesLabel.isHidden = true
+                    UIAccessibility.post(notification: .screenChanged, argument: self.errorLabel)
                 }
             }
         }
