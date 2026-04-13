@@ -22,6 +22,14 @@
                   symbolName = "UIViewAlertForUnsatisfiableConstraints"
                   usesParentBreakpointCondition = "Yes">
                </Location>
+               <Location
+                  uuid = "D53DE6A8-FC81-4695-88C8-7814E8CE040E - 304aafc9d4164c60"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "UIViewAlertForUnsatisfiableConstraints"
+                  usesParentBreakpointCondition = "Yes">
+               </Location>
             </Locations>
          </BreakpointContent>
       </BreakpointProxy>

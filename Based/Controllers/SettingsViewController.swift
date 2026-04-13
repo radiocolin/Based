@@ -29,6 +29,7 @@ class SettingsViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "SettingsCell")
+        tableView.register(SubtitleCell.self, forCellReuseIdentifier: "SubtitleCell")
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "FooterCell")
         setupUI()
         loadData()
@@ -36,7 +37,7 @@ class SettingsViewController: UIViewController {
         NotificationCenter.default.addObserver(self, selector: #selector(favoritesDidChange), name: FavoritesService.favoritesDidChangeNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(themeDidChange), name: ThemeService.themeDidChangeNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(tintDidChange), name: TintService.tintDidChangeNotification, object: nil)
-        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: SettingsViewController, _) in
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self, UITraitUserInterfaceStyle.self]) { (self: SettingsViewController, _) in
             self.setupNavigationBar()
             self.tableView.reloadData()
         }
@@ -281,13 +282,78 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
         switch section {
         case 0: return 2 // Appearance + Tint Color
         case 1: return favoriteTeamIds.count + 1 // Favorites + Add row
-        case 2: return 1 // Wheelie
+        case 2: return 2 // Wheelie, Away Message
         case 3: return 1 // Attribution
         default: return 0
         }
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        if indexPath.section == 2 {
+            let cell = tableView.dequeueReusableCell(withIdentifier: "SubtitleCell", for: indexPath)
+            cell.backgroundColor = .clear
+            cell.selectionStyle = .default
+            cell.textLabel?.font = AppFont.patrick(18, textStyle: .body, compatibleWith: traitCollection)
+            cell.textLabel?.textColor = AppColors.pencil
+            cell.textLabel?.adjustsFontForContentSizeCategory = true
+            cell.textLabel?.numberOfLines = 0
+            cell.detailTextLabel?.font = AppFont.patrick(14, textStyle: .caption1, compatibleWith: traitCollection)
+            cell.detailTextLabel?.textColor = AppColors.pencil.withAlphaComponent(0.6)
+            cell.detailTextLabel?.adjustsFontForContentSizeCategory = true
+            cell.detailTextLabel?.numberOfLines = 0
+            cell.isAccessibilityElement = true
+            cell.accessibilityTraits = .button
+            cell.textLabel?.isAccessibilityElement = false
+            cell.detailTextLabel?.isAccessibilityElement = false
+            
+            let appName: String
+            let appSubtitle: String
+            let appIcon: String
+            
+            if indexPath.row == 0 {
+                appName = "Wheelie"
+                appSubtitle = "Track every ride"
+                appIcon = "Wheelie-iOS-Default-1024x1024"
+            } else {
+                appName = "Away Message"
+                appSubtitle = "Digital sticky notes for your real friends"
+                appIcon = "away message icon-iOS-Default-1024x1024"
+            }
+            
+            cell.textLabel?.text = appName
+            cell.detailTextLabel?.text = appSubtitle
+            let iconAsset = UIImage(named: appIcon)
+            let resolved = iconAsset?.imageAsset?.image(with: traitCollection) ?? iconAsset
+            let size = CGSize(width: 30, height: 30)
+            let renderer = UIGraphicsImageRenderer(size: size)
+            let scaledImage = renderer.image { _ in
+                resolved?.draw(in: CGRect(origin: .zero, size: size))
+            }
+            cell.imageView?.image = scaledImage
+            cell.imageView?.layer.cornerRadius = 6
+            cell.imageView?.clipsToBounds = true
+            cell.accessoryType = .disclosureIndicator
+            cell.editingAccessoryType = .disclosureIndicator
+            cell.accessibilityLabel = appName
+            cell.accessibilityValue = appSubtitle
+            cell.accessibilityHint = "Double tap to open the App Store page."
+            
+            let bg = PencilSectionBackgroundView()
+            let rows = tableView.numberOfRows(inSection: indexPath.section)
+            if rows == 1 {
+                bg.position = .single
+            } else if indexPath.row == 0 {
+                bg.position = .top
+            } else if indexPath.row == rows - 1 {
+                bg.position = .bottom
+            } else {
+                bg.position = .middle
+            }
+            cell.backgroundView = bg
+            
+            return cell
+        }
+        
         if indexPath.section == 3 {
             let footerCell = tableView.dequeueReusableCell(withIdentifier: "FooterCell", for: indexPath)
             footerCell.contentView.subviews.forEach { $0.removeFromSuperview() }
@@ -473,24 +539,6 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
                 cell.showsReorderControl = false
             }
             
-        case 2:
-            cell.textLabel?.text = "Wheelie"
-            cell.detailTextLabel?.text = "Bike Ride Tracking"
-            cell.imageView?.image = UIImage(named: "Wheelie-iOS-Default-1024x1024")
-            cell.imageView?.layer.cornerRadius = 6
-            cell.imageView?.clipsToBounds = true
-            let size = CGSize(width: 30, height: 30)
-            UIGraphicsBeginImageContextWithOptions(size, false, 0.0)
-            cell.imageView?.image?.draw(in: CGRect(origin: .zero, size: size))
-            let scaledImage = UIGraphicsGetImageFromCurrentImageContext()
-            UIGraphicsEndImageContext()
-            cell.imageView?.image = scaledImage
-            cell.accessoryType = .disclosureIndicator
-            cell.editingAccessoryType = .disclosureIndicator
-            cell.accessibilityLabel = "Wheelie"
-            cell.accessibilityValue = "Bike Ride Tracking"
-            cell.accessibilityHint = "Double tap to open the App Store page."
-            
         default:
             break
         }
@@ -598,7 +646,13 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
             && teamMap.keys.contains(where: { !favoriteTeamIds.contains($0) }) {
             presentFavoriteTeamSelector()
         } else if indexPath.section == 2 {
-            if let url = URL(string: "https://apps.apple.com/us/app/wheelie-bike-ride-tracking/id6747010503") {
+            let urlString: String
+            if indexPath.row == 0 {
+                urlString = "https://apple.co/4qx0GMA"
+            } else {
+                urlString = "https://apple.co/3NzZ4E7"
+            }
+            if let url = URL(string: urlString) {
                 UIApplication.shared.open(url)
             }
         }
@@ -756,3 +810,12 @@ private final class SettingsSelectionViewController: UITableViewController {
         }
     }
 }
+private final class SubtitleCell: UITableViewCell {
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: .subtitle, reuseIdentifier: reuseIdentifier)
+    }
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+}
+
