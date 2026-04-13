@@ -1,3 +1,5 @@
+Added a loading indicator and retry on fail to the game schedule.
+
 New Features: Auto-Entry & Manual Priority
 - Added "Automatically enter live games" toggle for each favorite team.
 - The app now automatically navigates to the highest-priority live game for a favorite team on launch or after returning from the background (5-minute runway).

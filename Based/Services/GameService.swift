@@ -1268,7 +1268,16 @@ class GameService {
         }
     }
 
-    func fetchSchedule(for date: Date) async throws -> [ScheduleGame] { return try await MLBAPIClient.shared.fetchSchedule(date: date) }
+    /// Set to `true` to simulate a network failure on schedule fetch (for testing error/loading states)
+    var simulateScheduleFailure = true
+
+    func fetchSchedule(for date: Date) async throws -> [ScheduleGame] {
+        if simulateScheduleFailure {
+            try await Task.sleep(nanoseconds: 2_000_000_000)
+            throw NSError(domain: "GameService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Simulated network failure"])
+        }
+        return try await MLBAPIClient.shared.fetchSchedule(date: date)
+    }
     func selectGame(gamePk: Int) { currentGamePk = gamePk }
     func fetchPlayerInfo(playerId: Int) async throws -> PlayerInfo { return try await MLBAPIClient.shared.fetchPlayer(id: playerId) }
 }

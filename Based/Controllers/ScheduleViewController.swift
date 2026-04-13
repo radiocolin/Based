@@ -31,6 +31,28 @@ class ScheduleViewController: UIViewController {
         label.isHidden = true
         return label
     }()
+    
+    // Loading & error state
+    private let loadingIndicator = UIActivityIndicatorView(style: .medium)
+    private let errorContainer = UIView()
+    private let errorLabel: UILabel = {
+        let label = UILabel()
+        label.text = "Couldn't load schedule"
+        label.font = UIFont(name: "PatrickHand-Regular", size: 20) ?? .systemFont(ofSize: 20)
+        label.textColor = AppColors.pencil.withAlphaComponent(0.5)
+        label.textAlignment = .center
+        label.numberOfLines = 0
+        return label
+    }()
+    private let retryButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setTitle("Tap to retry", for: .normal)
+        button.titleLabel?.font = UIFont(name: "PatrickHand-Regular", size: 18) ?? .systemFont(ofSize: 18)
+        button.tintColor = AppColors.pencil
+        return button
+    }()
+    private var isLoading = false
+    private var loadTask: Task<Void, Never>?
 
     // Constants
     private var pencilColor: UIColor { AppColors.pencil }
@@ -75,6 +97,9 @@ class ScheduleViewController: UIViewController {
         nextButton.tintColor = pc
         dateLabel.textColor = pc
         noGamesLabel.textColor = pc.withAlphaComponent(0.5)
+        loadingIndicator.color = pc
+        errorLabel.textColor = pc.withAlphaComponent(0.5)
+        retryButton.tintColor = pc
         collectionView.reloadData()
     }
 
@@ -165,11 +190,31 @@ class ScheduleViewController: UIViewController {
         let gameLongPress = UILongPressGestureRecognizer(target: self, action: #selector(handleGameLongPress(_:)))
         collectionView.addGestureRecognizer(gameLongPress)
         
-        [collectionView, noGamesLabel].forEach {
+        // Pull-to-refresh
+        let refreshControl = UIRefreshControl()
+        refreshControl.addTarget(self, action: #selector(pullToRefresh), for: .valueChanged)
+        collectionView.refreshControl = refreshControl
+        
+        // Loading indicator
+        loadingIndicator.hidesWhenStopped = true
+        loadingIndicator.color = AppColors.pencil
+        
+        // Error container (label + retry button stacked vertically)
+        errorContainer.isHidden = true
+        retryButton.addTarget(self, action: #selector(retryTapped), for: .touchUpInside)
+        
+        [errorLabel, retryButton].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+            errorContainer.addSubview($0)
+        }
+        
+        [collectionView, noGamesLabel, loadingIndicator, errorContainer].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview($0)
         }
         noGamesLabel.adjustsFontForContentSizeCategory = true
+        errorLabel.adjustsFontForContentSizeCategory = true
+        retryButton.titleLabel?.adjustsFontForContentSizeCategory = true
 
         NSLayoutConstraint.activate([
             // Date Header
@@ -203,7 +248,25 @@ class ScheduleViewController: UIViewController {
             collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
             noGamesLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            noGamesLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+            noGamesLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            
+            // Loading indicator
+            loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            
+            // Error container
+            errorContainer.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            errorContainer.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            errorContainer.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 32),
+            errorContainer.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -32),
+            
+            errorLabel.topAnchor.constraint(equalTo: errorContainer.topAnchor),
+            errorLabel.leadingAnchor.constraint(equalTo: errorContainer.leadingAnchor),
+            errorLabel.trailingAnchor.constraint(equalTo: errorContainer.trailingAnchor),
+            
+            retryButton.topAnchor.constraint(equalTo: errorLabel.bottomAnchor, constant: 8),
+            retryButton.centerXAnchor.constraint(equalTo: errorContainer.centerXAnchor),
+            retryButton.bottomAnchor.constraint(equalTo: errorContainer.bottomAnchor),
         ])
         dateHeaderHeightConstraint = dateHeaderView.heightAnchor.constraint(greaterThanOrEqualToConstant: 50)
         dateHeaderHeightConstraint?.isActive = true
@@ -488,24 +551,51 @@ class ScheduleViewController: UIViewController {
     }
 
     private func loadSchedule(for date: Date, triggerAutoEntry: Bool = false) {
+        loadTask?.cancel()
         currentDate = date
         updateDateLabel()
+        
+        // Show loading only when we have no data to show (not during pull-to-refresh)
+        let showSpinner = currentGames.isEmpty && !collectionView.refreshControl!.isRefreshing
+        if showSpinner {
+            loadingIndicator.startAnimating()
+        }
+        errorContainer.isHidden = true
+        noGamesLabel.isHidden = true
 
-        Task {
+        loadTask = Task {
             do {
                 let games = sortedGames(try await GameService.shared.fetchSchedule(for: date))
+                guard !Task.isCancelled else { return }
                 self.currentGames = games
-                await MainActor.run {
-                    self.noGamesLabel.isHidden = !games.isEmpty
-                    self.collectionView.reloadData()
-                    if triggerAutoEntry {
-                        self.checkForAutoEntry()
-                    }
+                self.loadingIndicator.stopAnimating()
+                self.collectionView.refreshControl?.endRefreshing()
+                self.noGamesLabel.isHidden = !games.isEmpty
+                self.errorContainer.isHidden = true
+                self.collectionView.reloadData()
+                if triggerAutoEntry {
+                    self.checkForAutoEntry()
                 }
             } catch {
+                guard !Task.isCancelled else { return }
                 print("Error schedule: \(error)")
+                self.loadingIndicator.stopAnimating()
+                self.collectionView.refreshControl?.endRefreshing()
+                // Only show error state if we have nothing to display
+                if self.currentGames.isEmpty {
+                    self.errorContainer.isHidden = false
+                    self.noGamesLabel.isHidden = true
+                }
             }
         }
+    }
+    
+    @objc private func pullToRefresh() {
+        loadSchedule(for: currentDate)
+    }
+    
+    @objc private func retryTapped() {
+        loadSchedule(for: currentDate)
     }
     
     @objc private func prevDate() {
