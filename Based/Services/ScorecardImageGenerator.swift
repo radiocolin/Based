@@ -326,7 +326,12 @@ final class ScorecardImageGenerator {
                     let inningObj = data.innings.first { $0.num == inningNum }
                     let batterEvents = (isHome ? inningObj?.home : inningObj?.away)?.filter { $0.batterId == batter.id } ?? []
                     if subIndex < batterEvents.count {
-                        drawAtBatCell(in: CGRect(x: actualX, y: rowY, width: config.inningWidth, height: config.rowHeight), event: batterEvents[subIndex], ctx: ctx)
+                        drawAtBatCell(
+                            in: CGRect(x: actualX, y: rowY, width: config.inningWidth, height: config.rowHeight),
+                            event: batterEvents[subIndex],
+                            accentColor: data.teamAccentColor(isHomeTeam: isHome),
+                            ctx: ctx
+                        )
                     }
                 }
                 actualX += config.inningWidth
@@ -443,37 +448,169 @@ final class ScorecardImageGenerator {
         }
     }
     
-    private func drawAtBatCell(in rect: CGRect, event: AtBatEvent, ctx: CGContext) {
+    private func drawAtBatCell(in rect: CGRect, event: AtBatEvent, accentColor: UIColor, ctx: CGContext) {
         let dRect = rect.insetBy(dx: 8, dy: 8)
+        let baseSize = max(5, min(dRect.width, dRect.height) * 0.11)
+        let baseStrokeWidth = max(0.5, min(1.5, min(dRect.width, dRect.height) * 0.015))
+        let progressLineWidth = max(1.5, min(4, min(dRect.width, dRect.height) * 0.035))
         let lineToFirst = event.bases.lineToFirst ?? event.bases.first
         let lineToSecond = event.bases.lineToSecond ?? event.bases.second
         let lineToThird = event.bases.lineToThird ?? event.bases.third
         let lineToHome = event.bases.lineToHome ?? event.bases.home
-        ctx.setStrokeColor(config.pencilColor.withAlphaComponent(0.2).cgColor)
-        UIBezierPath.pencilDiamond(rect: dRect, jitter: 0.5).stroke()
-        ctx.setStrokeColor(config.pencilColor.withAlphaComponent(0.8).cgColor); ctx.setLineWidth(1.2)
-        if lineToFirst { UIBezierPath.pencilLine(from: CGPoint(x: dRect.midX, y: dRect.maxY), to: CGPoint(x: dRect.maxX, y: dRect.midY), jitter: 0.4).stroke() }
-        if lineToSecond { UIBezierPath.pencilLine(from: CGPoint(x: dRect.maxX, y: dRect.midY), to: CGPoint(x: dRect.midX, y: dRect.minY), jitter: 0.4).stroke() }
-        if lineToThird { UIBezierPath.pencilLine(from: CGPoint(x: dRect.midX, y: dRect.minY), to: CGPoint(x: dRect.minX, y: dRect.midY), jitter: 0.4).stroke() }
-        if lineToHome { UIBezierPath.pencilLine(from: CGPoint(x: dRect.minX, y: dRect.midY), to: CGPoint(x: dRect.midX, y: dRect.maxY), jitter: 0.4).stroke() }
+        let shouldUseAccent = event.result == "HR" || event.bases.home
+        let diamondColor = shouldUseAccent ? accentColor : config.pencilColor
+        let home = CGPoint(x: dRect.midX, y: dRect.maxY)
+        let first = CGPoint(x: dRect.maxX, y: dRect.midY)
+        let second = CGPoint(x: dRect.midX, y: dRect.minY)
+        let third = CGPoint(x: dRect.minX, y: dRect.midY)
+
+        let diamondPath = UIBezierPath()
+        diamondPath.move(to: home)
+        diamondPath.addLine(to: first)
+        diamondPath.addLine(to: second)
+        diamondPath.addLine(to: third)
+        diamondPath.close()
+        AppColors.diamondFill.setFill()
+        diamondPath.fill()
+
+        if shouldUseAccent {
+            diamondColor.withAlphaComponent(0.06).setFill()
+            diamondPath.fill()
+
+            ctx.saveGState()
+            diamondPath.addClip()
+            ctx.setStrokeColor(diamondColor.withAlphaComponent(0.32).cgColor)
+            ctx.setLineWidth(max(0.6, min(1.2, min(dRect.width, dRect.height) * 0.008)))
+            ctx.setLineCap(.round)
+            ctx.setLineJoin(.round)
+            UIBezierPath.pencilScribble(in: dRect, jitter: 0.8, spacing: max(1.5, min(3.0, min(dRect.width, dRect.height) * 0.02))).stroke()
+            ctx.restoreGState()
+        }
+
+        let progressPath = UIBezierPath()
+        func addSegment(from: CGPoint, to: CGPoint, wasOut: Bool?) {
+            if wasOut == true {
+                let mid = CGPoint(x: (from.x + to.x) / 2, y: (from.y + to.y) / 2)
+                progressPath.append(UIBezierPath.pencilLine(from: from, to: mid))
+                let dx = to.x - from.x
+                let dy = to.y - from.y
+                let len = hypot(dx, dy)
+                guard len > 0 else { return }
+                let slashSize = max(4, min(dRect.width, dRect.height) * 0.09)
+                let px = -dy / len * slashSize
+                let py = dx / len * slashSize
+                progressPath.append(UIBezierPath.pencilLine(
+                    from: CGPoint(x: mid.x - px, y: mid.y - py),
+                    to: CGPoint(x: mid.x + px, y: mid.y + py)
+                ))
+            } else {
+                progressPath.append(UIBezierPath.pencilLine(from: from, to: to))
+            }
+        }
+
+        if lineToFirst || event.bases.outAtFirst == true { addSegment(from: home, to: first, wasOut: event.bases.outAtFirst) }
+        if lineToSecond || event.bases.outAtSecond == true { addSegment(from: first, to: second, wasOut: event.bases.outAtSecond) }
+        if lineToThird || event.bases.outAtThird == true { addSegment(from: second, to: third, wasOut: event.bases.outAtThird) }
+        if lineToHome || event.bases.outAtHome == true { addSegment(from: third, to: home, wasOut: event.bases.outAtHome) }
+        if let annotations = event.bases.annotations {
+            for annotation in annotations where annotation.kind == .caughtStealing {
+                let segment: (CGPoint, CGPoint)
+                switch annotation.base {
+                case 2: segment = (first, second)
+                case 3: segment = (second, third)
+                case 4: segment = (third, home)
+                default: segment = (home, first)
+                }
+                addSegment(from: segment.0, to: segment.1, wasOut: true)
+            }
+        }
+
+        ctx.setStrokeColor(diamondColor.withAlphaComponent(0.8).cgColor)
+        ctx.setLineWidth(progressLineWidth)
+        ctx.setLineCap(.round)
+        ctx.setLineJoin(.round)
+        progressPath.stroke()
+
+        func drawBaseBox(at vertex: CGPoint, occupied: Bool, base: Int) {
+            let half = baseSize / 2
+            let bPath = UIBezierPath()
+            if base == 0 {
+                let width = baseSize * 1.2
+                let height = baseSize * 1.2
+                let topY = vertex.y - height
+                let midY = vertex.y - height / 2
+                bPath.move(to: CGPoint(x: vertex.x, y: vertex.y))
+                bPath.addLine(to: CGPoint(x: vertex.x - width / 2, y: midY))
+                bPath.addLine(to: CGPoint(x: vertex.x - width / 2, y: topY))
+                bPath.addLine(to: CGPoint(x: vertex.x + width / 2, y: topY))
+                bPath.addLine(to: CGPoint(x: vertex.x + width / 2, y: midY))
+                bPath.close()
+            } else {
+                var center = vertex
+                switch base {
+                case 1: center.x -= half
+                case 2: center.y += half
+                case 3: center.x += half
+                default: break
+                }
+                bPath.move(to: CGPoint(x: center.x, y: center.y - half))
+                bPath.addLine(to: CGPoint(x: center.x + half, y: center.y))
+                bPath.addLine(to: CGPoint(x: center.x, y: center.y + half))
+                bPath.addLine(to: CGPoint(x: center.x - half, y: center.y))
+                bPath.close()
+            }
+
+            (occupied ? diamondColor : AppColors.baseEmpty).setFill()
+            bPath.fill()
+            ctx.setStrokeColor(diamondColor.withAlphaComponent(0.4).cgColor)
+            ctx.setLineWidth(baseStrokeWidth)
+            bPath.stroke()
+        }
+
+        drawBaseBox(at: first, occupied: event.bases.first, base: 1)
+        drawBaseBox(at: second, occupied: event.bases.second, base: 2)
+        drawBaseBox(at: third, occupied: event.bases.third, base: 3)
+        drawBaseBox(at: home, occupied: event.bases.home, base: 0)
+
         let res = event.result == "Ʞ" ? "K" : event.result
-        let attrs: [NSAttributedString.Key: Any] = [.font: config.resultFont, .foregroundColor: config.pencilColor], size = (res as NSString).size(withAttributes: attrs)
+        let attrs: [NSAttributedString.Key: Any] = [.font: config.resultFont, .foregroundColor: diamondColor], size = (res as NSString).size(withAttributes: attrs)
         if event.result == "Ʞ" {
             ctx.saveGState(); ctx.translateBy(x: rect.midX, y: rect.midY); ctx.scaleBy(x: -1, y: 1); NSAttributedString(string: res, attributes: attrs).draw(at: CGPoint(x: -size.width/2, y: -size.height/2)); ctx.restoreGState()
         } else { NSAttributedString(string: res, attributes: attrs).draw(at: CGPoint(x: rect.midX - size.width/2, y: rect.midY - size.height/2)) }
-        let cAttrs: [NSAttributedString.Key: Any] = [.font: config.legibilityFont, .foregroundColor: config.pencilColor.withAlphaComponent(0.7)]
+        let cAttrs: [NSAttributedString.Key: Any] = [.font: config.legibilityFont, .foregroundColor: diamondColor.withAlphaComponent(0.7)]
         if event.balls > 0 { NSAttributedString(string: "\(event.balls)B", attributes: cAttrs).draw(at: CGPoint(x: rect.minX + 4, y: rect.minY + 2)) }
         if event.strikes > 0 { NSAttributedString(string: "\(event.strikes)S", attributes: cAttrs).draw(at: CGPoint(x: rect.maxX - 22, y: rect.minY + 2)) }
         if event.outs > 0 { NSAttributedString(string: "\(event.outs)", attributes: cAttrs).draw(at: CGPoint(x: rect.maxX - 15, y: rect.maxY - 18)) }
         if let annotations = event.bases.annotations {
-            drawAnnotations(annotations, in: rect, diamondRect: dRect)
+            drawAnnotations(annotations, in: rect, diamondRect: dRect, color: diamondColor)
         }
     }
 
-    private func drawAnnotations(_ annotations: [BaseAnnotation], in rect: CGRect, diamondRect dRect: CGRect) {
-        let color = config.pencilColor.withAlphaComponent(0.85)
+    private func drawAnnotations(_ annotations: [BaseAnnotation], in rect: CGRect, diamondRect dRect: CGRect, color: UIColor) {
+        let color = color.withAlphaComponent(0.85)
         let font = UIFont(name: "PatrickHand-Regular", size: 10) ?? .systemFont(ofSize: 10, weight: .medium)
-        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.alignment = .center
+        paragraphStyle.lineBreakMode = .byWordWrapping
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: color,
+            .paragraphStyle: paragraphStyle
+        ]
+
+        struct AnnotationPlacement {
+            enum StackDirection {
+                case down
+                case up
+            }
+
+            let annotation: BaseAnnotation
+            let anchor: CGPoint
+            let alignX: CGFloat
+            let alignY: CGFloat
+            let stackDirection: StackDirection
+            let key: String
+        }
 
         func vertex(for base: Int) -> CGPoint {
             switch base {
@@ -493,32 +630,87 @@ final class ScorecardImageGenerator {
             }
         }
 
-        for annotation in annotations {
-            let size = (annotation.label as NSString).boundingRect(
-                with: CGSize(width: 30, height: 24),
+        func measuredSize(for label: String) -> CGSize {
+            let maxWidth: CGFloat = label.contains("\n") ? 34 : 42
+            let boundingSize = (label as NSString).boundingRect(
+                with: CGSize(width: maxWidth, height: CGFloat.greatestFiniteMagnitude),
                 options: [.usesLineFragmentOrigin, .usesFontLeading],
                 attributes: attrs,
                 context: nil
             ).integral.size
+            return CGSize(
+                width: min(maxWidth, max(ceil(boundingSize.width), 1)),
+                height: max(ceil(boundingSize.height), font.lineHeight)
+            )
+        }
 
-            let origin: CGPoint
+        func placement(for annotation: BaseAnnotation) -> AnnotationPlacement {
             if annotation.kind == .caughtStealing {
                 let (fromPt, toPt) = basePath(to: annotation.base)
                 let mid = CGPoint(x: (fromPt.x + toPt.x) / 2, y: (fromPt.y + toPt.y) / 2)
                 if mid.y < rect.midY {
-                    origin = CGPoint(x: mid.x - size.width / 2, y: mid.y - size.height - 4)
+                    return AnnotationPlacement(
+                        annotation: annotation,
+                        anchor: CGPoint(x: mid.x, y: mid.y - 4),
+                        alignX: 0.5,
+                        alignY: 1,
+                        stackDirection: .up,
+                        key: "cs-\(annotation.base)-up"
+                    )
                 } else {
-                    origin = CGPoint(x: mid.x - size.width / 2, y: mid.y + 4)
-                }
-            } else {
-                let v = vertex(for: annotation.base)
-                switch annotation.base {
-                case 1, 3:
-                    origin = CGPoint(x: v.x - size.width / 2, y: v.y + 4)
-                default:
-                    origin = CGPoint(x: v.x - size.width - 4, y: v.y - size.height / 2)
+                    return AnnotationPlacement(
+                        annotation: annotation,
+                        anchor: CGPoint(x: mid.x, y: mid.y + 4),
+                        alignX: 0.5,
+                        alignY: 0,
+                        stackDirection: .down,
+                        key: "cs-\(annotation.base)-down"
+                    )
                 }
             }
+
+            let v = vertex(for: annotation.base)
+            switch annotation.base {
+            case 1, 3:
+                return AnnotationPlacement(
+                    annotation: annotation,
+                    anchor: CGPoint(x: v.x, y: v.y + 4),
+                    alignX: 0.5,
+                    alignY: 0,
+                    stackDirection: .down,
+                    key: "base-\(annotation.base)-down"
+                )
+            default:
+                return AnnotationPlacement(
+                    annotation: annotation,
+                    anchor: CGPoint(x: v.x - 4, y: v.y),
+                    alignX: 1,
+                    alignY: 0.5,
+                    stackDirection: annotation.base == 2 ? .down : .up,
+                    key: "base-\(annotation.base)-side"
+                )
+            }
+        }
+
+        var stackedCounts: [String: Int] = [:]
+        for placement in annotations.map(placement(for:)) {
+            let size = measuredSize(for: placement.annotation.label)
+            let stackIndex = stackedCounts[placement.key, default: 0]
+            stackedCounts[placement.key] = stackIndex + 1
+
+            let stackOffset: CGFloat
+            if stackIndex == 0 {
+                stackOffset = 0
+            } else {
+                let step = (stackIndex + 1) / 2
+                let preferredSign = placement.stackDirection == .down ? 1 : -1
+                let sign = stackIndex.isMultiple(of: 2) ? -preferredSign : preferredSign
+                stackOffset = CGFloat(step * sign) * (size.height + 1)
+            }
+            let origin = CGPoint(
+                x: placement.anchor.x - size.width * placement.alignX,
+                y: placement.anchor.y - size.height * placement.alignY + stackOffset
+            )
 
             let drawRect = CGRect(
                 x: max(rect.minX + 1, min(origin.x, rect.maxX - size.width - 1)),
@@ -527,7 +719,7 @@ final class ScorecardImageGenerator {
                 height: size.height
             )
 
-            NSString(string: annotation.label).draw(
+            NSString(string: placement.annotation.label).draw(
                 with: drawRect,
                 options: [.usesLineFragmentOrigin, .usesFontLeading],
                 attributes: attrs,
