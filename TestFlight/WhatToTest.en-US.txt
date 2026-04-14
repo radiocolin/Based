@@ -1,35 +1,19 @@
-Added a loading indicator and retry on fail to the game schedule.
+Smarter networking for poor connectivity
 
-New Features: Auto-Entry & Manual Priority
-- Added "Automatically enter live games" toggle for each favorite team.
-- The app now automatically navigates to the highest-priority live game for a favorite team on launch or after returning from the background (5-minute runway).
-- Favorite teams can now be manually reordered in Settings to prioritize them on the Schedule and for auto-entry selection.
-- Updated Settings UI for favorites to a reorderable list with new per-team option sheets and plain ellipsis indicators.
+This build reworks how the app polls for live game updates so it behaves better on slow, degraded, or metered connections.
 
-Please focus this build on accessibility and Dynamic Type.
+What changed
+- The app now uses Link Quality (new in iOS 26) to detect when your connection is weak. On a poor link, it automatically backs off polling frequency so requests aren't wasted on a struggling connection.
+- Polling intervals are now measured from when the last response finishes, not on a fixed clock. If a response takes 5 seconds on a slow network, the next request won't fire until after a full interval has passed — instead of nearly immediately.
+- The app tracks how long recent requests are taking. If responses are consistently slow, it spaces out requests further to avoid piling on.
+- Low Data Mode still doubles all intervals. These adjustments layer together but are capped so the app stays responsive even in the worst conditions.
 
-VoiceOver
-- Turn VoiceOver on and move through the main tabs.
-- Confirm the tab bar labels and icons are readable and understandable.
-- On Schedule, swipe through game cards and confirm scheduled games do not announce fake scores.
-- On Schedule, open the date picker and confirm focus moves into the calendar and back out correctly when dismissed.
-- On Schedule, try the VoiceOver three-finger left and right swipe to move between days.
-- Open a game and review the header, live state, timeline, footer, and scorecard.
-- On the scorecard, confirm each cell gives enough context to understand the batter row, inning, and current location in the table.
-- Open an at-bat detail view and confirm the sheet reads in a sensible order.
-- In the at-bat pitch list, confirm pitch type, speed, and result are all spoken clearly.
-- Open pitcher and batter detail sheets and confirm positions, handedness, and stat names are spoken naturally.
-- In Settings, confirm rows, pickers, remove buttons, and the attribution footer all read cleanly.
-
-Dynamic Type
-- Test with larger text sizes, especially the largest Accessibility sizes in Settings > Accessibility > Display & Text Size > Larger Text.
-- On Schedule, confirm cards grow enough to avoid team-name overlap or clipping at very large sizes.
-- On Settings, confirm headers, descriptive copy, selector rows, and the Philadelphia LOVE attribution wrap correctly.
-- Open the Appearance, Tint Color, and Add Favorite Team pickers and confirm text scales and remains readable.
-- Open a player detail sheet and confirm both stat tables stay aligned without strange reflow or overflow.
-- Open an at-bat detail sheet and confirm the sheet scrolls all the way to the pitch sequence at large sizes.
-- In the at-bat pitch sequence, confirm large text switches to a readable wrapped layout with pitch type above speed.
+What to test
+- Use the app on Wi-Fi, then switch to cellular mid-game and confirm updates keep flowing without long gaps or freezes.
+- If you can test on a weak connection (e.g. one bar of signal, crowded stadium Wi-Fi), check that the app stays usable and doesn't hang or spam failed requests.
+- Turn on Low Data Mode (Settings > Cellular > Cellular Data Options > Data Mode > Low Data Mode) during a live game. Updates should still arrive, just less frequently.
+- Background the app for a minute or two during a live game, then return. The score and timeline should refresh promptly.
+- Watch a game from start to finish. Confirm inning transitions look clean — no missing final outs or duplicate at-bats when innings change.
 
 General
-- Report any place where text truncates, overlaps, becomes unreachable, or sounds unnatural in VoiceOver.
-- Report any spot where focus lands in the wrong place, a control is announced as interactive but does nothing, or layout breaks at large text sizes.
+- Report any case where the app feels unresponsive, shows stale data for too long, or drains noticeably more battery than expected.

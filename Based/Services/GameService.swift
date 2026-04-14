@@ -43,7 +43,6 @@ class GameService {
     private var lastLinescore: Linescore?
     private var lastScorecard: ScorecardData?
     private var lastGameData: GameData?
-    private var lastFetchTime: Date?
     private var isBackgrounded = false
     
     // Network monitoring: skip polls when there's no connectivity
@@ -51,6 +50,10 @@ class GameService {
     private var networkMonitor: NWPathMonitor?
     private var hasConnectivity = true
     private var isConstrainedNetwork = false  // Low Data Mode
+    private var linkQuality: NWPath.LinkQuality = .unknown  // iOS 26+
+
+    // Round-trip time tracking: smoothed average of recent request durations
+    private var recentRTT: TimeInterval = 0  // seconds, 0 = no data yet
     
     // Error backoff: doubles on each consecutive failure, resets on success
     private var consecutiveErrors = 0
@@ -208,14 +211,17 @@ class GameService {
         monitor.pathUpdateHandler = { [weak self] path in
             self?.hasConnectivity = (path.status == .satisfied)
             self?.isConstrainedNetwork = path.isConstrained  // Low Data Mode
+            self?.linkQuality = path.linkQuality
         }
         monitor.start(queue: DispatchQueue(label: "NetworkMonitor"))
         
         pollingTask = Task {
             do {
+                let start = CFAbsoluteTimeGetCurrent()
                 try await performSmartUpdate(gamePk: gamePk)
+                updateRTT(CFAbsoluteTimeGetCurrent() - start)
                 consecutiveErrors = 0
-                
+
                 // If game is already final, don't start polling
                 if let linescore = lastLinescore {
                     let phase = livePhase(for: linescore, gameData: nil)
@@ -229,19 +235,28 @@ class GameService {
             }
             
             while !Task.isCancelled {
-                let interval = calculatePollingInterval()
-                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
-                
-                if Task.isCancelled { break }
-                
                 // Skip network calls when there's no point — backgrounded or no connectivity.
                 // This prevents wasted radio cycles on doomed requests.
+                if isBackgrounded || !hasConnectivity {
+                    try? await Task.sleep(nanoseconds: 2_000_000_000) // 2s check interval
+                    continue
+                }
+
+                // Long-polling: delay is measured AFTER the previous request completes,
+                // so slow responses naturally space themselves out.
+                let interval = calculatePollingInterval()
+                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+
+                if Task.isCancelled { break }
                 if isBackgrounded || !hasConnectivity { continue }
-                
+
                 do {
+                    let start = CFAbsoluteTimeGetCurrent()
                     try await performSmartUpdate(gamePk: gamePk)
+                    let elapsed = CFAbsoluteTimeGetCurrent() - start
+                    updateRTT(elapsed)
                     consecutiveErrors = 0
-                    
+
                     // Check if game just finished
                     if let linescore = lastLinescore {
                         let phase = livePhase(for: linescore, gameData: nil)
@@ -270,7 +285,9 @@ class GameService {
         guard let gamePk = currentGamePk, pollingTask != nil else { return }
         Task {
             do {
+                let start = CFAbsoluteTimeGetCurrent()
                 try await performSmartUpdate(gamePk: gamePk)
+                updateRTT(CFAbsoluteTimeGetCurrent() - start)
                 consecutiveErrors = 0
             } catch {
                 consecutiveErrors += 1
@@ -290,30 +307,71 @@ class GameService {
         needsInningCleanup = false
         inningCleanupAttempts = 0
         consecutiveErrors = 0
+        recentRTT = 0
+        linkQuality = .unknown
     }
     
+    /// Exponential moving average of request round-trip time
+    private func updateRTT(_ sample: TimeInterval) {
+        if recentRTT == 0 {
+            recentRTT = sample
+        } else {
+            // Smooth with α=0.3 so recent samples dominate without jitter
+            recentRTT = 0.3 * sample + 0.7 * recentRTT
+        }
+    }
+
     /// Base interval before error backoff is applied
     private func basePollingInterval() -> TimeInterval {
-        // Fast-poll during inning cleanup to capture the missing 3rd-out play
-        if needsInningCleanup { return 5.0 }
-        
-        guard let linescore = lastLinescore else { return 10.0 }
-        // MLB API inningState values: "Top", "Bottom", "Mid", "End"
-        let state = linescore.inningState?.lowercased() ?? ""
-        
-        let interval: TimeInterval
-        if state == "top" || state == "bottom" {
-            interval = 8.0   // Active play
-        } else if state == "mid" || state == "end" {
-            interval = 15.0  // Between half-innings
-        } else if state.contains("final") {
-            interval = 300.0
+        // 1. Phase-based base interval
+        var interval: TimeInterval
+        if needsInningCleanup {
+            interval = 5.0   // Fast-poll to capture missing 3rd-out play
+        } else if let linescore = lastLinescore {
+            // MLB API inningState values: "Top", "Bottom", "Mid", "End"
+            let state = linescore.inningState?.lowercased() ?? ""
+            if state == "top" || state == "bottom" {
+                interval = 8.0   // Active play
+            } else if state == "mid" || state == "end" {
+                interval = 15.0  // Between half-innings
+            } else if state.contains("final") {
+                interval = 300.0
+            } else {
+                interval = 30.0  // Pre-game, warmup, or unknown
+            }
         } else {
-            interval = 30.0  // Pre-game, warmup, or unknown
+            interval = 10.0
         }
-        
-        // Low Data Mode: double all intervals to halve bandwidth usage
-        return isConstrainedNetwork ? interval * 2 : interval
+
+        // 2. Network quality multiplier (capped so adjustments don't compound wildly)
+        var qualityMultiplier = 1.0
+
+        // Low Data Mode: halve bandwidth usage
+        if isConstrainedNetwork { qualityMultiplier *= 2 }
+
+        // Link quality adjustment: stretch intervals on poor links
+        switch linkQuality {
+        case .minimal:
+            qualityMultiplier *= 2.0
+        case .moderate:
+            qualityMultiplier *= 1.5
+        case .good, .unknown:
+            break
+        @unknown default:
+            break
+        }
+
+        // Cap the combined quality multiplier at 4× to stay responsive
+        interval *= min(qualityMultiplier, 4.0)
+
+        // 3. RTT-based floor: don't poll faster than 1.5× the recent response time.
+        // Since we use long-polling (delay starts after response), the actual
+        // gap between request starts is already ~RTT + interval.
+        if recentRTT > 0 {
+            interval = max(interval, recentRTT * 1.5)
+        }
+
+        return interval
     }
     
     private func calculatePollingInterval() -> TimeInterval {
