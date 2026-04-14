@@ -17,3 +17,18 @@ What to test
 
 General
 - Report any case where the app feels unresponsive, shows stale data for too long, or drains noticeably more battery than expected.
+
+Live state + stale data fixes
+
+This build adds smarter behavior for non-active games and better protection against stale UI data after switching dates/games.
+
+What changed
+- Final game detection now uses both linescore and `/feed/live` status (`final`, `game over`, `completed early`, plus `f/o` status codes), and polling stops once final is confirmed.
+- Pregame polling now adapts to scheduled first pitch: far-away starts are polled much less often, with a periodic pregame lineup probe so posted lineups still appear before warmup.
+- Added polling-session guards so canceled/old polling tasks cannot apply snapshots after switching games/dates.
+- Schedule date changes now clear old game cards immediately while loading the new date, reducing stale content carryover.
+
+What to test
+- Open a pregame matchup several hours before first pitch and verify the app stays quiet but still eventually picks up lineup availability.
+- Switch dates repeatedly in the schedule and confirm old-date cards/content do not persist while new data loads.
+- Enter one game, back out, quickly open another game, and confirm no scorecard/timeline/header data leaks from the prior game.

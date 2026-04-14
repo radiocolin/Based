@@ -560,8 +560,14 @@ class ScheduleViewController: UIViewController {
 
     private func loadSchedule(for date: Date, triggerAutoEntry: Bool = false) {
         loadTask?.cancel()
+        let didChangeDate = !Calendar.current.isDate(currentDate, inSameDayAs: date)
         currentDate = date
         updateDateLabel()
+
+        if didChangeDate {
+            currentGames = []
+            collectionView.reloadData()
+        }
         
         // Show loading only when we have no data to show (not during pull-to-refresh)
         let showSpinner = currentGames.isEmpty && !collectionView.refreshControl!.isRefreshing

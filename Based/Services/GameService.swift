@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import OSLog
 
 protocol GameUpdateDelegate: AnyObject {
     func didUpdateSnapshot(_ snapshot: LiveGameSnapshot)
@@ -34,6 +35,10 @@ struct LiveGameSnapshot {
 class GameService {
     static let shared = GameService()
     weak var delegate: GameUpdateDelegate?
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "Based",
+        category: "GameService"
+    )
     
     var useMockData = false
     var currentGamePk: Int?
@@ -63,6 +68,14 @@ class GameService {
     private var needsInningCleanup = false
     private var inningCleanupAttempts = 0
     private let maxCleanupAttempts = 5
+    private var lastLoggedPollingInterval: Int?
+    private var pollingSessionID = UUID()
+    private var scheduledStartTime: Date?
+    private var lastPregameLineupProbeAt: Date?
+
+    private let farPregameThreshold: TimeInterval = 3 * 60 * 60
+    private let mediumPregameThreshold: TimeInterval = 90 * 60
+    private let nearPregameThreshold: TimeInterval = 30 * 60
 
     private func isStatusOnlyPlay(_ play: Play) -> Bool {
         let type = play.result?.type ?? ""
@@ -164,6 +177,62 @@ class GameService {
             currentAtBat: currentAtBat
         )
     }
+
+    private func isGameFinal(linescore: Linescore, gameData: GameData?) -> Bool {
+        livePhase(for: linescore, gameData: gameData) == .final
+    }
+
+    private func pregamePollingInterval(state: String, now: Date = Date()) -> TimeInterval {
+        if state.contains("warmup") || state.contains("starting soon") {
+            return 20.0
+        }
+
+        guard let scheduledStartTime else {
+            return 120.0
+        }
+
+        let secondsUntilFirstPitch = scheduledStartTime.timeIntervalSince(now)
+        if secondsUntilFirstPitch > farPregameThreshold {
+            return 20 * 60
+        }
+        if secondsUntilFirstPitch > mediumPregameThreshold {
+            return 10 * 60
+        }
+        if secondsUntilFirstPitch > nearPregameThreshold {
+            return 3 * 60
+        }
+        if secondsUntilFirstPitch > 0 {
+            return 60
+        }
+        return 20.0
+    }
+
+    private func pregameLineupProbeInterval(now: Date = Date()) -> TimeInterval {
+        guard let scheduledStartTime else {
+            return 10 * 60
+        }
+
+        let secondsUntilFirstPitch = scheduledStartTime.timeIntervalSince(now)
+        if secondsUntilFirstPitch > farPregameThreshold {
+            return 20 * 60
+        }
+        if secondsUntilFirstPitch > mediumPregameThreshold {
+            return 10 * 60
+        }
+        if secondsUntilFirstPitch > nearPregameThreshold {
+            return 5 * 60
+        }
+        if secondsUntilFirstPitch > 0 {
+            return 2 * 60
+        }
+        return 60
+    }
+
+    private func shouldProbePregameLineup(now: Date = Date()) -> Bool {
+        guard let lastProbe = lastPregameLineupProbeAt else { return true }
+        let elapsed = now.timeIntervalSince(lastProbe)
+        return elapsed >= pregameLineupProbeInterval(now: now)
+    }
     
     /// Check if the just-completed half-inning has all 3 outs recorded in PBP data.
     /// If not, flag for re-fetch so we eventually capture the missing final at-bat.
@@ -180,6 +249,7 @@ class GameService {
         guard let inningData = scorecard.innings.first(where: { $0.num == currentInning }) else {
             needsInningCleanup = true
             inningCleanupAttempts += 1
+            logger.warning("Inning cleanup scheduled: missing inning data for inning \(currentInning, privacy: .public) (\(state, privacy: .public)); attempt \(self.inningCleanupAttempts, privacy: .public)/\(self.maxCleanupAttempts, privacy: .public)")
             return
         }
         
@@ -191,47 +261,69 @@ class GameService {
         if maxOuts < 3 && inningCleanupAttempts < maxCleanupAttempts {
             needsInningCleanup = true
             inningCleanupAttempts += 1
-            print("[InningCleanup] \(state.uppercased()) \(currentInning): only \(maxOuts) outs recorded, attempt \(inningCleanupAttempts)/\(maxCleanupAttempts)")
+            logger.warning("Inning cleanup needed: \(state.uppercased(), privacy: .public) \(currentInning, privacy: .public) has \(maxOuts, privacy: .public) outs, attempt \(self.inningCleanupAttempts, privacy: .public)/\(self.maxCleanupAttempts, privacy: .public)")
         } else {
             if maxOuts >= 3 && needsInningCleanup {
-                print("[InningCleanup] \(state.uppercased()) \(currentInning): 3 outs now recorded, cleanup complete")
+                logger.info("Inning cleanup complete: \(state.uppercased(), privacy: .public) \(currentInning, privacy: .public) now has 3 outs")
             }
             needsInningCleanup = false
             if maxOuts >= 3 { inningCleanupAttempts = 0 }
         }
     }
     
-    func startPolling(gamePk: Int) {
+    func startPolling(gamePk: Int, scheduledStartTime: Date? = nil) {
+        logger.info("Starting polling for gamePk \(gamePk, privacy: .public)")
         stopPolling()
         currentGamePk = gamePk
+        let sessionID = UUID()
+        pollingSessionID = sessionID
+        self.scheduledStartTime = scheduledStartTime
+        if let scheduledStartTime {
+            logger.debug("Scheduled start time for gamePk \(gamePk, privacy: .public): \(scheduledStartTime.formatted(date: .abbreviated, time: .shortened), privacy: .public)")
+        }
         
         // Create a fresh monitor (NWPathMonitor can't be restarted after cancel)
         let monitor = NWPathMonitor()
         networkMonitor = monitor
         monitor.pathUpdateHandler = { [weak self] path in
-            self?.hasConnectivity = (path.status == .satisfied)
-            self?.isConstrainedNetwork = path.isConstrained  // Low Data Mode
-            self?.linkQuality = path.linkQuality
+            guard let self else { return }
+            let hasConnectivity = (path.status == .satisfied)
+            let isConstrained = path.isConstrained
+            let linkQuality = path.linkQuality
+
+            if self.hasConnectivity != hasConnectivity ||
+                self.isConstrainedNetwork != isConstrained ||
+                self.linkQuality != linkQuality {
+                self.logger.info(
+                    "Network path changed: connected=\(hasConnectivity, privacy: .public), constrained=\(isConstrained, privacy: .public), linkQuality=\(String(describing: linkQuality), privacy: .public)"
+                )
+            }
+
+            self.hasConnectivity = hasConnectivity
+            self.isConstrainedNetwork = isConstrained  // Low Data Mode
+            self.linkQuality = linkQuality
         }
         monitor.start(queue: DispatchQueue(label: "NetworkMonitor"))
         
         pollingTask = Task {
             do {
                 let start = CFAbsoluteTimeGetCurrent()
-                try await performSmartUpdate(gamePk: gamePk)
+                try await performSmartUpdate(gamePk: gamePk, sessionID: sessionID)
                 updateRTT(CFAbsoluteTimeGetCurrent() - start)
                 consecutiveErrors = 0
+                logger.debug("Initial smart update succeeded for gamePk \(gamePk, privacy: .public)")
 
                 // If game is already final, don't start polling
                 if let linescore = lastLinescore {
-                    let phase = livePhase(for: linescore, gameData: nil)
-                    if phase == .final {
+                    if isGameFinal(linescore: linescore, gameData: lastGameData) {
+                        logger.info("Skipping polling loop because game is already final for gamePk \(gamePk, privacy: .public)")
                         return
                     }
                 }
             } catch {
+                if error is CancellationError { return }
                 consecutiveErrors += 1
-                print("Initial update failed: \(error)")
+                logger.error("Initial update failed for gamePk \(gamePk, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
             
             while !Task.isCancelled {
@@ -252,23 +344,23 @@ class GameService {
 
                 do {
                     let start = CFAbsoluteTimeGetCurrent()
-                    try await performSmartUpdate(gamePk: gamePk)
+                    try await performSmartUpdate(gamePk: gamePk, sessionID: sessionID)
                     let elapsed = CFAbsoluteTimeGetCurrent() - start
                     updateRTT(elapsed)
                     consecutiveErrors = 0
 
                     // Check if game just finished
                     if let linescore = lastLinescore {
-                        let phase = livePhase(for: linescore, gameData: nil)
-                        if phase == .final {
-                            print("Game is final, stopping polling.")
+                        if isGameFinal(linescore: linescore, gameData: lastGameData) {
+                            logger.info("Game reached final; stopping polling loop for gamePk \(gamePk, privacy: .public)")
                             break
                         }
                     }
                 } catch {
+                    if error is CancellationError { break }
                     consecutiveErrors += 1
                     let backoff = min(basePollingInterval() * pow(2.0, Double(consecutiveErrors - 1)), maxBackoffInterval)
-                    print("Update failed (attempt \(consecutiveErrors), next in \(Int(backoff))s): \(error.localizedDescription)")
+                    logger.error("Update failed for gamePk \(gamePk, privacy: .public), attempt \(self.consecutiveErrors, privacy: .public), next in \(Int(backoff), privacy: .public)s: \(error.localizedDescription, privacy: .public)")
                 }
             }
         }
@@ -277,26 +369,35 @@ class GameService {
     /// Called by SceneDelegate when app enters background
     func didEnterBackground() {
         isBackgrounded = true
+        logger.info("App entered background; polling will pause network calls")
     }
     
     /// Called by SceneDelegate when app returns to foreground — triggers an immediate refresh
     func willEnterForeground() {
         isBackgrounded = false
+        logger.info("App entering foreground; attempting immediate refresh if polling is active")
         guard let gamePk = currentGamePk, pollingTask != nil else { return }
+        let sessionID = pollingSessionID
         Task {
             do {
                 let start = CFAbsoluteTimeGetCurrent()
-                try await performSmartUpdate(gamePk: gamePk)
+                try await performSmartUpdate(gamePk: gamePk, sessionID: sessionID)
                 updateRTT(CFAbsoluteTimeGetCurrent() - start)
                 consecutiveErrors = 0
+                logger.debug("Foreground refresh succeeded for gamePk \(gamePk, privacy: .public)")
             } catch {
+                if error is CancellationError { return }
                 consecutiveErrors += 1
-                print("Foreground refresh failed: \(error.localizedDescription)")
+                logger.error("Foreground refresh failed for gamePk \(gamePk, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
         }
     }
     
     func stopPolling() {
+        if pollingTask != nil || currentGamePk != nil {
+            logger.info("Stopping polling and clearing cached game state")
+        }
+        pollingSessionID = UUID()
         pollingTask?.cancel()
         pollingTask = nil
         networkMonitor?.cancel()
@@ -309,6 +410,9 @@ class GameService {
         consecutiveErrors = 0
         recentRTT = 0
         linkQuality = .unknown
+        lastLoggedPollingInterval = nil
+        scheduledStartTime = nil
+        lastPregameLineupProbeAt = nil
     }
     
     /// Exponential moving average of request round-trip time
@@ -336,8 +440,10 @@ class GameService {
                 interval = 15.0  // Between half-innings
             } else if state.contains("final") {
                 interval = 300.0
+            } else if state.contains("scheduled") || state.contains("pre-game") || state.contains("warmup") || state.contains("starting soon") {
+                interval = pregamePollingInterval(state: state)
             } else {
-                interval = 30.0  // Pre-game, warmup, or unknown
+                interval = 30.0  // Unknown/non-standard state
             }
         } else {
             interval = 10.0
@@ -376,68 +482,83 @@ class GameService {
     
     private func calculatePollingInterval() -> TimeInterval {
         let base = basePollingInterval()
-        guard consecutiveErrors > 0 else { return base }
+        guard consecutiveErrors > 0 else {
+            logPollingIntervalIfNeeded(base, base: base)
+            return base
+        }
         // Exponential backoff: base * 2^(errors-1), capped at 60s
         let backoff = min(base * pow(2.0, Double(consecutiveErrors - 1)), maxBackoffInterval)
+        logPollingIntervalIfNeeded(backoff, base: base)
         return backoff
     }
     
-    private func performSmartUpdate(gamePk: Int) async throws {
+    private func performSmartUpdate(gamePk: Int, sessionID: UUID) async throws {
+        guard shouldApplyUpdate(for: gamePk, sessionID: sessionID) else {
+            logger.debug("Skipping smart update for stale session on gamePk \(gamePk, privacy: .public)")
+            return
+        }
+        logger.debug("Starting smart update for gamePk \(gamePk, privacy: .public)")
         // 1. Fetch linescore first (smallest payload, needed for early snapshot)
         let linescore = try await MLBAPIClient.shared.fetchLinescore(gamePk: gamePk)
+        guard shouldApplyUpdate(for: gamePk, sessionID: sessionID) else { return }
         
         // 2. Send an early snapshot so the header populates immediately on first load
         let isFirstLoad = lastScorecard == nil
         if isFirstLoad {
             await MainActor.run {
+                guard self.shouldApplyUpdate(for: gamePk, sessionID: sessionID) else { return }
                 self.lastLinescore = linescore
                 let earlySnapshot = self.makeSnapshot(linescore: linescore, scorecard: nil, gameData: nil)
                 self.delegate?.didUpdateSnapshot(earlySnapshot)
             }
+            logger.debug("Published early snapshot for initial load (linescore only)")
         }
         
         // 3. Decide if we need to fetch PBP/Boxscore (ScorecardData)
-        var shouldFetchScorecard = false
+        var fetchReasons: [String] = []
+        let phase = livePhase(for: linescore, gameData: lastGameData)
         
         if lastScorecard != nil {
-            if linescore.currentPitchCount != lastLinescore?.currentPitchCount ||
-               linescore.outs != lastLinescore?.outs || 
-               linescore.balls != lastLinescore?.balls || 
-               linescore.strikes != lastLinescore?.strikes ||
-               linescore.teams?.home?.runs != lastLinescore?.teams?.home?.runs || 
-               linescore.teams?.away?.runs != lastLinescore?.teams?.away?.runs ||
-               linescore.currentInning != lastLinescore?.currentInning || 
-               linescore.inningHalf != lastLinescore?.inningHalf ||
-               linescore.offense?.batter?.id != lastLinescore?.offense?.batter?.id ||
-               // Runner changes: SB, CS, WP, PB, pickoff errors, defensive indifference
-               linescore.offense?.first?.id != lastLinescore?.offense?.first?.id ||
-               linescore.offense?.second?.id != lastLinescore?.offense?.second?.id ||
-               linescore.offense?.third?.id != lastLinescore?.offense?.third?.id ||
-               // Pitcher changes: mid-inning substitutions
-               linescore.defense?.pitcher?.id != lastLinescore?.defense?.pitcher?.id ||
-               needsInningCleanup {
-                shouldFetchScorecard = true
-            }
+            fetchReasons = scorecardFetchReasons(new: linescore, old: lastLinescore)
         } else {
-            shouldFetchScorecard = true
+            fetchReasons = ["no cached scorecard"]
         }
+
+        if phase == .pregame && fetchReasons.isEmpty && shouldProbePregameLineup() {
+            fetchReasons.append("pregame lineup probe")
+        }
+
+        let shouldFetchScorecard = !fetchReasons.isEmpty
+        let reasonsText = fetchReasons.isEmpty ? "none" : fetchReasons.joined(separator: ", ")
+        logger.debug("Smart update scorecard decision for gamePk \(gamePk, privacy: .public): shouldFetch=\(shouldFetchScorecard, privacy: .public), reasons=\(reasonsText, privacy: .public)")
         
         // 4. Fetch PBP/Boxscore + LiveFeed together when state changed.
         //    LiveFeed (MVR, challenges, weather) only updates after plays, so piggyback
         //    on scorecard fetches instead of hitting it every cycle.
         if shouldFetchScorecard {
             let scorecard = try await fetchScorecard(linescore: linescore)
+            guard shouldApplyUpdate(for: gamePk, sessionID: sessionID) else { return }
+            if phase == .pregame {
+                lastPregameLineupProbeAt = Date()
+            }
             
             // Fetch live feed alongside scorecard (fail-safe, non-blocking)
             if !useMockData {
                 if let feed = try? await MLBAPIClient.shared.fetchLiveFeed(gamePk: gamePk) {
+                    guard shouldApplyUpdate(for: gamePk, sessionID: sessionID) else { return }
                     lastGameData = feed.gameData
+                    logger.debug("Updated live feed gameData for gamePk \(gamePk, privacy: .public)")
+                } else {
+                    logger.warning("Live feed fetch failed for gamePk \(gamePk, privacy: .public); continuing with scorecard update")
                 }
             }
             
             await MainActor.run {
+                guard self.shouldApplyUpdate(for: gamePk, sessionID: sessionID) else { return }
                 self.lastScorecard = scorecard
             }
+        } else {
+            logger.debug("Smart update reused cached scorecard for gamePk \(gamePk, privacy: .public)")
         }
         
         // Post-inning cleanup: check if a just-completed half-inning is missing its 3rd out
@@ -446,23 +567,29 @@ class GameService {
         }
         
         await MainActor.run {
+            guard self.shouldApplyUpdate(for: gamePk, sessionID: sessionID) else { return }
             self.lastLinescore = linescore
             let snapshot = self.makeSnapshot(linescore: linescore, scorecard: self.lastScorecard, gameData: self.lastGameData)
             self.delegate?.didUpdateSnapshot(snapshot)
         }
+        logger.debug("Smart update completed for gamePk \(gamePk, privacy: .public)")
     }
 
     func fetchCurrentGame() async throws -> Linescore {
         guard let gamePk = currentGamePk else {
+            logger.error("fetchCurrentGame called without a selected game")
             throw NSError(domain: "GameService", code: 400, userInfo: [NSLocalizedDescriptionKey: "No game selected"])
         }
+        logger.debug("Fetching current linescore for gamePk \(gamePk, privacy: .public)")
         return try await MLBAPIClient.shared.fetchLinescore(gamePk: gamePk)
     }
 
     func fetchScorecard(linescore: Linescore? = nil) async throws -> ScorecardData {
         guard let gamePk = currentGamePk else {
+            logger.error("fetchScorecard called without a selected game")
             throw NSError(domain: "GameService", code: 400, userInfo: [NSLocalizedDescriptionKey: "No game selected"])
         }
+        logger.debug("Fetching scorecard inputs (playByPlay + boxscore) for gamePk \(gamePk, privacy: .public)")
         
         // Fetch PBP and boxscore in parallel using TaskGroup (avoids async let runtime issues)
         var pbp: PlayByPlayResponse?
@@ -482,10 +609,48 @@ class GameService {
         }
         
         guard let pbp, let box else {
+            logger.error("Scorecard input fetch incomplete for gamePk \(gamePk, privacy: .public): pbp=\(pbp != nil, privacy: .public), box=\(box != nil, privacy: .public)")
             throw NSError(domain: "GameService", code: 500, userInfo: [NSLocalizedDescriptionKey: "Failed to fetch game data"])
         }
+        logger.debug("Fetched scorecard inputs successfully for gamePk \(gamePk, privacy: .public)")
         
         return transformToScorecardData(playByPlay: pbp, boxscore: box, linescore: linescore)
+    }
+
+    private func logPollingIntervalIfNeeded(_ interval: TimeInterval, base: TimeInterval) {
+        let rounded = Int(interval.rounded())
+        guard lastLoggedPollingInterval != rounded else { return }
+        lastLoggedPollingInterval = rounded
+        logger.debug(
+            "Polling interval updated to \(rounded, privacy: .public)s (base=\(Int(base.rounded()), privacy: .public)s, consecutiveErrors=\(self.consecutiveErrors, privacy: .public), constrained=\(self.isConstrainedNetwork, privacy: .public), linkQuality=\(String(describing: self.linkQuality), privacy: .public), needsCleanup=\(self.needsInningCleanup, privacy: .public))"
+        )
+    }
+
+    private func scorecardFetchReasons(new linescore: Linescore, old previous: Linescore?) -> [String] {
+        guard let previous else { return ["missing previous linescore"] }
+        var reasons: [String] = []
+
+        if linescore.currentPitchCount != previous.currentPitchCount { reasons.append("pitch count changed") }
+        if linescore.outs != previous.outs { reasons.append("outs changed") }
+        if linescore.balls != previous.balls { reasons.append("balls changed") }
+        if linescore.strikes != previous.strikes { reasons.append("strikes changed") }
+        if linescore.teams?.home?.runs != previous.teams?.home?.runs { reasons.append("home runs changed") }
+        if linescore.teams?.away?.runs != previous.teams?.away?.runs { reasons.append("away runs changed") }
+        if linescore.currentInning != previous.currentInning { reasons.append("inning changed") }
+        if linescore.inningHalf != previous.inningHalf { reasons.append("inning half changed") }
+        if linescore.offense?.batter?.id != previous.offense?.batter?.id { reasons.append("batter changed") }
+        if linescore.offense?.first?.id != previous.offense?.first?.id { reasons.append("runner on first changed") }
+        if linescore.offense?.second?.id != previous.offense?.second?.id { reasons.append("runner on second changed") }
+        if linescore.offense?.third?.id != previous.offense?.third?.id { reasons.append("runner on third changed") }
+        if linescore.defense?.pitcher?.id != previous.defense?.pitcher?.id { reasons.append("pitcher changed") }
+        if needsInningCleanup { reasons.append("inning cleanup requested") }
+
+        return reasons
+    }
+
+    private func shouldApplyUpdate(for gamePk: Int, sessionID: UUID) -> Bool {
+        guard !Task.isCancelled else { return false }
+        return currentGamePk == gamePk && pollingSessionID == sessionID
     }
 
     private func transformToScorecardData(playByPlay: PlayByPlayResponse, boxscore: BoxscoreResponse, linescore: Linescore? = nil) -> ScorecardData {
