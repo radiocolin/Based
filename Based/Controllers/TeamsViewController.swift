@@ -158,6 +158,9 @@ class TeamsViewController: UITableViewController {
         let chevronImageView = UIImageView(image: chevronImage)
         chevronImageView.contentMode = .center
         cell.accessoryView = chevronImageView
+        cell.accessibilityTraits = .button
+        cell.accessibilityLabel = team.name
+        cell.accessibilityHint = "Shows team schedule"
         return cell
     }
 

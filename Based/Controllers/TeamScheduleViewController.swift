@@ -434,6 +434,45 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
 
         populateStatsRow(statsRow1, items: row1Items)
         populateStatsRow(statsRow2, items: row2Items)
+
+        // VoiceOver: expose each stat as a separate element
+        statsContainer.isAccessibilityElement = false
+        statsContainer.accessibilityElements = []
+
+        let streakSpoken = streakType == "W" ? "winning \(streak)" : "losing \(streak)"
+
+        let recordElement = UIAccessibilityElement(accessibilityContainer: statsContainer)
+        recordElement.accessibilityLabel = "\(wins) wins, \(losses) losses, \(pct)"
+        recordElement.accessibilityFrameInContainerSpace = recordLabel.frame
+
+        let homeElement = UIAccessibilityElement(accessibilityContainer: statsContainer)
+        homeElement.accessibilityLabel = "Home: \(homeW) and \(homeL)"
+
+        let awayElement = UIAccessibilityElement(accessibilityContainer: statsContainer)
+        awayElement.accessibilityLabel = "Away: \(awayW) and \(awayL)"
+
+        let streakElement = UIAccessibilityElement(accessibilityContainer: statsContainer)
+        streakElement.accessibilityLabel = "Streak: \(streakSpoken)"
+
+        let l10Element = UIAccessibilityElement(accessibilityContainer: statsContainer)
+        l10Element.accessibilityLabel = "Last 10: \(last10W) and \(10 - last10W)"
+
+        let rdElement = UIAccessibilityElement(accessibilityContainer: statsContainer)
+        rdElement.accessibilityLabel = "Run differential: \(rdStr)"
+
+        let oneRunElement = UIAccessibilityElement(accessibilityContainer: statsContainer)
+        oneRunElement.accessibilityLabel = "One run games: \(oneRunW) and \(oneRunL)"
+
+        let bestElement = UIAccessibilityElement(accessibilityContainer: statsContainer)
+        bestElement.accessibilityLabel = "Best win streak: \(bestStreak)"
+
+        let worstElement = UIAccessibilityElement(accessibilityContainer: statsContainer)
+        worstElement.accessibilityLabel = "Worst loss streak: \(worstStreak)"
+
+        statsContainer.accessibilityElements = [
+            recordElement, homeElement, awayElement, streakElement,
+            l10Element, rdElement, oneRunElement, bestElement, worstElement
+        ]
     }
 
     private func populateStatsRow(_ stack: UIStackView, items: [(String, String)]) {
@@ -818,11 +857,12 @@ private class TeamGameCell: UITableViewCell {
         }
 
         isAccessibilityElement = true
+        accessibilityTraits = .button
         accessibilityLabel = AccessibilitySupport.joined([
-            detailLabel.text,
+            statusBadge.text,
             opponentLabel.text,
+            detailLabel.attributedText?.string,
             rightLabel.text,
-            statusBadge.text
         ])
     }
 
