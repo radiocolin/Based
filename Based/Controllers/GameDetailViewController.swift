@@ -192,33 +192,14 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     
     private func setupNavigationBar() {
         navigationItem.hidesBackButton = true
-        
+        let prevTitle = navigationController?.viewControllers.dropLast().last?.title
+        navigationItem.leftBarButtonItem = BarAppearanceSupport.makePencilBackButton(
+            title: prevTitle ?? "Back", traitCollection: traitCollection, target: self, action: #selector(backTapped)
+        )
+
         let titleFont = BarAppearanceSupport.titleFont(for: traitCollection)
         let buttonFont = BarAppearanceSupport.buttonFont(for: traitCollection)
         let pencilColor = AppColors.pencil
-
-        // Custom Back Button with wobbly chevron
-        let backBtn = UIButton(type: .system)
-        let chevronSize = BarAppearanceSupport.iconSize(for: traitCollection, base: 18, maximum: 22)
-        let chevronImg = UIImage.pencilStyledIcon(named: "chevron.backward", color: pencilColor, size: chevronSize)
-        
-        var config = UIButton.Configuration.plain()
-        config.image = chevronImg
-        config.title = "Back"
-        config.imagePadding = 2
-        config.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 10)
-        
-        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
-            var outgoing = incoming
-            outgoing.font = buttonFont
-            return outgoing
-        }
-        
-        backBtn.configuration = config
-        backBtn.tintColor = pencilColor
-        backBtn.accessibilityLabel = "Back"
-        backBtn.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
-        navigationItem.leftBarButtonItem = UIBarButtonItem(customView: backBtn)
         
         let iconSize = BarAppearanceSupport.iconSize(for: traitCollection, base: 32, maximum: 32)
         let shareImg = UIImage.pencilStyledIcon(named: "square.and.arrow.up", color: pencilColor, size: iconSize, offset: CGPoint(x: -0.5, y: 0), scaleMultiplier: 0.9)

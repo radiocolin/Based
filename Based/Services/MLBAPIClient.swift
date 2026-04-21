@@ -94,7 +94,7 @@ extension MLBAPIClient {
         
         let response = try await fetch(
             ScheduleResponse.self, 
-            endpoint: "/api/v1/schedule?date=\(dateString)&sportId=1&hydrate=team"
+            endpoint: "/api/v1/schedule?date=\(dateString)&sportId=1&hydrate=team,linescore"
         )
         return response.dates.first?.games ?? []
     }
@@ -116,5 +116,13 @@ extension MLBAPIClient {
         }
         let response = try await fetch(TeamsResponse.self, endpoint: "/api/v1/teams?sportId=1")
         return response.teams
+    }
+
+    func fetchTeamSchedule(teamId: Int, season: Int) async throws -> [ScheduleGame] {
+        let response = try await fetch(
+            ScheduleResponse.self,
+            endpoint: "/api/v1/schedule?teamId=\(teamId)&season=\(season)&sportId=1&hydrate=team,linescore&gameType=R"
+        )
+        return response.dates.flatMap { $0.games }
     }
 }

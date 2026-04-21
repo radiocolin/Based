@@ -282,7 +282,7 @@ class ScheduleViewController: UIViewController {
         updateCollectionLayout()
     }
 
-    private func setupNavigationBar() {        title = "Based"
+    private func setupNavigationBar() {        title = "Games"
 
         let titleFont = BarAppearanceSupport.titleFont(for: traitCollection)
         let buttonFont = BarAppearanceSupport.buttonFont(for: traitCollection)
@@ -695,13 +695,6 @@ extension ScheduleViewController: UICollectionViewDataSource, UICollectionViewDe
         let game = currentGames[indexPath.item]
         let detailVC = GameDetailViewController(gamePk: game.gamePk, games: currentGames)
         detailVC.hidesBottomBarWhenPushed = true
-        
-        // Setup handwriting back button for the detail view
-        let font = AppFont.permanent(18, textStyle: .headline, compatibleWith: traitCollection)
-        let backItem = UIBarButtonItem(title: "< BACK", style: .plain, target: nil, action: nil)
-        backItem.setTitleTextAttributes([.font: font, .foregroundColor: AppColors.pencil], for: .normal)
-        navigationItem.backBarButtonItem = backItem
-        
         navigationController?.pushViewController(detailVC, animated: true)
     }
 }
@@ -741,11 +734,6 @@ private extension ScheduleViewController {
             
             let detailVC = GameDetailViewController(gamePk: gameToEnter.gamePk, games: currentGames)
             detailVC.hidesBottomBarWhenPushed = true
-            
-            let font = AppFont.permanent(18, textStyle: .headline, compatibleWith: traitCollection)
-            let backItem = UIBarButtonItem(title: "< BACK", style: .plain, target: nil, action: nil)
-            backItem.setTitleTextAttributes([.font: font, .foregroundColor: AppColors.pencil], for: .normal)
-            navigationItem.backBarButtonItem = backItem
             
             navigationController?.pushViewController(detailVC, animated: true)
         }

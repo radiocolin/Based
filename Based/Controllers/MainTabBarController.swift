@@ -18,10 +18,13 @@ class MainTabBarController: UITabBarController {
         let scheduleVC = ScheduleViewController()
         let scheduleNav = UINavigationController(rootViewController: scheduleVC)
         
+        let teamsVC = TeamsViewController(style: .plain)
+        let teamsNav = UINavigationController(rootViewController: teamsVC)
+        
         let settingsVC = SettingsViewController()
         let settingsNav = UINavigationController(rootViewController: settingsVC)
         
-        viewControllers = [scheduleNav, settingsNav]
+        viewControllers = [scheduleNav, teamsNav, settingsNav]
         updateTabIcons()
     }
     
@@ -31,7 +34,7 @@ class MainTabBarController: UITabBarController {
     }
     
     private func updateTabIcons() {
-        guard let vcs = viewControllers, vcs.count >= 2 else { return }
+        guard let vcs = viewControllers, vcs.count >= 3 else { return }
         
         let category = traitCollection.preferredContentSizeCategory
         let iconSide: CGFloat
@@ -45,10 +48,12 @@ class MainTabBarController: UITabBarController {
         let iconSize = CGSize(width: iconSide, height: iconSide)
         
         let baseballImg = UIImage.pencilStyledIcon(named: "baseball", color: AppColors.pencil, size: iconSize)
+        let teamsImg = UIImage.pencilStyledIcon(named: "figure.baseball", color: AppColors.pencil, size: iconSize)
         let gearImg = UIImage.pencilStyledIcon(named: "gear", color: AppColors.pencil, size: iconSize)
         
         vcs[0].tabBarItem = UITabBarItem(title: "Games", image: baseballImg, selectedImage: nil)
-        vcs[1].tabBarItem = UITabBarItem(title: "Settings", image: gearImg, selectedImage: nil)
+        vcs[1].tabBarItem = UITabBarItem(title: "Teams", image: teamsImg, selectedImage: nil)
+        vcs[2].tabBarItem = UITabBarItem(title: "Settings", image: gearImg, selectedImage: nil)
     }
     
     private func updateAppearance() {

@@ -42,4 +42,29 @@ enum BarAppearanceSupport {
         appearance.focused.titleTextAttributes = normalAttributes
         appearance.disabled.titleTextAttributes = normalAttributes
     }
+
+    /// Creates the standard pencil-styled back button used throughout the app.
+    static func makePencilBackButton(title: String = "Back", traitCollection: UITraitCollection, target: Any?, action: Selector) -> UIBarButtonItem {
+        let pencilColor = AppColors.pencil
+        let buttonFont = buttonFont(for: traitCollection)
+        let chevronSize = iconSize(for: traitCollection, base: 18, maximum: 22)
+        let chevronImg = UIImage.pencilStyledIcon(named: "chevron.backward", color: pencilColor, size: chevronSize)
+
+        let backBtn = UIButton(type: .system)
+        var config = UIButton.Configuration.plain()
+        config.image = chevronImg
+        config.title = title
+        config.imagePadding = 2
+        config.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 10)
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var outgoing = incoming
+            outgoing.font = buttonFont
+            return outgoing
+        }
+        backBtn.configuration = config
+        backBtn.tintColor = pencilColor
+        backBtn.accessibilityLabel = title
+        backBtn.addTarget(target, action: action, for: .touchUpInside)
+        return UIBarButtonItem(customView: backBtn)
+    }
 }

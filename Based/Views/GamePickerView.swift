@@ -442,7 +442,12 @@ class GameCardCell: UICollectionViewCell {
     private func formatStatus(_ game: ScheduleGame) -> String {
         let state = game.status.detailedState
         switch state {
-        case "Final": return "FINAL"
+        case "Final", "Game Over", "Completed Early":
+            if let currentInning = game.linescore?.currentInning,
+               currentInning > (game.linescore?.scheduledInnings ?? 9) {
+                return "FINAL/\(currentInning)"
+            }
+            return "FINAL"
         case "In Progress": return "LIVE"
         case "Scheduled", "Pre-Game": return formatGameTime(game.gameDate)
         default: return state.uppercased()

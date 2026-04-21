@@ -17,6 +17,7 @@ struct ScheduleGame: Codable, Sendable {
     let status: GameStatus
     let teams: ScheduleTeams
     let venue: Venue?
+    let linescore: ScheduleGameLinescore?
 }
 
 struct GameStatus: Codable, Sendable {
@@ -27,6 +28,11 @@ struct GameStatus: Codable, Sendable {
 struct ScheduleTeams: Codable, Sendable {
     let away: ScheduleTeamInfo
     let home: ScheduleTeamInfo
+}
+
+struct ScheduleGameLinescore: Codable, Sendable {
+    let currentInning: Int?
+    let scheduledInnings: Int?
 }
 
 struct ScheduleTeamInfo: Codable, Sendable {

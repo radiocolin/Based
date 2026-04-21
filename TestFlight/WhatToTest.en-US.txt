@@ -1,34 +1,34 @@
-Smarter networking for poor connectivity
+New Teams tab
 
-This build reworks how the app polls for live game updates so it behaves better on slow, degraded, or metered connections.
+Browse all 30 MLB teams and their full season schedule. Favorites float to top.
 
-What changed
-- The app now uses Link Quality (new in iOS 26) to detect when your connection is weak. On a poor link, it automatically backs off polling frequency so requests aren't wasted on a struggling connection.
-- Polling intervals are now measured from when the last response finishes, not on a fixed clock. If a response takes 5 seconds on a slow network, the next request won't fire until after a full interval has passed — instead of nearly immediately.
-- The app tracks how long recent requests are taking. If responses are consistently slow, it spaces out requests further to avoid piling on.
-- Low Data Mode still doubles all intervals. These adjustments layer together but are capped so the app stays responsive even in the worst conditions.
-
-What to test
-- Use the app on Wi-Fi, then switch to cellular mid-game and confirm updates keep flowing without long gaps or freezes.
-- If you can test on a weak connection (e.g. one bar of signal, crowded stadium Wi-Fi), check that the app stays usable and doesn't hang or spam failed requests.
-- Turn on Low Data Mode (Settings > Cellular > Cellular Data Options > Data Mode > Low Data Mode) during a live game. Updates should still arrive, just less frequently.
-- Background the app for a minute or two during a live game, then return. The score and timeline should refresh promptly.
-- Watch a game from start to finish. Confirm inning transitions look clean — no missing final outs or duplicate at-bats when innings change.
-
-General
-- Report any case where the app feels unresponsive, shows stale data for too long, or drains noticeably more battery than expected.
-
-Live state + stale data fixes
-
-This build adds smarter behavior for non-active games and better protection against stale UI data after switching dates/games.
-
-What changed
-- Final game detection now uses both linescore and `/feed/live` status (`final`, `game over`, `completed early`, plus `f/o` status codes), and polling stops once final is confirmed.
-- Pregame polling now adapts to scheduled first pitch: far-away starts are polled much less often, with a periodic pregame lineup probe so posted lineups still appear before warmup.
-- Added polling-session guards so canceled/old polling tasks cannot apply snapshots after switching games/dates.
-- Schedule date changes now clear old game cards immediately while loading the new date, reducing stale content carryover.
+- New "Teams" tab with pencil-styled baseball icon
+- Team schedule: 162 games grouped by month, sticky stats header (record, W/L bar, home/away, streak, L10, run diff, 1-run games)
+- Completed games show W/L + score; extras show inning (e.g. "W/10 5-4"). PPD games labeled. Next game highlighted.
+- Series visually separated. Status bar tap scrolls to next game.
 
 What to test
-- Open a pregame matchup several hours before first pitch and verify the app stays quiet but still eventually picks up lineup availability.
-- Switch dates repeatedly in the schedule and confirm old-date cards/content do not persist while new data loads.
-- Enter one game, back out, quickly open another game, and confirm no scorecard/timeline/header data leaks from the prior game.
+- Verify all 30 teams, favorites at top, stats header stays pinned
+- Confirm W/L scores, extra-inning labels, PPD handling
+- Test with large/small dynamic type sizes
+
+Networking improvements
+
+- Adaptive polling using Link Quality (iOS 26) on weak connections
+- Intervals measured from response completion, not fixed clock
+- Low Data Mode doubles all intervals
+
+What to test
+- Switch Wi-Fi to cellular mid-game; updates should keep flowing
+- Test on weak connection — app should stay usable
+- Enable Low Data Mode during a live game
+- Background and return — score should refresh promptly
+
+Stale data fixes
+
+- Better final-game detection stops unnecessary polling
+- Pregame polling adapts to scheduled first pitch
+- Date/game switches clear old data immediately
+
+What to test
+- Switch dates/games rapidly — no stale data should persist
