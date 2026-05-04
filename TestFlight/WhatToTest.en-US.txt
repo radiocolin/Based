@@ -25,5 +25,3 @@ Surgical Typographic Refinements:
 - Standardized headers on the Scoreboard, Scorecard grid (including BATTER and TOTALS), Standings, and Timeline views.
 - Updated Player Detail view with condensed labels and restricted sheet dragging for a better multi-tasking experience.
 - Standardized 'Pitch Sequence' and game footer labels (Umpires, Game Info) on IBM Plex.
-- Fixed a bug where the 'Pitch Sequence' header could appear in the wrong font on initial load.
-- Restored visual consistency to League and Division headers in the Standings view.
