@@ -133,4 +133,12 @@ extension MLBAPIClient {
         )
         return response.records
     }
+
+    func fetchTeamRoster(teamId: Int) async throws -> [RosterEntry] {
+        let response = try await fetch(
+            RosterResponse.self,
+            endpoint: "/api/v1/teams/\(teamId)/roster"
+        )
+        return response.roster ?? []
+    }
 }

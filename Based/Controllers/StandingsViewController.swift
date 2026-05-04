@@ -445,6 +445,37 @@ class StandingsViewController: UIViewController, UITableViewDataSource, UITableV
             break
         }
     }
+
+    func tableView(_ tableView: UITableView, contextMenuConfigurationForRowAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
+        let row = sections[indexPath.section].rows[indexPath.row]
+        guard case .team(let record, _, _) = row,
+              let teamId = record.team.id,
+              let teamName = record.team.name else {
+            return nil
+        }
+        
+        let isFavorite = FavoritesService.shared.isFavorite(teamId: teamId)
+        
+        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in
+            let favoriteAction = UIAction(
+                title: isFavorite ? "Remove from Favorites" : "Add to Favorites",
+                image: UIImage(systemName: isFavorite ? "star" : "star.fill")
+            ) { _ in
+                let feedback = UISelectionFeedbackGenerator()
+                feedback.prepare()
+                feedback.selectionChanged()
+                FavoritesService.shared.toggleFavorite(teamId: teamId)
+            }
+            
+            return UIMenu(title: teamName, children: [favoriteAction])
+        }
+    }
+
+    func tableView(_ tableView: UITableView, willDisplayContextMenu configuration: UIContextMenuConfiguration, animator: UIContextMenuInteractionAnimating?) {
+        let impact = UIImpactFeedbackGenerator(style: .medium)
+        impact.prepare()
+        impact.impactOccurred()
+    }
 }
 
 // MARK: - StandingsSubHeaderCell

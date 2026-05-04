@@ -23,3 +23,5 @@ What to test:
 - Accessibility: Enable VoiceOver to verify that standings and schedule information are announced correctly.
 - Theme Consistency: Confirm the mix of IBM Plex (structural) and Patrick Hand (data) fonts feels natural across all views.
 - Team Navigation: Verify that tapping a team name on the Scoreboard (in Game View) correctly navigates to that team's full schedule.
+- Favorites Management: Long-press any team in the Teams list, Schedule cards, or Standings to access the favorite/unfavorite context menu. Confirm the haptic feedback pulse when the menu appears.
+- Team Roster: On any team detail page, use the pencil-styled "Schedule/Roster" picker to view the current active roster grouped by position. Verify that tapping a player opens their profile.

@@ -49,6 +49,12 @@ class PlayerDetailViewController: UIViewController {
         super.init(nibName: nil, bundle: nil)
     }
 
+    init(playerId: Int, fullName: String, position: String) {
+        let batter = ScorecardBatter(id: playerId, fullName: fullName, abbreviation: "", position: position, jerseyNumber: nil, inningEntered: nil, inningExited: nil)
+        self.subject = .batter(batter, nil)
+        super.init(nibName: nil, bundle: nil)
+    }
+
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }

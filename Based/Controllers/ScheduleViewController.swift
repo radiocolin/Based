@@ -193,9 +193,6 @@ class ScheduleViewController: UIViewController {
         collectionView.register(GameCardCell.self, forCellWithReuseIdentifier: GameCardCell.reuseIdentifier)
         collectionView.isAccessibilityElement = false
         
-        let gameLongPress = UILongPressGestureRecognizer(target: self, action: #selector(handleGameLongPress(_:)))
-        collectionView.addGestureRecognizer(gameLongPress)
-        
         // Pull-to-refresh
         let refreshControl = UIRefreshControl()
         refreshControl.addTarget(self, action: #selector(pullToRefresh), for: .valueChanged)
@@ -640,43 +637,48 @@ class ScheduleViewController: UIViewController {
         }
     }
 
-    @objc private func handleGameLongPress(_ gesture: UILongPressGestureRecognizer) {
-        guard gesture.state == .began else { return }
-        let point = gesture.location(in: collectionView)
-        
-        guard let indexPath = collectionView.indexPathForItem(at: point) else { return }
+    func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
         let game = currentGames[indexPath.item]
-        
-        let alert = UIAlertController(title: "Favorite Teams", message: "Pin games involving these teams to the top.", preferredStyle: .actionSheet)
-        
-        // Away Team
-        if let awayId = game.teams.away.team.id {
-            let awayName = game.teams.away.team.name ?? "Away Team"
-            let awayIsFav = FavoritesService.shared.isFavorite(teamId: awayId)
-            alert.addAction(UIAlertAction(title: awayIsFav ? "Unfavorite \(awayName)" : "Favorite \(awayName)", style: awayIsFav ? .destructive : .default) { [weak self] _ in
+        let awayId = game.teams.away.team.id ?? 0
+        let homeId = game.teams.home.team.id ?? 0
+        let awayName = game.teams.away.team.name ?? "Away Team"
+        let homeName = game.teams.home.team.name ?? "Home Team"
+        let awayIsFav = FavoritesService.shared.isFavorite(teamId: awayId)
+        let homeIsFav = FavoritesService.shared.isFavorite(teamId: homeId)
+
+        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+            let awayAction = UIAction(
+                title: awayIsFav ? "Unfavorite \(awayName)" : "Favorite \(awayName)",
+                image: UIImage(systemName: awayIsFav ? "star" : "star.fill"),
+                attributes: awayIsFav ? .destructive : []
+            ) { [weak self] _ in
+                let feedback = UISelectionFeedbackGenerator()
+                feedback.prepare()
+                feedback.selectionChanged()
                 FavoritesService.shared.toggleFavorite(teamId: awayId)
                 self?.loadSchedule(for: self?.currentDate ?? Date())
-            })
-        }
-        
-        // Home Team
-        if let homeId = game.teams.home.team.id {
-            let homeName = game.teams.home.team.name ?? "Home Team"
-            let homeIsFav = FavoritesService.shared.isFavorite(teamId: homeId)
-            alert.addAction(UIAlertAction(title: homeIsFav ? "Unfavorite \(homeName)" : "Favorite \(homeName)", style: homeIsFav ? .destructive : .default) { [weak self] _ in
+            }
+
+            let homeAction = UIAction(
+                title: homeIsFav ? "Unfavorite \(homeName)" : "Favorite \(homeName)",
+                image: UIImage(systemName: homeIsFav ? "star" : "star.fill"),
+                attributes: homeIsFav ? .destructive : []
+            ) { [weak self] _ in
+                let feedback = UISelectionFeedbackGenerator()
+                feedback.prepare()
+                feedback.selectionChanged()
                 FavoritesService.shared.toggleFavorite(teamId: homeId)
                 self?.loadSchedule(for: self?.currentDate ?? Date())
-            })
+            }
+
+            return UIMenu(title: "Favorite Teams", children: [awayAction, homeAction])
         }
-        
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        
-        if let cell = collectionView.cellForItem(at: indexPath) {
-            alert.popoverPresentationController?.sourceView = cell
-            alert.popoverPresentationController?.sourceRect = cell.bounds
-        }
-        
-        present(alert, animated: true)
+    }
+
+    func collectionView(_ collectionView: UICollectionView, willDisplayContextMenu configuration: UIContextMenuConfiguration, animator: UIContextMenuInteractionAnimating?) {
+        let impact = UIImpactFeedbackGenerator(style: .medium)
+        impact.prepare()
+        impact.impactOccurred()
     }
 }
 

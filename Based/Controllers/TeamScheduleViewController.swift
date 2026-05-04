@@ -10,6 +10,9 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
 
     private let statsContainer = UIView()
     private let tableView = UITableView(frame: .zero, style: .plain)
+    private let rosterTableView = UITableView(frame: .zero, style: .plain)
+    private let segmentedControl = UISegmentedControl(items: ["Schedule", "Roster"])
+    private lazy var segmentedOverlay = PencilSegmentedOverlay(segmentedControl: segmentedControl)
     private let loadingIndicator = UIActivityIndicatorView(style: .medium)
     private let errorLabel = UILabel()
     private let retryButton = UIButton(type: .system)
@@ -29,6 +32,13 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
         let games: [ScheduleGame]
     }
 
+    private struct RosterSection {
+        let title: String
+        let players: [RosterEntry]
+    }
+
+    private var rosterSections: [RosterSection] = []
+
     init(teamId: Int, teamName: String) {
         self.teamId = teamId
         self.teamName = teamName
@@ -44,8 +54,10 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
         title = nickname(for: teamName)
         view.backgroundColor = AppColors.paper
 
+        setupSegmentedControl()
         setupStatsView()
         setupTableView()
+        setupRosterTableView()
         setupLoadingViews()
 
         NotificationCenter.default.addObserver(self, selector: #selector(tintDidChange), name: TintService.tintDidChangeNotification, object: nil)
@@ -77,6 +89,44 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
     }
 
     // MARK: - UI Setup
+
+    private func setupSegmentedControl() {
+        segmentedControl.selectedSegmentIndex = 0
+        segmentedControl.addTarget(self, action: #selector(modeChanged), for: .valueChanged)
+        
+        let clear = UIImage()
+        segmentedControl.setBackgroundImage(clear, for: .normal, barMetrics: .default)
+        segmentedControl.setBackgroundImage(clear, for: .selected, barMetrics: .default)
+        segmentedControl.setDividerImage(clear, forLeftSegmentState: .normal, rightSegmentState: .normal, barMetrics: .default)
+        
+        updateSegmentedControlStyle()
+
+        view.addSubview(segmentedControl)
+        view.addSubview(segmentedOverlay)
+        
+        segmentedControl.translatesAutoresizingMaskIntoConstraints = false
+        segmentedOverlay.translatesAutoresizingMaskIntoConstraints = false
+        
+        NSLayoutConstraint.activate([
+            segmentedControl.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            segmentedControl.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            segmentedControl.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            segmentedControl.heightAnchor.constraint(equalToConstant: 40),
+            
+            segmentedOverlay.topAnchor.constraint(equalTo: segmentedControl.topAnchor),
+            segmentedOverlay.leadingAnchor.constraint(equalTo: segmentedControl.leadingAnchor),
+            segmentedOverlay.trailingAnchor.constraint(equalTo: segmentedControl.trailingAnchor),
+            segmentedOverlay.bottomAnchor.constraint(equalTo: segmentedControl.bottomAnchor)
+        ])
+    }
+
+    private func updateSegmentedControlStyle() {
+        let font = AppFont.patrick(18, textStyle: .body, compatibleWith: traitCollection)
+        let normalAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: pencilColor.withAlphaComponent(0.6)]
+        let selectedAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: pencilColor]
+        segmentedControl.setTitleTextAttributes(normalAttrs, for: .normal)
+        segmentedControl.setTitleTextAttributes(selectedAttrs, for: .selected)
+    }
 
     private func setupStatsView() {
         let pc = pencilColor
@@ -185,7 +235,7 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
         view.addSubview(statsContainer)
         statsContainer.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            statsContainer.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            statsContainer.topAnchor.constraint(equalTo: segmentedControl.bottomAnchor, constant: 8),
             statsContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             statsContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
         ])
@@ -207,6 +257,26 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+    }
+
+    private func setupRosterTableView() {
+        rosterTableView.dataSource = self
+        rosterTableView.delegate = self
+        rosterTableView.backgroundColor = AppColors.paper
+        rosterTableView.separatorStyle = .none
+        rosterTableView.rowHeight = UITableView.automaticDimension
+        rosterTableView.estimatedRowHeight = 60
+        rosterTableView.register(RosterPlayerCell.self, forCellReuseIdentifier: RosterPlayerCell.reuseIdentifier)
+        rosterTableView.isHidden = true
+
+        view.addSubview(rosterTableView)
+        rosterTableView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            rosterTableView.topAnchor.constraint(equalTo: segmentedControl.bottomAnchor, constant: 8),
+            rosterTableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            rosterTableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            rosterTableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
     }
 
@@ -307,8 +377,62 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
         }
     }
 
+    @objc private func modeChanged() {
+        let isSchedule = segmentedControl.selectedSegmentIndex == 0
+        tableView.isHidden = !isSchedule
+        statsContainer.isHidden = !isSchedule
+        rosterTableView.isHidden = isSchedule
+        
+        if !isSchedule && rosterSections.isEmpty {
+            loadRoster()
+        }
+    }
+
+    private func loadRoster() {
+        loadingIndicator.startAnimating()
+        Task {
+            do {
+                let entries = try await MLBAPIClient.shared.fetchTeamRoster(teamId: teamId)
+                self.rosterSections = buildRosterSections(from: entries)
+                self.loadingIndicator.stopAnimating()
+                self.rosterTableView.reloadData()
+            } catch {
+                self.loadingIndicator.stopAnimating()
+            }
+        }
+    }
+
+    private func buildRosterSections(from entries: [RosterEntry]) -> [RosterSection] {
+        var pitchers: [RosterEntry] = []
+        var catchers: [RosterEntry] = []
+        var infielders: [RosterEntry] = []
+        var outfielders: [RosterEntry] = []
+        var dhs: [RosterEntry] = []
+        
+        for entry in entries {
+            let type = entry.position?.type?.lowercased() ?? ""
+            if type == "pitcher" { pitchers.append(entry) }
+            else if type == "catcher" { catchers.append(entry) }
+            else if type == "infielder" { infielders.append(entry) }
+            else if type == "outfielder" { outfielders.append(entry) }
+            else { dhs.append(entry) }
+        }
+        
+        var result: [RosterSection] = []
+        if !pitchers.isEmpty { result.append(RosterSection(title: "Pitchers", players: pitchers)) }
+        if !catchers.isEmpty { result.append(RosterSection(title: "Catchers", players: catchers)) }
+        if !infielders.isEmpty { result.append(RosterSection(title: "Infielders", players: infielders)) }
+        if !outfielders.isEmpty { result.append(RosterSection(title: "Outfielders", players: outfielders)) }
+        if !dhs.isEmpty { result.append(RosterSection(title: "Designated Hitters", players: dhs)) }
+        return result
+    }
+
     @objc private func retryTapped() {
-        loadSchedule()
+        if segmentedControl.selectedSegmentIndex == 0 {
+            loadSchedule()
+        } else {
+            loadRoster()
+        }
     }
 
     private func scrollToNextGame(animated: Bool) {
@@ -488,6 +612,8 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
 
     private func updateStatsColors() {
         let pc = pencilColor
+        updateSegmentedControlStyle()
+        segmentedOverlay.setNeedsLayout()
         statsContainer.viewWithTag(100)?.backgroundColor = pc.withAlphaComponent(0.1)
         // Just reload stats from sections data
         let allGames = sections.flatMap { $0.games }
@@ -581,15 +707,24 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
     // MARK: - Table View
 
     func numberOfSections(in tableView: UITableView) -> Int {
-        sections.count
+        if tableView === rosterTableView {
+            return rosterSections.count
+        }
+        return sections.count
     }
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        sections[section].games.count
+        if tableView === rosterTableView {
+            return rosterSections[section].players.count
+        }
+        return sections[section].games.count
     }
 
     func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        sections[section].title
+        if tableView === rosterTableView {
+            return rosterSections[section].title
+        }
+        return sections[section].title
     }
 
     func tableView(_ tableView: UITableView, willDisplayHeaderView view: UIView, forSection section: Int) {
@@ -600,6 +735,13 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        if tableView === rosterTableView {
+            let cell = tableView.dequeueReusableCell(withIdentifier: RosterPlayerCell.reuseIdentifier, for: indexPath) as! RosterPlayerCell
+            let player = rosterSections[indexPath.section].players[indexPath.row]
+            cell.configure(with: player)
+            return cell
+        }
+
         let cell = tableView.dequeueReusableCell(withIdentifier: TeamGameCell.reuseIdentifier, for: indexPath) as! TeamGameCell
         let game = sections[indexPath.section].games[indexPath.row]
         let isNext = indexPath == nextGameIndexPath
@@ -618,8 +760,16 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        let game = sections[indexPath.section].games[indexPath.row]
+        
+        if tableView === rosterTableView {
+            let player = rosterSections[indexPath.section].players[indexPath.row]
+            guard let playerId = player.person?.id, let fullName = player.person?.fullName else { return }
+            let playerVC = PlayerDetailViewController(playerId: playerId, fullName: fullName, position: player.position?.name ?? "")
+            present(playerVC, animated: true)
+            return
+        }
 
+        let game = sections[indexPath.section].games[indexPath.row]
         let detailVC = GameDetailViewController(gamePk: game.gamePk, games: [game])
         detailVC.hidesBottomBarWhenPushed = true
         navigationController?.pushViewController(detailVC, animated: true)
@@ -922,6 +1072,92 @@ private class TeamGameCell: UITableViewCell {
         path.append(UIBezierPath.pencilLine(from: CGPoint(x: 16, y: b.maxY), to: CGPoint(x: b.maxX - 16, y: b.maxY), jitter: 0.3))
         linesLayer.path = path.cgPath
         linesLayer.strokeColor = pencilColor.withAlphaComponent(0.15).cgColor
+        linesLayer.lineWidth = 0.5
+        linesLayer.fillColor = UIColor.clear.cgColor
+    }
+}
+
+// MARK: - RosterPlayerCell
+
+private class RosterPlayerCell: UITableViewCell {
+    static let reuseIdentifier = "RosterPlayerCell"
+
+    private let nameLabel = UILabel()
+    private let numberLabel = UILabel()
+    private let positionLabel = UILabel()
+    private let chevronView = UIImageView()
+    private let linesLayer = CAShapeLayer()
+
+    private var pencilColor: UIColor { AppColors.pencil }
+
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        setupUI()
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    private func setupUI() {
+        backgroundColor = AppColors.paper
+        contentView.layer.addSublayer(linesLayer)
+
+        numberLabel.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1)
+        numberLabel.textColor = pencilColor.withAlphaComponent(0.4)
+        numberLabel.textAlignment = .center
+
+        nameLabel.font = AppFont.ibmPlexCondensedBold(18, textStyle: .body)
+        nameLabel.textColor = pencilColor
+        nameLabel.adjustsFontForContentSizeCategory = true
+
+        positionLabel.font = AppFont.patrick(16, textStyle: .subheadline)
+        positionLabel.textColor = pencilColor.withAlphaComponent(0.5)
+
+        chevronView.image = UIImage.pencilStyledIcon(
+            named: "chevron.forward",
+            color: pencilColor.withAlphaComponent(0.3),
+            size: CGSize(width: 10, height: 10)
+        )
+        chevronView.contentMode = .center
+
+        for v: UIView in [numberLabel, nameLabel, positionLabel, chevronView] {
+            contentView.addSubview(v)
+            v.translatesAutoresizingMaskIntoConstraints = false
+        }
+
+        let pad: CGFloat = 16
+        NSLayoutConstraint.activate([
+            numberLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: pad),
+            numberLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            numberLabel.widthAnchor.constraint(equalToConstant: 24),
+
+            nameLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12),
+            nameLabel.leadingAnchor.constraint(equalTo: numberLabel.trailingAnchor, constant: 8),
+            nameLabel.trailingAnchor.constraint(lessThanOrEqualTo: positionLabel.leadingAnchor, constant: -8),
+
+            positionLabel.trailingAnchor.constraint(equalTo: chevronView.leadingAnchor, constant: -12),
+            positionLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+
+            chevronView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -pad),
+            chevronView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            chevronView.widthAnchor.constraint(equalToConstant: 10),
+
+            nameLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12),
+        ])
+    }
+
+    func configure(with entry: RosterEntry) {
+        nameLabel.text = entry.person?.fullName
+        numberLabel.text = entry.jerseyNumber ?? "--"
+        positionLabel.text = entry.position?.abbreviation
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let b = contentView.bounds
+        let path = UIBezierPath()
+        path.append(UIBezierPath.pencilLine(from: CGPoint(x: 16, y: b.maxY), to: CGPoint(x: b.maxX - 16, y: b.maxY), jitter: 0.3))
+        linesLayer.path = path.cgPath
+        linesLayer.strokeColor = pencilColor.withAlphaComponent(0.1).cgColor
         linesLayer.lineWidth = 0.5
         linesLayer.fillColor = UIColor.clear.cgColor
     }

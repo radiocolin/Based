@@ -253,6 +253,48 @@ extension GamePickerView: UICollectionViewDataSource, UICollectionViewDelegate {
         collectionView.reloadData()
         delegate?.gamePickerView(self, didSelectGame: game)
     }
+
+    func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
+        let game = games[indexPath.item]
+        let awayId = game.teams.away.team.id ?? 0
+        let homeId = game.teams.home.team.id ?? 0
+        let awayName = game.teams.away.team.name ?? "Away Team"
+        let homeName = game.teams.home.team.name ?? "Home Team"
+        let awayIsFav = FavoritesService.shared.isFavorite(teamId: awayId)
+        let homeIsFav = FavoritesService.shared.isFavorite(teamId: homeId)
+
+        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in
+            let awayAction = UIAction(
+                title: awayIsFav ? "Unfavorite \(awayName)" : "Favorite \(awayName)",
+                image: UIImage(systemName: awayIsFav ? "star" : "star.fill"),
+                attributes: awayIsFav ? .destructive : []
+            ) { _ in
+                let feedback = UISelectionFeedbackGenerator()
+                feedback.prepare()
+                feedback.selectionChanged()
+                FavoritesService.shared.toggleFavorite(teamId: awayId)
+            }
+
+            let homeAction = UIAction(
+                title: homeIsFav ? "Unfavorite \(homeName)" : "Favorite \(homeName)",
+                image: UIImage(systemName: homeIsFav ? "star" : "star.fill"),
+                attributes: homeIsFav ? .destructive : []
+            ) { _ in
+                let feedback = UISelectionFeedbackGenerator()
+                feedback.prepare()
+                feedback.selectionChanged()
+                FavoritesService.shared.toggleFavorite(teamId: homeId)
+            }
+
+            return UIMenu(title: "Favorite Teams", children: [awayAction, homeAction])
+        }
+    }
+
+    func collectionView(_ collectionView: UICollectionView, willDisplayContextMenu configuration: UIContextMenuConfiguration, animator: UIContextMenuInteractionAnimating?) {
+        let impact = UIImpactFeedbackGenerator(style: .medium)
+        impact.prepare()
+        impact.impactOccurred()
+    }
 }
 
 // MARK: - GameCardCell

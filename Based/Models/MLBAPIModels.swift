@@ -251,3 +251,15 @@ struct PitchingStats: Codable, Sendable {
     let holds: Int?
     let blownSaves: Int?
 }
+
+// MARK: - Roster
+
+struct RosterResponse: Codable, Sendable {
+    let roster: [RosterEntry]?
+}
+
+struct RosterEntry: Codable, Sendable {
+    let person: Player?
+    let jerseyNumber: String?
+    let position: Position?
+}

@@ -174,6 +174,31 @@ class TeamsViewController: UITableViewController {
         navigationController?.pushViewController(scheduleVC, animated: true)
     }
 
+    override func tableView(_ tableView: UITableView, contextMenuConfigurationForRowAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
+        let team = teamEntry(for: indexPath)
+        let isFavorite = FavoritesService.shared.isFavorite(teamId: team.id)
+        
+        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in
+            let favoriteAction = UIAction(
+                title: isFavorite ? "Remove from Favorites" : "Add to Favorites",
+                image: UIImage(systemName: isFavorite ? "star" : "star.fill")
+            ) { _ in
+                let feedback = UISelectionFeedbackGenerator()
+                feedback.prepare()
+                feedback.selectionChanged()
+                FavoritesService.shared.toggleFavorite(teamId: team.id)
+            }
+            
+            return UIMenu(title: team.name, children: [favoriteAction])
+        }
+    }
+
+    override func tableView(_ tableView: UITableView, willDisplayContextMenu configuration: UIContextMenuConfiguration, animator: UIContextMenuInteractionAnimating?) {
+        let impact = UIImpactFeedbackGenerator(style: .medium)
+        impact.prepare()
+        impact.impactOccurred()
+    }
+
     private func teamEntry(for indexPath: IndexPath) -> TeamEntry {
         if hasFavorites {
             return indexPath.section == 0 ? favoriteTeams[indexPath.row] : otherTeams[indexPath.row]
