@@ -83,6 +83,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
+        applyTypography()
         applyEventPresentation()
         view.accessibilityViewIsModal = true
         updateAccessibilityOrder()
@@ -191,7 +192,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         containerView.addSubview(pitchesTableView)
 
         pitchSequenceHeaderLabel.text = "PITCH SEQUENCE"
-        pitchSequenceHeaderLabel.font = AppFont.patrick(16, textStyle: .headline, compatibleWith: traitCollection)
+        pitchSequenceHeaderLabel.font = AppFont.ibmPlexCondensed(16, textStyle: .headline, compatibleWith: traitCollection)
         pitchSequenceHeaderLabel.textColor = pencilColor
         pitchSequenceHeaderLabel.adjustsFontForContentSizeCategory = true
         pitchSequenceHeaderLabel.accessibilityTraits = .header
@@ -377,7 +378,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
     private func applyTypography() {
         batterLabel.font = AppFont.permanent(32, textStyle: .title1, compatibleWith: traitCollection)
         descriptionLabel.font = AppFont.patrick(18, textStyle: .body, compatibleWith: traitCollection)
-        pitchSequenceHeaderLabel.font = AppFont.patrick(16, textStyle: .headline, compatibleWith: traitCollection)
+        pitchSequenceHeaderLabel.font = AppFont.ibmPlexCondensed(16, textStyle: .headline, compatibleWith: traitCollection)
         
         let sideColumnWidth: CGFloat = 160
         atBatGraphicWidthConstraint?.constant = sideColumnWidth

@@ -305,7 +305,7 @@ class PlayerDetailViewController: UIViewController {
 
         let labelLabel = UILabel()
         labelLabel.text = item.label
-        labelLabel.font = AppFont.patrick(16, textStyle: .caption1, compatibleWith: traitCollection)
+        labelLabel.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1, compatibleWith: traitCollection)
         labelLabel.textColor = pencilColor.withAlphaComponent(0.7)
         labelLabel.textAlignment = .center
         labelLabel.isAccessibilityElement = false

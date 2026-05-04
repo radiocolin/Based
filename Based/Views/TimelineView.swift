@@ -149,7 +149,7 @@ class TimelineView: UIView {
         // "CURRENT AT BAT" label
         let titleLabel = UILabel()
         titleLabel.text = "CURRENT AT BAT"
-        titleLabel.font = AppFont.permanent(14, textStyle: .headline, compatibleWith: traitCollection)
+        titleLabel.font = AppFont.ibmPlexCondensed(14, textStyle: .headline, compatibleWith: traitCollection)
         titleLabel.textColor = AppColors.pencil.withAlphaComponent(0.8)
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.isAccessibilityElement = false
@@ -349,7 +349,7 @@ extension TimelineView: UITableViewDelegate, UITableViewDataSource {
         
         let label = UILabel()
         label.text = groups[section].title
-        label.font = AppFont.permanent(14, textStyle: .headline, compatibleWith: traitCollection)
+        label.font = AppFont.ibmPlexCondensed(14, textStyle: .headline, compatibleWith: traitCollection)
         label.textColor = AppColors.pencil.withAlphaComponent(0.8)
         label.translatesAutoresizingMaskIntoConstraints = false
         label.isAccessibilityElement = false

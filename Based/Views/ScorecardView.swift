@@ -14,7 +14,7 @@ class ScorecardView: UIView {
     private let topLeftLabel: UILabel = {
         let label = UILabel()
         label.text = "BATTER"
-        label.font = UIFont(name: "PatrickHand-Regular", size: 18) ?? .systemFont(ofSize: 18, weight: .bold)
+        label.font = AppFont.ibmPlexCondensed(18, textStyle: .headline)
         label.textColor = AppColors.pencil
         label.textAlignment = .center
         label.backgroundColor = AppColors.header
@@ -209,7 +209,7 @@ class ScorecardView: UIView {
             label.translatesAutoresizingMaskIntoConstraints = false
             label.text = "\(inningLayout.inningNum)"
             label.textAlignment = .center
-            label.font = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
+            label.font = AppFont.ibmPlexCondensed(16, textStyle: .caption1)
             label.textColor = AppColors.pencil
             label.backgroundColor = AppColors.header
             label.isAccessibilityElement = false
@@ -228,7 +228,7 @@ class ScorecardView: UIView {
             label.translatesAutoresizingMaskIntoConstraints = false
             label.text = stat
             label.textAlignment = .center
-            label.font = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
+            label.font = AppFont.ibmPlexCondensed(16, textStyle: .caption1)
             label.textColor = AppColors.pencil
             label.backgroundColor = AppColors.header
             label.isAccessibilityElement = false
@@ -593,7 +593,7 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate, U
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "NameCell", for: indexPath) as! LabelCell
             if isTotalsRow {
                 cell.label.text = "TOTALS"
-                cell.label.font = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
+                cell.label.font = AppFont.ibmPlexCondensed(16, textStyle: .headline)
                 cell.label.textAlignment = .center
                 cell.backgroundColor = AppColors.header
                 cell.accessibilityLabel = "Totals row"

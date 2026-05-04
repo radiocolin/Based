@@ -90,12 +90,12 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
 
         let winLabel = UILabel()
         winLabel.text = "W"
-        winLabel.font = AppFont.patrick(11, textStyle: .caption2)
+        winLabel.font = AppFont.ibmPlexCondensed(11, textStyle: .caption2)
         winLabel.textColor = .systemGreen
 
         let lossLabel = UILabel()
         lossLabel.text = "L"
-        lossLabel.font = AppFont.patrick(11, textStyle: .caption2)
+        lossLabel.font = AppFont.ibmPlexCondensed(11, textStyle: .caption2)
         lossLabel.textColor = .systemRed
         lossLabel.textAlignment = .right
 
@@ -215,14 +215,14 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
         loadingIndicator.color = pencilColor
         loadingIndicator.accessibilityElementsHidden = true
 
-        errorLabel.font = AppFont.patrick(20, textStyle: .title3, compatibleWith: traitCollection)
+        errorLabel.font = AppFont.ibmPlexCondensed(20, textStyle: .title3, compatibleWith: traitCollection)
         errorLabel.textColor = pencilColor.withAlphaComponent(0.5)
         errorLabel.textAlignment = .center
         errorLabel.numberOfLines = 0
         errorLabel.isHidden = true
 
         retryButton.setTitle("Tap to retry", for: .normal)
-        retryButton.titleLabel?.font = AppFont.patrick(18, textStyle: .body, compatibleWith: traitCollection)
+        retryButton.titleLabel?.font = AppFont.ibmPlexCondensed(18, textStyle: .body, compatibleWith: traitCollection)
         retryButton.tintColor = pencilColor
         retryButton.isHidden = true
         retryButton.addTarget(self, action: #selector(retryTapped), for: .touchUpInside)
@@ -476,7 +476,7 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
 
             let titleLabel = UILabel()
             titleLabel.text = label
-            titleLabel.font = AppFont.patrick(13, textStyle: .caption1)
+            titleLabel.font = AppFont.ibmPlexCondensed(13, textStyle: .caption1)
             titleLabel.textColor = pc.withAlphaComponent(0.4)
 
             col.addArrangedSubview(valueLabel)
@@ -593,7 +593,7 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
 
     func tableView(_ tableView: UITableView, willDisplayHeaderView view: UIView, forSection section: Int) {
         guard let header = view as? UITableViewHeaderFooterView else { return }
-        header.textLabel?.font = AppFont.permanent(16, textStyle: .headline, compatibleWith: traitCollection)
+        header.textLabel?.font = AppFont.ibmPlexCondensedBold(16, textStyle: .headline, compatibleWith: traitCollection)
         header.textLabel?.textColor = pencilColor.withAlphaComponent(0.6)
         header.contentView.backgroundColor = AppColors.paper
     }
@@ -661,7 +661,7 @@ private class TeamGameCell: UITableViewCell {
         backgroundColor = AppColors.paper
         contentView.layer.addSublayer(linesLayer)
 
-        opponentLabel.font = AppFont.permanent(20, textStyle: .body)
+        opponentLabel.font = AppFont.ibmPlexCondensedBold(20, textStyle: .body)
         opponentLabel.adjustsFontForContentSizeCategory = true
         opponentLabel.numberOfLines = 0
 
@@ -675,7 +675,7 @@ private class TeamGameCell: UITableViewCell {
         rightLabel.setContentHuggingPriority(.required, for: .horizontal)
         rightLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-        statusBadge.font = AppFont.patrick(12, textStyle: .caption1)
+        statusBadge.font = AppFont.ibmPlexCondensed(12, textStyle: .caption1)
         statusBadge.textAlignment = .center
         statusBadge.adjustsFontForContentSizeCategory = true
         statusBadge.setContentHuggingPriority(.required, for: .horizontal)
@@ -757,7 +757,7 @@ private class TeamGameCell: UITableViewCell {
         let df = DateFormatter()
         df.dateFormat = "EEE, MMM d"
         let dateStr = df.string(from: gameDate)
-        let detailFont = AppFont.patrick(15, textStyle: .subheadline)
+        let detailFont = AppFont.ibmPlexCondensed(15, textStyle: .subheadline)
         let detail = NSMutableAttributedString(
             string: dateStr,
             attributes: [.font: detailFont, .foregroundColor: pencilColor.withAlphaComponent(0.6)]

@@ -6,6 +6,9 @@
 	<array>
 		<string>PermanentMarker-Regular.ttf</string>
 		<string>PatrickHand-Regular.ttf</string>
+		<string>IBMPlexSansCondensed-Regular.ttf</string>
+		<string>IBMPlexSansCondensed-Bold.ttf</string>
+		<string>IBMPlexSansCondensed-SemiBold.ttf</string>
 	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>

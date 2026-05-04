@@ -138,7 +138,7 @@ class TeamsViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, willDisplayHeaderView view: UIView, forSection section: Int) {
         guard let header = view as? UITableViewHeaderFooterView else { return }
-        header.textLabel?.font = AppFont.permanent(16, textStyle: .headline, compatibleWith: traitCollection)
+        header.textLabel?.font = AppFont.ibmPlexCondensedBold(16, textStyle: .headline, compatibleWith: traitCollection)
         header.textLabel?.textColor = pencilColor.withAlphaComponent(0.6)
     }
 
@@ -148,7 +148,7 @@ class TeamsViewController: UITableViewController {
 
         var config = cell.defaultContentConfiguration()
         config.text = team.name
-        config.textProperties.font = AppFont.patrick(20, textStyle: .body, compatibleWith: traitCollection)
+        config.textProperties.font = AppFont.ibmPlexCondensedBold(20, textStyle: .body, compatibleWith: traitCollection)
         config.textProperties.color = TeamColorProvider.color(for: team.name)
         cell.contentConfiguration = config
         cell.backgroundColor = AppColors.paper

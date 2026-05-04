@@ -24,7 +24,7 @@ class ScheduleViewController: UIViewController {
     private let noGamesLabel: UILabel = {
         let label = UILabel()
         label.text = "No games scheduled"
-        label.font = UIFont(name: "PatrickHand-Regular", size: 20) ?? .systemFont(ofSize: 20)
+        label.font = AppFont.ibmPlexCondensed(20, textStyle: .title3)
         label.textColor = AppColors.pencil.withAlphaComponent(0.5)
         label.textAlignment = .center
         label.numberOfLines = 0
@@ -42,7 +42,7 @@ class ScheduleViewController: UIViewController {
     private let errorLabel: UILabel = {
         let label = UILabel()
         label.text = "Couldn't load schedule"
-        label.font = UIFont(name: "PatrickHand-Regular", size: 20) ?? .systemFont(ofSize: 20)
+        label.font = AppFont.ibmPlexCondensed(20, textStyle: .title3)
         label.textColor = AppColors.pencil.withAlphaComponent(0.5)
         label.textAlignment = .center
         label.numberOfLines = 0
@@ -51,7 +51,7 @@ class ScheduleViewController: UIViewController {
     private let retryButton: UIButton = {
         let button = UIButton(type: .system)
         button.setTitle("Tap to retry", for: .normal)
-        button.titleLabel?.font = UIFont(name: "PatrickHand-Regular", size: 18) ?? .systemFont(ofSize: 18)
+        button.titleLabel?.font = AppFont.ibmPlexCondensed(18, textStyle: .body)
         button.tintColor = AppColors.pencil
         button.accessibilityLabel = "Retry loading schedule"
         button.accessibilityHint = "Double tap to try loading the schedule again."
@@ -62,7 +62,7 @@ class ScheduleViewController: UIViewController {
 
     // Constants
     private var pencilColor: UIColor { AppColors.pencil }
-    private let headerFont = "PermanentMarker-Regular"
+    private let headerFont = "IBMPlexSansCond-Bold"
     private let bodyFont = "PatrickHand-Regular"
 
     override func loadView() {
@@ -164,7 +164,7 @@ class ScheduleViewController: UIViewController {
         let longPress = UILongPressGestureRecognizer(target: self, action: #selector(jumpToToday(_:)))
         nextButton.addGestureRecognizer(longPress)
         
-        dateLabel.font = AppFont.permanent(20, textStyle: .title2, compatibleWith: traitCollection)
+        dateLabel.font = AppFont.ibmPlexCondensedBold(20, textStyle: .title2, compatibleWith: traitCollection)
         dateLabel.textColor = pencilColor
         dateLabel.textAlignment = .center
         dateLabel.isUserInteractionEnabled = true
@@ -334,7 +334,7 @@ class ScheduleViewController: UIViewController {
         datePickerContainer.addSubview(datePicker)
         
         datePickerDoneButton.setTitle("DONE", for: .normal)
-        datePickerDoneButton.titleLabel?.font = AppFont.permanent(18, textStyle: .headline, compatibleWith: traitCollection)
+        datePickerDoneButton.titleLabel?.font = AppFont.ibmPlexCondensedBold(18, textStyle: .headline, compatibleWith: traitCollection)
         datePickerDoneButton.titleLabel?.adjustsFontForContentSizeCategory = true
         datePickerDoneButton.tintColor = pencilColor
         datePickerDoneButton.accessibilityHint = "Double tap to close the calendar and show the selected schedule."
@@ -701,7 +701,7 @@ extension ScheduleViewController: UICollectionViewDataSource, UICollectionViewDe
 
 private extension ScheduleViewController {
     func applyTypography() {
-        noGamesLabel.font = AppFont.patrick(20, textStyle: .title3, compatibleWith: traitCollection)
+        noGamesLabel.font = AppFont.ibmPlexCondensed(20, textStyle: .title3, compatibleWith: traitCollection)
         dateLabel.numberOfLines = traitCollection.preferredContentSizeCategory.isAccessibilityCategory ? 2 : 1
     }
 

@@ -40,7 +40,7 @@ class GameHeaderView: UIView {
 
     private let paperColor = AppColors.paper
     private var pencilColor: UIColor { AppColors.pencil }
-    private let headerFont = "PatrickHand-Regular"
+    private let headerFont = "IBMPlexSansCond-Regular"
     private let bodyFont = "PermanentMarker-Regular"
     private let nameWidth: CGFloat = 45
     private let statWidth: CGFloat = 28

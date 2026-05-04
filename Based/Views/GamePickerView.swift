@@ -299,8 +299,8 @@ class GameCardCell: UICollectionViewCell {
         isAccessibilityElement = true
         accessibilityTraits = .button
 
-        awayLabel.font = AppFont.permanent(18, textStyle: .headline)
-        homeLabel.font = AppFont.permanent(18, textStyle: .headline)
+        awayLabel.font = AppFont.ibmPlexCondensedBold(18, textStyle: .headline)
+        homeLabel.font = AppFont.ibmPlexCondensedBold(18, textStyle: .headline)
         awayLabel.adjustsFontForContentSizeCategory = true
         homeLabel.adjustsFontForContentSizeCategory = true
         awayLabel.numberOfLines = 1
@@ -327,18 +327,18 @@ class GameCardCell: UICollectionViewCell {
         homeScoreLabel.setContentHuggingPriority(.required, for: .horizontal)
 
         atLabel.text = "@"
-        atLabel.font = AppFont.permanent(16, textStyle: .caption1)
+        atLabel.font = AppFont.ibmPlexCondensed(12, textStyle: .caption1)
         atLabel.textColor = pencilColor.withAlphaComponent(0.3)
         atLabel.textAlignment = .center
         atLabel.adjustsFontForContentSizeCategory = true
 
-        statusLabel.font = AppFont.patrick(13, textStyle: .caption1)
+        statusLabel.font = AppFont.ibmPlexCondensed(12, textStyle: .caption1)
         statusLabel.textColor = pencilColor.withAlphaComponent(0.7)
         statusLabel.textAlignment = .center
         statusLabel.numberOfLines = 2
         statusLabel.adjustsFontForContentSizeCategory = true
         
-        venueLabel.font = AppFont.patrick(11, textStyle: .caption2)
+        venueLabel.font = AppFont.ibmPlexCondensed(10, textStyle: .caption2)
         venueLabel.textColor = pencilColor.withAlphaComponent(0.5)
         venueLabel.textAlignment = .center
         venueLabel.numberOfLines = 2

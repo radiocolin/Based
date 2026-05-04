@@ -23,7 +23,7 @@ enum GameFooterContent {
         for (groupIndex, group) in visibleGroups.enumerated() {
             let titleLabel = UILabel()
             titleLabel.text = group.title
-            titleLabel.font = AppFont.patrick(16, textStyle: .headline)
+            titleLabel.font = AppFont.ibmPlexCondensedBold(16, textStyle: .headline)
             titleLabel.textColor = AppColors.pencil
             titleLabel.accessibilityTraits = .header
             titleLabel.adjustsFontForContentSizeCategory = true
@@ -36,7 +36,7 @@ enum GameFooterContent {
 
             let nameHeader = UILabel()
             nameHeader.text = "Name"
-            nameHeader.font = AppFont.patrick(12, textStyle: .caption1)
+            nameHeader.font = AppFont.ibmPlexCondensed(12, textStyle: .caption1)
             nameHeader.textColor = AppColors.pencil.withAlphaComponent(0.6)
             nameHeader.isAccessibilityElement = false
             nameHeader.adjustsFontForContentSizeCategory = true
@@ -45,7 +45,7 @@ enum GameFooterContent {
             for label in pitcherStatLabels {
                 let statLabel = UILabel()
                 statLabel.text = label
-                statLabel.font = AppFont.patrick(12, textStyle: .caption1)
+                statLabel.font = AppFont.ibmPlexCondensed(12, textStyle: .caption1)
                 statLabel.textColor = AppColors.pencil.withAlphaComponent(0.6)
                 statLabel.textAlignment = .center
                 statLabel.isAccessibilityElement = false
@@ -118,13 +118,13 @@ enum GameFooterContent {
         guard !umpires.isEmpty else { return nil }
 
         let attributedText = NSMutableAttributedString(string: "UMPIRES\n", attributes: [
-            .font: AppFont.patrick(16, textStyle: .headline),
+            .font: AppFont.ibmPlexCondensedBold(16, textStyle: .headline),
             .foregroundColor: AppColors.pencil
         ])
 
         for (index, umpire) in umpires.enumerated() {
             let roleAttributes: [NSAttributedString.Key: Any] = [
-                .font: AppFont.patrick(14, textStyle: .footnote),
+                .font: AppFont.ibmPlexCondensed(14, textStyle: .footnote),
                 .foregroundColor: AppColors.pencil.withAlphaComponent(0.7)
             ]
             let nameAttributes: [NSAttributedString.Key: Any] = [
@@ -157,12 +157,12 @@ enum GameFooterContent {
 
         let labelMap = ["First pitch": "First Pitch", "T": "Duration", "Att": "Attendance"]
         let attributedText = NSMutableAttributedString(string: "GAME INFO\n", attributes: [
-            .font: AppFont.patrick(16, textStyle: .headline),
+            .font: AppFont.ibmPlexCondensedBold(16, textStyle: .headline),
             .foregroundColor: AppColors.pencil
         ])
 
         let labelAttributes: [NSAttributedString.Key: Any] = [
-            .font: AppFont.patrick(14, textStyle: .footnote),
+            .font: AppFont.ibmPlexCondensed(14, textStyle: .footnote),
             .foregroundColor: AppColors.pencil.withAlphaComponent(0.7)
         ]
         let valueAttributes: [NSAttributedString.Key: Any] = [

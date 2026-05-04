@@ -12,7 +12,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private let topLeftLabel: UILabel = {
         let label = UILabel()
         label.text = "BATTER"
-        label.font = UIFont(name: "PatrickHand-Regular", size: 18) ?? .systemFont(ofSize: 18, weight: .bold)
+        label.font = AppFont.ibmPlexCondensed(18, textStyle: .headline)
         label.textColor = AppColors.pencil
         label.textAlignment = .center
         label.backgroundColor = AppColors.header
@@ -598,7 +598,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             label.translatesAutoresizingMaskIntoConstraints = false
             label.text = "\(inningLayout.inningNum)"
             label.textAlignment = .center
-            label.font = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
+            label.font = AppFont.ibmPlexCondensed(16, textStyle: .caption1)
             label.textColor = AppColors.pencil
             label.backgroundColor = AppColors.header
             label.isAccessibilityElement = false
@@ -617,7 +617,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             label.translatesAutoresizingMaskIntoConstraints = false
             label.text = stat
             label.textAlignment = .center
-            label.font = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
+            label.font = AppFont.ibmPlexCondensed(16, textStyle: .caption1)
             label.textColor = AppColors.pencil
             label.backgroundColor = AppColors.header
             label.isAccessibilityElement = false
@@ -1101,7 +1101,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
     private func configurePlayerDetailSheet(_ vc: UIViewController) {
         if let sheet = vc.sheetPresentationController {
-            sheet.detents = [.medium(), .large()]
+            sheet.detents = [.medium()]
             sheet.prefersGrabberVisible = true
         }
     }

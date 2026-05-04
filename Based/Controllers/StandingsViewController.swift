@@ -378,7 +378,7 @@ class StandingsViewController: UIViewController, UITableViewDataSource, UITableV
 
         let nameLabel = UILabel()
         nameLabel.text = sections[section].title
-        nameLabel.font = AppFont.permanent(22, textStyle: .title2, compatibleWith: traitCollection)
+        nameLabel.font = AppFont.ibmPlexCondensed(22, textStyle: .title2, compatibleWith: traitCollection)
         nameLabel.textColor = pc
         nameLabel.isAccessibilityElement = false
 
@@ -464,7 +464,7 @@ private class StandingsSubHeaderCell: UITableViewCell {
         backgroundColor = AppColors.paper
         selectionStyle = .none
         
-        nameLabel.font = AppFont.permanent(16, textStyle: .headline)
+        nameLabel.font = AppFont.ibmPlexCondensed(16, textStyle: .headline)
         nameLabel.textColor = AppColors.pencil.withAlphaComponent(0.6)
         nameLabel.adjustsFontForContentSizeCategory = true
         
@@ -519,12 +519,12 @@ private class StandingsTeamCell: UITableViewCell {
         backgroundColor = AppColors.paper
         contentView.layer.addSublayer(linesLayer)
 
-        rankLabel.font = AppFont.patrick(16, textStyle: .caption1)
+        rankLabel.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1)
         rankLabel.textAlignment = .center
         rankLabel.setContentHuggingPriority(.required, for: .horizontal)
         rankLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-        nameLabel.font = AppFont.permanent(18, textStyle: .body)
+        nameLabel.font = AppFont.ibmPlexCondensedBold(18, textStyle: .body)
         nameLabel.adjustsFontForContentSizeCategory = true
         nameLabel.numberOfLines = 1
 
@@ -538,7 +538,6 @@ private class StandingsTeamCell: UITableViewCell {
         pctLabel.textAlignment = .right
         pctLabel.adjustsFontForContentSizeCategory = true
 
-        detailLabel.font = AppFont.patrick(14, textStyle: .caption1)
         detailLabel.adjustsFontForContentSizeCategory = true
         detailLabel.numberOfLines = 1
 
@@ -634,7 +633,31 @@ private class StandingsTeamCell: UITableViewCell {
             parts.append("RD: \(text)")
         }
 
-        detailLabel.text = parts.joined(separator: "  \u{00B7}  ")
+        // Attributed Detail Label (Labels in Condensed, Stats in Pencil)
+        let detailAttr = NSMutableAttributedString()
+        let labelFont = AppFont.ibmPlexCondensed(12, textStyle: .caption1)
+        let statFont = AppFont.patrick(14, textStyle: .caption1)
+        let labelColor = pc.withAlphaComponent(0.5)
+        let statColor = pc
+
+        func addStat(_ label: String, value: String) {
+            if !detailAttr.string.isEmpty {
+                detailAttr.append(NSAttributedString(string: "   ", attributes: [.font: labelFont]))
+            }
+            detailAttr.append(NSAttributedString(string: label, attributes: [.font: labelFont, .foregroundColor: labelColor]))
+            detailAttr.append(NSAttributedString(string: " ", attributes: [.font: labelFont]))
+            detailAttr.append(NSAttributedString(string: value, attributes: [.font: statFont, .foregroundColor: statColor]))
+        }
+
+        if isWildcard {
+            if let wcgb = record.wildCardGamesBack { addStat("WCGB", value: wcgb) }
+        } else {
+            if let gb = record.gamesBack { addStat("GB", value: gb) }
+        }
+        if let l10 = l10Text { addStat("L10", value: l10) }
+        if let rd = rdText { addStat("RD", value: rd) }
+        
+        detailLabel.attributedText = detailAttr
         detailLabel.textColor = pc.withAlphaComponent(0.45)
 
         let gbSpoken: String?
