@@ -125,4 +125,12 @@ extension MLBAPIClient {
         )
         return response.dates.flatMap { $0.games }
     }
+
+    func fetchStandings(season: Int, type: String = "regularSeason") async throws -> [StandingsRecord] {
+        let response = try await fetch(
+            StandingsResponse.self,
+            endpoint: "/api/v1/standings?leagueId=103,104&season=\(season)&standingsTypes=\(type)&hydrate=team"
+        )
+        return response.records
+    }
 }

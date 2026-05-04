@@ -17,14 +17,17 @@ class MainTabBarController: UITabBarController {
     private func setupTabs() {
         let scheduleVC = ScheduleViewController()
         let scheduleNav = UINavigationController(rootViewController: scheduleVC)
-        
+
         let teamsVC = TeamsViewController(style: .plain)
         let teamsNav = UINavigationController(rootViewController: teamsVC)
-        
+
+        let standingsVC = StandingsViewController()
+        let standingsNav = UINavigationController(rootViewController: standingsVC)
+
         let settingsVC = SettingsViewController()
         let settingsNav = UINavigationController(rootViewController: settingsVC)
-        
-        viewControllers = [scheduleNav, teamsNav, settingsNav]
+
+        viewControllers = [scheduleNav, teamsNav, standingsNav, settingsNav]
         updateTabIcons()
     }
     
@@ -34,8 +37,8 @@ class MainTabBarController: UITabBarController {
     }
     
     private func updateTabIcons() {
-        guard let vcs = viewControllers, vcs.count >= 3 else { return }
-        
+        guard let vcs = viewControllers, vcs.count >= 4 else { return }
+
         let category = traitCollection.preferredContentSizeCategory
         let iconSide: CGFloat
         if category.isAccessibilityCategory {
@@ -46,14 +49,16 @@ class MainTabBarController: UITabBarController {
             iconSide = 30
         }
         let iconSize = CGSize(width: iconSide, height: iconSide)
-        
+
         let baseballImg = UIImage.pencilStyledIcon(named: "baseball", color: AppColors.pencil, size: iconSize)
         let teamsImg = UIImage.pencilStyledIcon(named: "figure.baseball", color: AppColors.pencil, size: iconSize)
+        let standingsImg = UIImage.pencilStyledIcon(named: "list.number", color: AppColors.pencil, size: iconSize)
         let gearImg = UIImage.pencilStyledIcon(named: "gear", color: AppColors.pencil, size: iconSize)
-        
+
         vcs[0].tabBarItem = UITabBarItem(title: "Games", image: baseballImg, selectedImage: nil)
         vcs[1].tabBarItem = UITabBarItem(title: "Teams", image: teamsImg, selectedImage: nil)
-        vcs[2].tabBarItem = UITabBarItem(title: "Settings", image: gearImg, selectedImage: nil)
+        vcs[2].tabBarItem = UITabBarItem(title: "Standings", image: standingsImg, selectedImage: nil)
+        vcs[3].tabBarItem = UITabBarItem(title: "Settings", image: gearImg, selectedImage: nil)
     }
     
     private func updateAppearance() {

@@ -1,34 +1,21 @@
-New Teams tab
+New Standings tab
 
-Browse all 30 MLB teams and their full season schedule. Favorites float to top.
+View MLB standings organized by league and division. Tap any team to jump to their full schedule.
 
-- New "Teams" tab with pencil-styled baseball icon
-- Team schedule: 162 games grouped by month, sticky stats header (record, W/L bar, home/away, streak, L10, run diff, 1-run games)
-- Completed games show W/L + score; extras show inning (e.g. "W/10 5-4"). PPD games labeled. Next game highlighted.
-- Series visually separated. Status bar tap scrolls to next game.
+- New "Standings" tab with pencil-styled numbered-list icon
+- League headers ("American League", "National League") with pencil divider lines
+- 6 division sections (East, Central, West) grouped under each league
+- Each team row shows rank, W-L record, winning percentage, games back, last 10, streak, and run differential
+- Tapping a team navigates to the team schedule view with full stats header
+- Full VoiceOver support: headers announce league and division, cells read all stats
 
 What to test
-- Verify all 30 teams, favorites at top, stats header stays pinned
-- Confirm W/L scores, extra-inning labels, PPD handling
+- Verify all 30 teams appear in the correct divisions and rank order
+- Confirm league headers appear above AL and NL division groups
+- Confirm games back, L10, streak, and run differential are accurate
+- Tap a team and confirm it opens the correct team schedule
+- Check standings icon in tab bar matches pencil aesthetic
 - Test with large/small dynamic type sizes
-
-Networking improvements
-
-- Adaptive polling using Link Quality (iOS 26) on weak connections
-- Intervals measured from response completion, not fixed clock
-- Low Data Mode doubles all intervals
-
-What to test
-- Switch Wi-Fi to cellular mid-game; updates should keep flowing
-- Test on weak connection — app should stay usable
-- Enable Low Data Mode during a live game
-- Background and return — score should refresh promptly
-
-Stale data fixes
-
-- Better final-game detection stops unnecessary polling
-- Pregame polling adapts to scheduled first pitch
-- Date/game switches clear old data immediately
-
-What to test
-- Switch dates/games rapidly — no stale data should persist
+- Test in light and dark mode
+- Test with a custom tint color applied
+- Enable VoiceOver: verify headers announce full division name, cells read all stats and hint
