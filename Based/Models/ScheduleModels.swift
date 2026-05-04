@@ -18,6 +18,10 @@ struct ScheduleGame: Codable, Sendable {
     let teams: ScheduleTeams
     let venue: Venue?
     let linescore: ScheduleGameLinescore?
+    let rescheduleDate: String?
+    let rescheduleGamePk: Int?
+    let rescheduledFrom: String?
+    let rescheduledFromDate: String?
 }
 
 struct GameStatus: Codable, Sendable {

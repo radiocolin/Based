@@ -196,7 +196,7 @@ class PlayerDetailViewController: UIViewController {
     }
 
     private func createSectionTitleLabel(from label: UILabel) -> UILabel {
-        label.font = AppFont.patrick(16, textStyle: .headline, compatibleWith: traitCollection)
+        label.font = AppFont.ibmPlexCondensed(16, textStyle: .headline, compatibleWith: traitCollection)
         label.textColor = pencilColor.withAlphaComponent(0.7)
         label.textAlignment = .center
         label.accessibilityTraits = .header

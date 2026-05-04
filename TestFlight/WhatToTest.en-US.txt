@@ -1,27 +1,25 @@
-New Standings tab
+New Standings tab & Scout Notebook Aesthetic Refinements
 
-View MLB standings organized by league and division. Tap any team to jump to their full schedule.
+Standings:
+- View MLB standings organized by league and division. Tap any team to jump to their full schedule.
+- New "Standings" tab with pencil-styled numbered-list icon.
+- Comprehensive team rows showing Rank, W-L, PCT, GB, L10, Streak, and Run Differential.
+- Full VoiceOver support: headers announce league and division, cells read all team stats and context.
 
-- New "Standings" tab with pencil-styled numbered-list icon
-- League headers ("American League", "National League") with pencil divider lines
-- 6 division sections (East, Central, West) grouped under each league
-- Each team row shows rank, W-L record, winning percentage, games back, last 10, streak, and run differential
-- Tapping a team navigates to the team schedule view with full stats header
-- Full VoiceOver support: headers announce league and division, cells read all stats
+Scout Notebook Aesthetic Refinements:
+- Organic Highlighter: Winning teams in the game list now feature a hand-drawn "marker" swipe. Using a multiply blend mode and intentional human inconsistency, the effect mimics physical ink soaking into the paper.
+- Typographic Hierarchy: Standardized structural labels (headers, category tags, umpires) on IBM Plex Sans Condensed, while preserving the signature handwritten "pencil" font (Patrick Hand) for scores, players, and primary game data.
+- Personalized Team Views: Team nicknames and season records now utilize team-specific brand colors (with automated contrast lifting for dark mode) to anchor each team's identity.
+- Enhanced Schedule Layout: Status badges (NEXT, LIVE, PPD) now sit in a fixed gutter, ensuring team names stay perfectly aligned vertically for better scannability.
+- Rescheduling Logic: Postponed games now feature a strikethrough on obsolete data (time, venue) with a "Resched" date, while moved games show their original date ("From: [Date]").
+- UI Polish: Refined the win/loss bar labels and restored full-screen detent support for the Player Detail view.
 
-What to test
-- Verify all 30 teams appear in the correct divisions and rank order
-- Confirm league headers appear above AL and NL division groups
-- Confirm games back, L10, streak, and run differential are accurate
-- Tap a team and confirm it opens the correct team schedule
-- Check standings icon in tab bar matches pencil aesthetic
-- Test with large/small dynamic type sizes
-- Test in light and dark mode
-- Test with a custom tint color applied
-- Enable VoiceOver: verify headers announce full division name, cells read all stats and hint
-
-Surgical Typographic Refinements:
-- Refined typographic hierarchy across the app: structural headers and labels now use IBM Plex Sans Condensed, while game data preserves the signature handwritten aesthetic.
-- Standardized headers on the Scoreboard, Scorecard grid (including BATTER and TOTALS), Standings, and Timeline views.
-- Updated Player Detail view with condensed labels and restricted sheet dragging for a better multi-tasking experience.
-- Standardized 'Pitch Sequence' and game footer labels (Umpires, Game Info) on IBM Plex.
+What to test:
+- Standings: Confirm correct division ranking, AL/NL header visibility, and accurate stats (GB, L10, Strk, RD).
+- Game List: Verify the highlighter appears on winning teams in final games and looks organic and imperfect.
+- Team View: Confirm the team name and record use the correct brand color and remain readable in both light and dark modes.
+- Schedule: Check that team names align perfectly regardless of status badges (NEXT/LIVE/PPD).
+- Rescheduling: Verify strikethrough on postponed games and the presence of "Resched" or "From" dates.
+- Accessibility: Enable VoiceOver to verify that standings and schedule information are announced correctly.
+- Theme Consistency: Confirm the mix of IBM Plex (structural) and Patrick Hand (data) fonts feels natural across all views.
+- Team Navigation: Verify that tapping a team name on the Scoreboard (in Game View) correctly navigates to that team's full schedule.

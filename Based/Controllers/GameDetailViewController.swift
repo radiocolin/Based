@@ -425,7 +425,11 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         gameInfoWidth.priority = .init(999)
         gameInfoWidth.isActive = true
         
-        [scorecardView, pitcherContainer, infoColumnsStack, placeholderLabel].forEach {
+        let footerSpacer = UIView()
+        footerSpacer.translatesAutoresizingMaskIntoConstraints = false
+        footerSpacer.heightAnchor.constraint(equalToConstant: 12).isActive = true
+
+        [scorecardView, pitcherContainer, footerSpacer, infoColumnsStack, placeholderLabel].forEach {
             mainStackView.addArrangedSubview($0)
         }
         
@@ -435,6 +439,12 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         
         scorecardView.setHeadersVisible(false)
         scorecardView.delegate = self
+        
+        gameHeaderView.onTeamTapped = { [weak self] teamId, teamName in
+            self?.navigationItem.backBarButtonItem = UIBarButtonItem(title: "Game", style: .plain, target: nil, action: nil)
+            let scheduleVC = TeamScheduleViewController(teamId: teamId, teamName: teamName)
+            self?.navigationController?.pushViewController(scheduleVC, animated: true)
+        }
         
         currentStateView.tapAction = { [weak self] in
             self?.showLiveAtBatDetail()
@@ -655,7 +665,9 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         let livePitches = snapshot.currentAtBat?.pitches
 
         let isFinal = snapshot.phase == .final
-        gameHeaderView.configure(with: linescore, awayNameOverride: awayName, homeNameOverride: homeName, isFinal: isFinal)
+        let awayId = game?.teams.away.team.id
+        let homeId = game?.teams.home.team.id
+        gameHeaderView.configure(with: linescore, awayNameOverride: awayName, homeNameOverride: homeName, awayId: awayId, homeId: homeId, isFinal: isFinal)
         currentStateView.configure(with: linescore, pitches: livePitches, gameData: gameData, hasActiveAtBat: hasCurrentAtBat)
         timelineView.configureLiveState(linescore: linescore, pitches: livePitches, gameData: gameData, hasActiveAtBat: hasCurrentAtBat)
         updateGameInfo()
@@ -1101,7 +1113,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
     private func configurePlayerDetailSheet(_ vc: UIViewController) {
         if let sheet = vc.sheetPresentationController {
-            sheet.detents = [.medium()]
+            sheet.detents = [.medium(), .large()]
             sheet.prefersGrabberVisible = true
         }
     }

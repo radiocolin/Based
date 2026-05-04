@@ -91,12 +91,12 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
         let winLabel = UILabel()
         winLabel.text = "W"
         winLabel.font = AppFont.ibmPlexCondensed(11, textStyle: .caption2)
-        winLabel.textColor = .systemGreen
+        winLabel.textColor = pc.withAlphaComponent(0.4)
 
         let lossLabel = UILabel()
         lossLabel.text = "L"
         lossLabel.font = AppFont.ibmPlexCondensed(11, textStyle: .caption2)
-        lossLabel.textColor = .systemRed
+        lossLabel.textColor = pc.withAlphaComponent(0.4)
         lossLabel.textAlignment = .right
 
         let barContainer = UIView()
@@ -253,8 +253,9 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
         let appearance = UINavigationBarAppearance()
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = AppColors.paper
-        appearance.titleTextAttributes = [.font: titleFont, .foregroundColor: pencilColor]
-        appearance.largeTitleTextAttributes = [.font: titleFont, .foregroundColor: pencilColor]
+        let teamColor = TeamColorProvider.color(for: teamName)
+        appearance.titleTextAttributes = [.font: titleFont, .foregroundColor: teamColor]
+        appearance.largeTitleTextAttributes = [.font: titleFont, .foregroundColor: teamColor]
         appearance.shadowColor = .clear
         BarAppearanceSupport.applyPlainBarButtonAppearance(appearance.buttonAppearance, font: buttonFont, color: pencilColor)
         BarAppearanceSupport.applyPlainBarButtonAppearance(appearance.backButtonAppearance, font: buttonFont, color: pencilColor)
@@ -397,7 +398,7 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
         // Record label
         let a = NSMutableAttributedString(
             string: "\(wins)-\(losses)",
-            attributes: [.font: AppFont.permanent(38, textStyle: .largeTitle), .foregroundColor: pc]
+            attributes: [.font: AppFont.permanent(38, textStyle: .largeTitle), .foregroundColor: teamColor]
         )
         a.append(NSAttributedString(
             string: "  \(pct)",
@@ -696,6 +697,7 @@ private class TeamGameCell: UITableViewCell {
         }
 
         let pad: CGFloat = 16
+        let gutter: CGFloat = 40
         topConstraint = opponentLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 10)
         NSLayoutConstraint.activate([
             seriesDivider.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 0),
@@ -703,16 +705,18 @@ private class TeamGameCell: UITableViewCell {
             seriesDivider.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -pad),
             seriesDivider.heightAnchor.constraint(equalToConstant: 1),
 
-            // Status badge on the left
+            // Status badge in a fixed gutter on the left
             statusBadge.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: pad),
-            statusBadge.topAnchor.constraint(equalTo: opponentLabel.topAnchor),
+            statusBadge.trailingAnchor.constraint(equalTo: opponentLabel.leadingAnchor, constant: -4),
+            statusBadge.widthAnchor.constraint(equalToConstant: gutter),
+            statusBadge.centerYAnchor.constraint(equalTo: opponentLabel.centerYAnchor),
 
-            // Top line: opponent
+            // Top line: opponent (now with fixed leading offset relative to contentView)
             topConstraint,
-            opponentLabel.leadingAnchor.constraint(equalTo: statusBadge.trailingAnchor, constant: 6),
+            opponentLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: pad + gutter + 4),
             opponentLabel.trailingAnchor.constraint(lessThanOrEqualTo: rightLabel.leadingAnchor, constant: -8),
-
-            // Right side: score/time aligned to the two-line block
+            
+            // Right side: score/time
             rightLabel.topAnchor.constraint(greaterThanOrEqualTo: opponentLabel.topAnchor),
             rightLabel.bottomAnchor.constraint(lessThanOrEqualTo: detailLabel.bottomAnchor),
             {
@@ -768,6 +772,28 @@ private class TeamGameCell: UITableViewCell {
                 attributes: [.font: detailFont, .foregroundColor: pencilColor.withAlphaComponent(0.35)]
             ))
         }
+
+        if phase == .delayed {
+            detail.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: NSRange(location: 0, length: detail.length))
+        }
+
+        if phase == .delayed, let resDate = game.rescheduleDate {
+            let rd = parseDate(resDate)
+            let rdf = DateFormatter()
+            rdf.dateFormat = "MMM d"
+            detail.append(NSAttributedString(
+                string: " · Resched: \(rdf.string(from: rd))",
+                attributes: [.font: detailFont, .foregroundColor: UIColor.systemOrange.withAlphaComponent(0.8)]
+            ))
+        } else if let fromDate = game.rescheduledFromDate {
+            let rd = parseDate(fromDate)
+            let rdf = DateFormatter()
+            rdf.dateFormat = "MMM d"
+            detail.append(NSAttributedString(
+                string: " · From: \(rdf.string(from: rd))",
+                attributes: [.font: detailFont, .foregroundColor: pencilColor.withAlphaComponent(0.35)]
+            ))
+        }
         detailLabel.attributedText = detail
 
         backgroundColor = isNextGame ? AppColors.selected : AppColors.paper
@@ -820,8 +846,15 @@ private class TeamGameCell: UITableViewCell {
             detailLabel.alpha = 1.0
 
         case .delayed:
-            rightLabel.text = tf.string(from: gameDate)
-            rightLabel.textColor = pc.withAlphaComponent(0.5)
+            let timeStr = tf.string(from: gameDate)
+            rightLabel.attributedText = NSAttributedString(
+                string: timeStr,
+                attributes: [
+                    .font: AppFont.patrick(22, textStyle: .title3),
+                    .foregroundColor: pc.withAlphaComponent(0.3),
+                    .strikethroughStyle: NSUnderlineStyle.single.rawValue
+                ]
+            )
             statusBadge.text = "PPD"
             statusBadge.textColor = pc.withAlphaComponent(0.5)
             opponentLabel.alpha = 0.7
@@ -855,9 +888,16 @@ private class TeamGameCell: UITableViewCell {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         if let date = formatter.date(from: isoDate) { return date }
+        
         let fallback = ISO8601DateFormatter()
         fallback.formatOptions = [.withInternetDateTime]
-        return fallback.date(from: isoDate) ?? .distantFuture
+        if let date = fallback.date(from: isoDate) { return date }
+        
+        let simple = DateFormatter()
+        simple.dateFormat = "yyyy-MM-dd"
+        if let date = simple.date(from: isoDate) { return date }
+        
+        return .distantFuture
     }
 
     private func abbreviation(for teamName: String) -> String {

@@ -270,6 +270,9 @@ class GameCardCell: UICollectionViewCell {
     private let atLabel = UILabel()
     
     private let linesLayer = CAShapeLayer()
+    private let highlighterLayer = CAShapeLayer()
+    private var winningTeamLabel: UILabel?
+    private var gamePk: Int = 0
 
     private let paperColor = AppColors.paper
     private var selectedColor: UIColor { AppColors.selected }
@@ -295,6 +298,7 @@ class GameCardCell: UICollectionViewCell {
     private func setupUI() {
         contentView.backgroundColor = paperColor
         contentView.layer.cornerRadius = 8
+        contentView.layer.addSublayer(highlighterLayer)
         contentView.layer.addSublayer(linesLayer)
         isAccessibilityElement = true
         accessibilityTraits = .button
@@ -410,6 +414,20 @@ class GameCardCell: UICollectionViewCell {
         } else {
             homeScoreLabel.text = ""
         }
+        
+        self.gamePk = game.gamePk
+
+        // Winning Team Highlight
+        let state = game.status.detailedState
+        let isFinal = ["Final", "Game Over", "Completed Early"].contains(state)
+        winningTeamLabel = nil
+        if isFinal, let awayS = game.teams.away.score, let homeS = game.teams.home.score {
+            if awayS > homeS {
+                winningTeamLabel = awayLabel
+            } else if homeS > awayS {
+                winningTeamLabel = homeLabel
+            }
+        }
 
         // Refresh pencil-colored elements
         let pc = pencilColor
@@ -480,8 +498,42 @@ class GameCardCell: UICollectionViewCell {
         path.append(UIBezierPath.pencilLine(from: CGPoint(x: b.width, y: b.height), to: CGPoint(x: 0, y: b.height), jitter: 0.4))
         path.append(UIBezierPath.pencilLine(from: CGPoint(x: 0, y: b.height), to: CGPoint(x: 0, y: 0), jitter: 0.4))
         linesLayer.path = path.cgPath
-        linesLayer.strokeColor = pencilColor.withAlphaComponent(0.3).cgColor
-        linesLayer.lineWidth = 0.75
+        linesLayer.strokeColor = pencilColor.withAlphaComponent(0.2).cgColor
+        linesLayer.fillColor = nil
+
+        // Highlighter
+        if let label = winningTeamLabel, label.frame != .zero {
+            let scoreLabel = (label == awayLabel) ? awayScoreLabel : homeScoreLabel
+            let highlightPath = UIBezierPath()
+            let midY = label.frame.midY
+            
+            // Deterministic "randomness" based on gamePk
+            let seed = CGFloat(gamePk % 100) / 100.0
+            let verticalShift = (seed - 0.5) * 4.0 // -2 to +2pt shift
+            let tilt = (seed - 0.5) * 3.0 // -1.5 to +1.5pt tilt
+            
+            let start = CGPoint(x: label.frame.minX - 6, y: midY + verticalShift - tilt)
+            let end = CGPoint(x: scoreLabel.frame.maxX + 2, y: midY + verticalShift + tilt)
+            
+            // Multiple overlapping wobbly strokes for a "hand-drawn marker" look
+            // We use a wider spread and more strokes to make it look less perfectly confined
+            for i in -2...2 {
+                let yOffset = CGFloat(i) * 2.0
+                let s = CGPoint(x: start.x - CGFloat.random(in: 0...4), y: start.y + yOffset)
+                let e = CGPoint(x: end.x + CGFloat.random(in: -2...2), y: end.y + yOffset)
+                highlightPath.append(.pencilLine(from: s, to: e, jitter: 1.8))
+            }
+            
+            highlighterLayer.path = highlightPath.cgPath
+            highlighterLayer.fillColor = nil
+            highlighterLayer.strokeColor = UIColor.systemYellow.withAlphaComponent(0.15).cgColor
+            highlighterLayer.lineWidth = 12
+            highlighterLayer.lineCap = .round
+            highlighterLayer.compositingFilter = "multiplyBlendMode"
+            highlighterLayer.isHidden = false
+        } else {
+            highlighterLayer.isHidden = true
+        }
         linesLayer.fillColor = UIColor.clear.cgColor
     }
 }

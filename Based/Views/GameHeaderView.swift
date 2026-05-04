@@ -49,10 +49,17 @@ class GameHeaderView: UIView {
     private let headerHeight: CGFloat = 22
     private let outerPadding: CGFloat = 16
 
+    private var awayTeamId: Int?
+    private var homeTeamId: Int?
+    private var awayTeamName: String?
+    private var homeTeamName: String?
+    var onTeamTapped: ((Int, String) -> Void)?
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         setupUI()
         rebuildInningColumns(count: 9)
+        setupTapGestures()
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: GameHeaderView, _) in
             self.setNeedsLayout()
         }
@@ -60,6 +67,22 @@ class GameHeaderView: UIView {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    private func setupTapGestures() {
+        [awayName, homeName].forEach { label in
+            label.isUserInteractionEnabled = true
+            let tap = UITapGestureRecognizer(target: self, action: #selector(teamLabelTapped(_:)))
+            label.addGestureRecognizer(tap)
+        }
+    }
+
+    @objc private func teamLabelTapped(_ gesture: UITapGestureRecognizer) {
+        if gesture.view === awayName, let id = awayTeamId, let name = awayTeamName {
+            onTeamTapped?(id, name)
+        } else if gesture.view === homeName, let id = homeTeamId, let name = homeTeamName {
+            onTeamTapped?(id, name)
+        }
     }
 
     private func setupUI() {
@@ -362,9 +385,13 @@ class GameHeaderView: UIView {
         linesLayer.lineJoin = .round
     }
 
-    func configure(with linescore: Linescore, awayNameOverride: String? = nil, homeNameOverride: String? = nil, isFinal: Bool = false) {
+    func configure(with linescore: Linescore, awayNameOverride: String? = nil, homeNameOverride: String? = nil, awayId: Int? = nil, homeId: Int? = nil, isFinal: Bool = false) {
+        awayTeamId = awayId ?? linescore.teams?.away?.team?.id
+        homeTeamId = homeId ?? linescore.teams?.home?.team?.id
         let awayActual = awayNameOverride ?? linescore.teams?.away?.team?.name ?? "AWAY"
         let homeActual = homeNameOverride ?? linescore.teams?.home?.team?.name ?? "HOME"
+        awayTeamName = awayActual
+        homeTeamName = homeActual
         let awayColor = TeamColorProvider.color(for: awayActual)
         let homeColor = TeamColorProvider.color(for: homeActual)
         let zeroColor = pencilColor.withAlphaComponent(0.7)
