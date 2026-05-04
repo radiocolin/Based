@@ -876,11 +876,21 @@ private class TeamGameCell: UITableViewCell {
         isAccessibilityElement = true
         accessibilityTraits = .button
         let spokenOpponent = "\(prefix) \(opponent)"
+        var statusPrefix = ""
+        if statusBadge.text == "NEXT" { statusPrefix = "Next game," }
+        else if statusBadge.text == "PPD" { statusPrefix = "Postponed," }
+        else if statusBadge.text == "LIVE" { statusPrefix = "Live now," }
+        
+        var detailVO = detailLabel.attributedText?.string ?? ""
+        detailVO = detailVO.replacingOccurrences(of: " · ", with: ", ")
+        detailVO = detailVO.replacingOccurrences(of: "Resched:", with: "rescheduled to")
+        detailVO = detailVO.replacingOccurrences(of: "From:", with: "originally scheduled for")
+        
         accessibilityLabel = AccessibilitySupport.joined([
-            statusBadge.text,
+            statusPrefix,
             spokenOpponent,
-            detailLabel.attributedText?.string,
             rightLabel.text,
+            detailVO
         ])
     }
 

@@ -655,10 +655,13 @@ private class StandingsTeamCell: UITableViewCell {
             if let gb = record.gamesBack { addStat("GB", value: gb) }
         }
         if let l10 = l10Text { addStat("L10", value: l10) }
+        if let streak = record.streak?.streakCode { addStat("STRK", value: streak) }
         if let rd = rdText { addStat("RD", value: rd) }
         
         detailLabel.attributedText = detailAttr
         detailLabel.textColor = pc.withAlphaComponent(0.45)
+        detailLabel.adjustsFontSizeToFitWidth = true
+        detailLabel.minimumScaleFactor = 0.8
 
         let gbSpoken: String?
         if isWildcard {
