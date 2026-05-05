@@ -6,6 +6,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
     private var event: AtBatEvent
     private var batterName: String
     private var pitcherName: String
+    private var previousPitcherName: String?
     private var accentColor: UIColor?
     
     // UI Elements
@@ -41,10 +42,11 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
     private let headerFont = "PermanentMarker-Regular"
     private let bodyFont = "PatrickHand-Regular"
     
-    init(event: AtBatEvent, batterName: String, pitcherName: String, accentColor: UIColor? = nil) {
+    init(event: AtBatEvent, batterName: String, pitcherName: String, previousPitcherName: String? = nil, accentColor: UIColor? = nil) {
         self.event = event
         self.batterName = batterName
         self.pitcherName = pitcherName
+        self.previousPitcherName = previousPitcherName
         self.accentColor = accentColor
         super.init(nibName: nil, bundle: nil)
     }
@@ -53,13 +55,16 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         fatalError("init(coder:) has not been implemented")
     }
     
-    func update(event: AtBatEvent, batterName: String? = nil, pitcherName: String? = nil, accentColor: UIColor? = nil) {
+    func update(event: AtBatEvent, batterName: String? = nil, pitcherName: String? = nil, previousPitcherName: String? = nil, accentColor: UIColor? = nil) {
         self.event = event
         if let batterName {
             self.batterName = batterName
         }
         if let pitcherName {
             self.pitcherName = pitcherName
+        }
+        if let previousPitcherName {
+            self.previousPitcherName = previousPitcherName
         }
         if let accentColor {
             self.accentColor = accentColor
@@ -310,8 +315,22 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         ]
         let text = NSMutableAttributedString(string: "vs. ", attributes: prefixAttributes)
         text.append(NSAttributedString(string: pitcherName.capitalized, attributes: pitcherAttributes))
+
+        if let previousPitcherName {
+            let changeAttributes: [NSAttributedString.Key: Any] = [
+                .font: AppFont.patrick(15, textStyle: .subheadline, compatibleWith: traitCollection),
+                .foregroundColor: pencilColor.withAlphaComponent(0.5)
+            ]
+            text.append(NSAttributedString(string: "\nreplaces \(previousPitcherName.capitalized)", attributes: changeAttributes))
+        }
+
         subHeaderLabel.attributedText = text
-        subHeaderLabel.accessibilityLabel = "Pitcher, \(pitcherName.capitalized)"
+
+        var accessibilityText = "Pitcher, \(pitcherName.capitalized)"
+        if let previousPitcherName {
+            accessibilityText += ". Pitching change, replaces \(previousPitcherName.capitalized)"
+        }
+        subHeaderLabel.accessibilityLabel = accessibilityText
     }
 
     @objc private func handleBatterTap() {

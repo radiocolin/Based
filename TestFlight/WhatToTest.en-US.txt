@@ -1,27 +1,24 @@
-New Standings tab & Scout Notebook Aesthetic Refinements
+New Standings Tab & Aesthetic Refinements
 
 Standings:
-- View MLB standings organized by league and division. Tap any team to jump to their full schedule.
-- New "Standings" tab with pencil-styled numbered-list icon.
-- Comprehensive team rows showing Rank, W-L, PCT, GB, L10, Streak, and Run Differential.
-- Full VoiceOver support: headers announce league and division, cells read all team stats and context.
+- View MLB rankings by league/division with detailed stats (Rank, GB, L10, RD).
+- Full VoiceOver support for all team data and headers.
 
-Scout Notebook Aesthetic Refinements:
-- Organic Highlighter: Winning teams in the game list now feature a hand-drawn "marker" swipe. Using a multiply blend mode and intentional human inconsistency, the effect mimics physical ink soaking into the paper.
-- Typographic Hierarchy: Standardized structural labels (headers, category tags, umpires) on IBM Plex Sans Condensed, while preserving the signature handwritten "pencil" font (Patrick Hand) for scores, players, and primary game data.
-- Personalized Team Views: Team nicknames and season records now utilize team-specific brand colors (with automated contrast lifting for dark mode) to anchor each team's identity.
-- Enhanced Schedule Layout: Status badges (NEXT, LIVE, PPD) now sit in a fixed gutter, ensuring team names stay perfectly aligned vertically for better scannability.
-- Rescheduling Logic: Postponed games now feature a strikethrough on obsolete data (time, venue) with a "Resched" date, while moved games show their original date ("From: [Date]").
-- UI Polish: Refined the win/loss bar labels and restored full-screen detent support for the Player Detail view.
+Scout Notebook Aesthetic:
+- Organic Highlighter: Hand-drawn marker effect for winning teams.
+- Typography: Improved hierarchy using IBM Plex Sans Condensed for structure and Patrick Hand for pencil data.
+- Team Identity: Nicknames and records now use team brand colors.
+- Scorecard: Organic pencil lines for pitching changes and "replaces [Pitcher]" labels in at-bat details.
+
+Enhanced Features:
+- Team Roster: View active rosters grouped by position with player profile links.
+- Schedule: Improved vertical alignment and clear rescheduling (strikethrough/From) indicators.
+- Navigation: Tap team names or long-press for favorites with haptic feedback.
 
 What to test:
-- Standings: Confirm correct division ranking, AL/NL header visibility, and accurate stats (GB, L10, Strk, RD).
-- Game List: Verify the highlighter appears on winning teams in final games and looks organic and imperfect.
-- Team View: Confirm the team name and record use the correct brand color and remain readable in both light and dark modes.
-- Schedule: Check that team names align perfectly regardless of status badges (NEXT/LIVE/PPD).
-- Rescheduling: Verify strikethrough on postponed games and the presence of "Resched" or "From" dates.
-- Accessibility: Enable VoiceOver to verify that standings and schedule information are announced correctly.
-- Theme Consistency: Confirm the mix of IBM Plex (structural) and Patrick Hand (data) fonts feels natural across all views.
-- Team Navigation: Verify that tapping a team name on the Scoreboard (in Game View) correctly navigates to that team's full schedule.
-- Favorites Management: Long-press any team in the Teams list, Schedule cards, or Standings to access the favorite/unfavorite context menu. Confirm the haptic feedback pulse when the menu appears.
-- Team Roster: On any team detail page, use the pencil-styled "Schedule/Roster" picker to view the current active roster grouped by position. Verify that tapping a player opens their profile.
+- Verify standings rankings and stats accuracy.
+- Confirm organic look of the winner highlighter and pitching change lines.
+- Test the "Schedule/Roster" picker on team pages.
+- Check "replaces [Pitcher]" labels in At-Bat details after pitching changes.
+- Ensure team colors and alignment remain readable and consistent.
+- Verify VoiceOver announcements for standings and schedule details.

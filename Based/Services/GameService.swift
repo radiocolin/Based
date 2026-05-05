@@ -1117,6 +1117,7 @@ class GameService {
         )
 
         return AtBatEvent(
+            atBatIndex: seedPlay.about?.atBatIndex,
             batterId: runnerId,
             batterName: runnerName,
             pinchRunnerName: pinchRunnerName,
@@ -1335,6 +1336,7 @@ class GameService {
         )
 
         return AtBatEvent(
+            atBatIndex: play.about?.atBatIndex,
             batterId: batterId,
             batterName: batterName,
             pinchRunnerName: pinchRunnerName,

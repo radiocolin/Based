@@ -75,6 +75,7 @@ struct ScorecardInning: Codable, Sendable, Equatable {
 }
 
 struct AtBatEvent: Codable, Sendable, Equatable {
+    let atBatIndex: Int? // Unique identifier from MLB API
     let batterId: Int
     let batterName: String
     let pinchRunnerName: String? // Name of the PR who replaced the batter on base

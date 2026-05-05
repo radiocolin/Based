@@ -544,18 +544,18 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
 
         // Row 1: Home, Away, Streak, L10
         let row1Items: [(String, String)] = [
-            ("Home", "\(homeW)-\(homeL)"),
-            ("Away", "\(awayW)-\(awayL)"),
-            ("Strk", "\(streakType)\(streak)"),
+            ("HOME", "\(homeW)-\(homeL)"),
+            ("AWAY", "\(awayW)-\(awayL)"),
+            ("STRK", "\(streakType)\(streak)"),
             ("L10", "\(last10W)-\(10 - last10W)"),
         ]
 
         // Row 2: Run diff, 1-Run, Best W, Worst L
         let row2Items: [(String, String)] = [
-            ("Run Diff", rdStr),
-            ("1-Run", "\(oneRunW)-\(oneRunL)"),
-            ("Best W", "\(bestStreak)"),
-            ("Worst L", "\(worstStreak)"),
+            ("RUN DIFF", rdStr),
+            ("1-RUN", "\(oneRunW)-\(oneRunL)"),
+            ("BEST W", "\(bestStreak)"),
+            ("WORST L", "\(worstStreak)"),
         ]
 
         // VoiceOver: record label reads as one element

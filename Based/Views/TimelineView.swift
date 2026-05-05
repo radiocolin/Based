@@ -12,8 +12,30 @@ class TimelineView: UIView {
     weak var delegate: TimelineViewDelegate?
     private let tableView = UITableView(frame: .zero, style: .plain)
     private var groups: [InningGroup] = []
+    private var items: [[TimelineItem]] = []
     private var awayAccentColor: UIColor = AppColors.pencil
     private var homeAccentColor: UIColor = AppColors.pencil
+
+    private enum TimelineItem: Equatable {
+        case atBat(AtBatEvent)
+        case pitchingChange(newPitcher: String, oldPitcher: String)
+    }
+
+    private static func buildItems(from groups: [InningGroup]) -> [[TimelineItem]] {
+        groups.map { group in
+            var sectionItems: [TimelineItem] = []
+            for (i, event) in group.events.enumerated() {
+                if i > 0 && event.pitcherId != group.events[i - 1].pitcherId {
+                    sectionItems.append(.pitchingChange(
+                        newPitcher: event.pitcherName,
+                        oldPitcher: group.events[i - 1].pitcherName
+                    ))
+                }
+                sectionItems.append(.atBat(event))
+            }
+            return sectionItems
+        }
+    }
     
     // Embedded live panel
     private let liveStateView = CurrentStateView()
@@ -54,6 +76,7 @@ class TimelineView: UIView {
         tableView.delegate = self
         tableView.dataSource = self
         tableView.register(TimelineCell.self, forCellReuseIdentifier: TimelineCell.identifier)
+        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "PitchingChangeCell")
         tableView.estimatedRowHeight = 150
         tableView.rowHeight = UITableView.automaticDimension
         tableView.sectionHeaderTopPadding = 0
@@ -78,19 +101,21 @@ class TimelineView: UIView {
             homeAccentColor = TeamColorProvider.color(for: homeTeamName)
         }
         let newGroups = InningGroup.build(from: timeline)
+        let newItems = Self.buildItems(from: newGroups)
         let oldGroups = groups
+        let oldItems = items
 
         guard oldGroups != newGroups else {
             groups = newGroups
             return
         }
 
-        let sameSectionCount = oldGroups.count == newGroups.count
-        let sameStructure = sameSectionCount && zip(oldGroups, newGroups).allSatisfy { oldGroup, newGroup in
-            oldGroup.title == newGroup.title && oldGroup.events.count == newGroup.events.count
-        }
-
         groups = newGroups
+        items = newItems
+
+        let sameSectionCount = oldItems.count == newItems.count
+        let sameStructure = sameSectionCount && zip(oldGroups, newGroups).allSatisfy { $0.title == $1.title }
+            && zip(oldItems, newItems).allSatisfy { $0.count == $1.count }
 
         guard sameStructure else {
             tableView.reloadData()
@@ -100,14 +125,12 @@ class TimelineView: UIView {
         var rowsToReload: [IndexPath] = []
         var sectionsToReload = IndexSet()
 
-        for (sectionIndex, pair) in zip(oldGroups.indices, zip(oldGroups, newGroups)) {
-            let (oldGroup, newGroup) = pair
-            if oldGroup.title != newGroup.title {
+        for sectionIndex in oldItems.indices {
+            if oldGroups[sectionIndex].title != newGroups[sectionIndex].title {
                 sectionsToReload.insert(sectionIndex)
                 continue
             }
-
-            for rowIndex in oldGroup.events.indices where oldGroup.events[rowIndex] != newGroup.events[rowIndex] {
+            for rowIndex in oldItems[sectionIndex].indices where oldItems[sectionIndex][rowIndex] != newItems[sectionIndex][rowIndex] {
                 rowsToReload.append(IndexPath(row: rowIndex, section: sectionIndex))
             }
         }
@@ -323,21 +346,38 @@ class TimelineView: UIView {
 
 extension TimelineView: UITableViewDelegate, UITableViewDataSource {
     func numberOfSections(in tableView: UITableView) -> Int {
-        return groups.count
+        return items.count
     }
-    
+
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return groups[section].events.count
+        return items[section].count
     }
-    
+
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        guard let cell = tableView.dequeueReusableCell(withIdentifier: TimelineCell.identifier, for: indexPath) as? TimelineCell else {
-            return UITableViewCell()
+        let item = items[indexPath.section][indexPath.row]
+        switch item {
+        case .atBat(let event):
+            guard let cell = tableView.dequeueReusableCell(withIdentifier: TimelineCell.identifier, for: indexPath) as? TimelineCell else {
+                return UITableViewCell()
+            }
+            let group = groups[indexPath.section]
+            let accentColor = group.isTop ? awayAccentColor : homeAccentColor
+            cell.configure(with: event, accentColor: accentColor)
+            return cell
+        case .pitchingChange(let newPitcher, let oldPitcher):
+            let cell = tableView.dequeueReusableCell(withIdentifier: "PitchingChangeCell", for: indexPath)
+            var config = UIListContentConfiguration.cell()
+            config.text = "\(newPitcher) replaces \(oldPitcher)"
+            config.textProperties.font = AppFont.patrick(15, textStyle: .subheadline)
+            config.textProperties.color = AppColors.pencil.withAlphaComponent(0.6)
+            config.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12)
+            cell.contentConfiguration = config
+            cell.backgroundColor = .clear
+            cell.selectionStyle = .none
+            cell.isAccessibilityElement = true
+            cell.accessibilityLabel = "Pitching change: \(newPitcher) replaces \(oldPitcher)"
+            return cell
         }
-        let group = groups[indexPath.section]
-        let accentColor = group.isTop ? awayAccentColor : homeAccentColor
-        cell.configure(with: group.events[indexPath.row], accentColor: accentColor)
-        return cell
     }
     
     func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
@@ -379,6 +419,8 @@ extension TimelineView: UITableViewDelegate, UITableViewDataSource {
     }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        delegate?.didSelectTimelineAtBat(groups[indexPath.section].events[indexPath.row])
+        if case .atBat(let event) = items[indexPath.section][indexPath.row] {
+            delegate?.didSelectTimelineAtBat(event)
+        }
     }
 }

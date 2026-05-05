@@ -35,7 +35,7 @@ enum GameFooterContent {
             headerRow.isAccessibilityElement = false
 
             let nameHeader = UILabel()
-            nameHeader.text = "Name"
+            nameHeader.text = "NAME"
             nameHeader.font = AppFont.ibmPlexCondensed(12, textStyle: .caption1)
             nameHeader.textColor = AppColors.pencil.withAlphaComponent(0.6)
             nameHeader.isAccessibilityElement = false

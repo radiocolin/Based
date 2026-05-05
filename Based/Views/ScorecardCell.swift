@@ -9,6 +9,7 @@ class ScorecardCell: UICollectionViewCell {
     private let ballsLabel = UILabel()
     private let strikesLabel = UILabel()
     private let outsLabel = UILabel()
+    private let pitchingChangeLayer = CAShapeLayer()
     private var accentColor: UIColor = AppColors.pencil
     
     override init(frame: CGRect) {
@@ -56,7 +57,14 @@ class ScorecardCell: UICollectionViewCell {
         resultLabel.numberOfLines = 0
         resultLabel.adjustsFontSizeToFitWidth = true
         resultLabel.minimumScaleFactor = 0.5
-        
+
+        pitchingChangeLayer.strokeColor = AppColors.pencil.cgColor
+        pitchingChangeLayer.lineWidth = 2.5
+        pitchingChangeLayer.lineCap = .round
+        pitchingChangeLayer.fillColor = nil
+        pitchingChangeLayer.isHidden = true
+        contentView.layer.addSublayer(pitchingChangeLayer)
+
         // Constraints — inset the diamond slightly so corner labels have breathing room
         let top = diamondView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4)
         let leading = diamondView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 2)
@@ -102,7 +110,7 @@ class ScorecardCell: UICollectionViewCell {
                 let c = outsLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -2)
                 c.priority = .init(999)
                 return c
-            }()
+            }(),
         ])
     }
     
@@ -146,6 +154,23 @@ class ScorecardCell: UICollectionViewCell {
         )
     }
 
+    func showPitchingChange(_ show: Bool) {
+        pitchingChangeLayer.isHidden = !show
+        if show {
+            updatePitchingChangePath()
+        }
+    }
+
+    private func updatePitchingChangePath() {
+        let b = contentView.bounds
+        let path = UIBezierPath.pencilLine(
+            from: CGPoint(x: -0.5, y: 0.5),
+            to: CGPoint(x: b.width + 0.5, y: 0.5),
+            jitter: 0.4
+        )
+        pitchingChangeLayer.path = path.cgPath
+    }
+
     func setInactive(_ inactive: Bool) {
         diamondView.isHidden = inactive
         resultLabel.isHidden = inactive
@@ -172,6 +197,7 @@ class ScorecardCell: UICollectionViewCell {
         outsLabel.textColor = AppColors.pencil
         diamondView.configure(with: BasesReached(first: false, second: false, third: false, home: false, lineToFirst: nil, lineToSecond: nil, lineToThird: nil, lineToHome: nil, outAtFirst: false, outAtSecond: false, outAtThird: false, outAtHome: false, annotations: nil), style: .scorecard, isRun: false)
         diamondView.alpha = 1.0
+        pitchingChangeLayer.isHidden = true
         contentView.layer.borderWidth = 0.5
         contentView.layer.borderColor = AppColors.grid.cgColor
         accessibilityLabel = nil
@@ -184,6 +210,10 @@ class ScorecardCell: UICollectionViewCell {
         // Refresh CGColor-based properties for dark mode changes
         if contentView.layer.borderWidth == 0.5 {
             contentView.layer.borderColor = AppColors.grid.cgColor
+        }
+        pitchingChangeLayer.strokeColor = AppColors.pencil.cgColor
+        if !pitchingChangeLayer.isHidden {
+            updatePitchingChangePath()
         }
     }
 

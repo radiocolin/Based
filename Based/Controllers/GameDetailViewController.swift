@@ -896,6 +896,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             event: liveEvent,
             batterName: liveEvent.batterName,
             pitcherName: liveEvent.pitcherName,
+            previousPitcherName: previousPitcherName(for: liveEvent),
             accentColor: teamAccentColor(isTopInning: liveEvent.isTop)
         )
         configureAtBatDetailCallbacks(
@@ -962,12 +963,37 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         )
     }
 
+    private func previousPitcherName(for event: AtBatEvent) -> String? {
+        guard let scorecard = currentScorecard else { return nil }
+        let inningObj = scorecard.innings.first { $0.num == event.inning }
+        let eventsInInning = event.isTop ? (inningObj?.away ?? []) : (inningObj?.home ?? [])
+        
+        if let index = eventsInInning.firstIndex(of: event) {
+            // Event is already in the scorecard innings
+            guard index > 0,
+                  eventsInInning[index].pitcherId != eventsInInning[index - 1].pitcherId else {
+                return nil
+            }
+            return eventsInInning[index - 1].pitcherName
+        } else if event.result == "LIVE" || event.atBatIndex == scorecard.liveCurrentAtBat?.atBatIndex {
+            // Event is the live at-bat (not yet in innings)
+            guard let lastEvent = eventsInInning.last,
+                  event.pitcherId != lastEvent.pitcherId else {
+                return nil
+            }
+            return lastEvent.pitcherName
+        }
+        
+        return nil
+    }
+
     // MARK: - TimelineViewDelegate
     func didSelectTimelineAtBat(_ event: AtBatEvent) {
         let vc = AtBatDetailViewController(
             event: event,
             batterName: event.batterName,
             pitcherName: event.pitcherName,
+            previousPitcherName: previousPitcherName(for: event),
             accentColor: teamAccentColor(isTopInning: event.isTop)
         )
         configureAtBatDetailCallbacks(vc, event: event, batterName: event.batterName, pitcherName: event.pitcherName)
@@ -996,6 +1022,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             event: event,
             batterName: batter.fullName,
             pitcherName: event.pitcherName,
+            previousPitcherName: previousPitcherName(for: event),
             accentColor: teamAccentColor(isTopInning: event.isTop)
         )
         configureAtBatDetailCallbacks(vc, event: event, batterName: batter.fullName, pitcherName: event.pitcherName)

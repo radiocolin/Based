@@ -743,6 +743,23 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate, U
             
             cell.configure(with: event)
 
+            var isPitchingChange = false
+            if event != nil, let allEvents = events {
+                var batterOccurrence = 0
+                for (i, e) in allEvents.enumerated() {
+                    if e.batterId == batter.id {
+                        if batterOccurrence == subIndex {
+                            if i > 0 && e.pitcherId != allEvents[i - 1].pitcherId {
+                                isPitchingChange = true
+                            }
+                            break
+                        }
+                        batterOccurrence += 1
+                    }
+                }
+            }
+            cell.showPitchingChange(isPitchingChange)
+
             let isBeforeEntry = inningNum < (batter.inningEntered ?? 1)
             let exitInning = batter.inningExited ?? 99
             let isAfterExit = inningNum > exitInning
