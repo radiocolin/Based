@@ -289,165 +289,173 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        if indexPath.section == 2 {
-            let cell = tableView.dequeueReusableCell(withIdentifier: "SubtitleCell", for: indexPath)
-            cell.backgroundColor = .clear
-            cell.selectionStyle = .default
-            cell.textLabel?.font = AppFont.patrick(18, textStyle: .body, compatibleWith: traitCollection)
-            cell.textLabel?.textColor = AppColors.pencil
-            cell.textLabel?.adjustsFontForContentSizeCategory = true
-            cell.textLabel?.numberOfLines = 0
-            cell.detailTextLabel?.font = AppFont.patrick(14, textStyle: .caption1, compatibleWith: traitCollection)
-            cell.detailTextLabel?.textColor = AppColors.pencil.withAlphaComponent(0.6)
-            cell.detailTextLabel?.adjustsFontForContentSizeCategory = true
-            cell.detailTextLabel?.numberOfLines = 0
-            cell.isAccessibilityElement = true
-            cell.accessibilityTraits = .button
-            cell.textLabel?.isAccessibilityElement = false
-            cell.detailTextLabel?.isAccessibilityElement = false
-            
-            let appName: String
-            let appSubtitle: String
-            let appIcon: String
-            
-            if indexPath.row == 0 {
-                appName = "Wheelie"
-                appSubtitle = "Track every ride"
-                appIcon = "Wheelie-iOS-Default-1024x1024"
-            } else {
-                appName = "Away Message"
-                appSubtitle = "Digital sticky notes for your real friends"
-                appIcon = "away message icon-iOS-Default-1024x1024"
-            }
-            
-            cell.textLabel?.text = appName
-            cell.detailTextLabel?.text = appSubtitle
-            let iconAsset = UIImage(named: appIcon)
-            let resolved = iconAsset?.imageAsset?.image(with: traitCollection) ?? iconAsset
-            let size = CGSize(width: 30, height: 30)
-            let renderer = UIGraphicsImageRenderer(size: size)
-            let scaledImage = renderer.image { _ in
-                resolved?.draw(in: CGRect(origin: .zero, size: size))
-            }
-            cell.imageView?.image = scaledImage
-            cell.imageView?.layer.cornerRadius = 6
-            cell.imageView?.clipsToBounds = true
-            cell.accessoryType = .disclosureIndicator
-            cell.editingAccessoryType = .disclosureIndicator
-            cell.accessibilityLabel = appName
-            cell.accessibilityValue = appSubtitle
-            cell.accessibilityHint = "Double tap to open the App Store page."
-            
-            let bg = PencilSectionBackgroundView()
-            let rows = tableView.numberOfRows(inSection: indexPath.section)
-            if rows == 1 {
-                bg.position = .single
-            } else if indexPath.row == 0 {
-                bg.position = .top
-            } else if indexPath.row == rows - 1 {
-                bg.position = .bottom
-            } else {
-                bg.position = .middle
-            }
-            cell.backgroundView = bg
-            
-            return cell
+        switch indexPath.section {
+        case 2: return configureAppCell(tableView, indexPath: indexPath)
+        case 3: return configureAttributionCell(tableView, indexPath: indexPath)
+        default: return configureSettingsCell(tableView, indexPath: indexPath)
         }
-        
-        if indexPath.section == 3 {
-            let footerCell = tableView.dequeueReusableCell(withIdentifier: "FooterCell", for: indexPath)
-            footerCell.contentView.subviews.forEach { $0.removeFromSuperview() }
-            footerCell.backgroundColor = .clear
-            footerCell.selectionStyle = .none
-            footerCell.isAccessibilityElement = true
-            footerCell.accessibilityTraits = .staticText
-            footerCell.accessibilityLabel = "Made with LOVE in Philadelphia by Colin Weir. Statistical data is sourced via public API and is the proprietary property of MLB Advanced Media, L.P. This application is an independent project and is not officially affiliated with Major League Baseball."
-            
-            let stack = UIStackView()
-            stack.axis = .vertical
-            stack.alignment = .fill
-            stack.spacing = 24
-            stack.translatesAutoresizingMaskIntoConstraints = false
-            footerCell.contentView.addSubview(stack)
-            
-            let font = AppFont.patrick(14, textStyle: .footnote, compatibleWith: traitCollection)
-            let color = AppColors.pencil.withAlphaComponent(0.6)
-            let symbolHeight = UIFontMetrics(forTextStyle: .footnote).scaledValue(for: 14, compatibleWith: traitCollection)
-            let symbolWidth = UIFontMetrics(forTextStyle: .footnote).scaledValue(for: 16, compatibleWith: traitCollection)
-            
-            // Signature line (centered)
-            let signatureStack = UIStackView()
-            signatureStack.axis = .horizontal
-            signatureStack.alignment = .center
-            signatureStack.spacing = 0
-            
-            let label1 = UILabel()
-            label1.text = "Made with "
-            label1.font = font
-            label1.textColor = color
-            label1.isAccessibilityElement = false
-            label1.adjustsFontForContentSizeCategory = true
-            
-            let loveIcon = UIImageView(image: UIImage(named: "PhiladelphiaLove.symbols")?.withRenderingMode(.alwaysTemplate))
-            loveIcon.tintColor = .systemRed
-            loveIcon.contentMode = .scaleAspectFit
-            loveIcon.setContentHuggingPriority(.required, for: .horizontal)
-            loveIcon.setContentCompressionResistancePriority(.required, for: .horizontal)
-            loveIcon.isAccessibilityElement = false
-            
-            let label2 = UILabel()
-            label2.text = " in Philadelphia by Colin Weir"
-            label2.font = font
-            label2.textColor = color
-            label2.isAccessibilityElement = false
-            label2.adjustsFontForContentSizeCategory = true
-            label2.numberOfLines = 1
-            
-            signatureStack.addArrangedSubview(label1)
-            signatureStack.addArrangedSubview(loveIcon)
-            signatureStack.addArrangedSubview(label2)
-            
-            let signatureContainer = UIView()
-            signatureContainer.addSubview(signatureStack)
-            signatureStack.translatesAutoresizingMaskIntoConstraints = false
-            NSLayoutConstraint.activate([
-                signatureStack.centerXAnchor.constraint(equalTo: signatureContainer.centerXAnchor),
-                signatureStack.topAnchor.constraint(equalTo: signatureContainer.topAnchor),
-                signatureStack.bottomAnchor.constraint(equalTo: signatureContainer.bottomAnchor),
-                signatureStack.leadingAnchor.constraint(greaterThanOrEqualTo: signatureContainer.leadingAnchor),
-                signatureStack.trailingAnchor.constraint(lessThanOrEqualTo: signatureContainer.trailingAnchor)
-            ])
-            
-            stack.addArrangedSubview(signatureContainer)
-            
-            // MLB Attribution (left-aligned)
-            let mlbLabel = UILabel()
-            mlbLabel.text = "Statistical data is sourced via public API and is the proprietary property of MLB Advanced Media, L.P. All Major League Baseball trademarks, service marks, team names, and logos are the property of MLB Advanced Media, L.P. and its respective member clubs.\n\nThis application is an independent project and is not officially affiliated with, endorsed by, or sponsored by Major League Baseball or any of its affiliates."
-            mlbLabel.font = AppFont.patrick(11, textStyle: .caption2, compatibleWith: traitCollection)
-            mlbLabel.textColor = color.withAlphaComponent(0.4)
-            mlbLabel.textAlignment = .left
-            mlbLabel.numberOfLines = 0
-            mlbLabel.adjustsFontForContentSizeCategory = true
-            
-            stack.addArrangedSubview(mlbLabel)
-            
-            let bottomConstraint = stack.bottomAnchor.constraint(equalTo: footerCell.contentView.bottomAnchor, constant: -32)
-            bottomConstraint.priority = UILayoutPriority(999)
-            
-            NSLayoutConstraint.activate([
-                loveIcon.heightAnchor.constraint(equalToConstant: symbolHeight),
-                loveIcon.widthAnchor.constraint(equalToConstant: symbolWidth),
-                stack.leadingAnchor.constraint(equalTo: footerCell.contentView.leadingAnchor, constant: 20),
-                stack.trailingAnchor.constraint(equalTo: footerCell.contentView.trailingAnchor, constant: -20),
-                stack.topAnchor.constraint(equalTo: footerCell.contentView.topAnchor, constant: 16),
-                bottomConstraint
-            ])
-            return footerCell
+    }
+
+    private func configureAppCell(_ tableView: UITableView, indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: "SubtitleCell", for: indexPath)
+        cell.backgroundColor = .clear
+        cell.selectionStyle = .default
+        cell.textLabel?.font = AppFont.patrick(18, textStyle: .body, compatibleWith: traitCollection)
+        cell.textLabel?.textColor = AppColors.pencil
+        cell.textLabel?.adjustsFontForContentSizeCategory = true
+        cell.textLabel?.numberOfLines = 0
+        cell.detailTextLabel?.font = AppFont.patrick(14, textStyle: .caption1, compatibleWith: traitCollection)
+        cell.detailTextLabel?.textColor = AppColors.pencil.withAlphaComponent(0.6)
+        cell.detailTextLabel?.adjustsFontForContentSizeCategory = true
+        cell.detailTextLabel?.numberOfLines = 0
+        cell.isAccessibilityElement = true
+        cell.accessibilityTraits = .button
+        cell.textLabel?.isAccessibilityElement = false
+        cell.detailTextLabel?.isAccessibilityElement = false
+
+        let appName: String
+        let appSubtitle: String
+        let appIcon: String
+
+        if indexPath.row == 0 {
+            appName = "Wheelie"
+            appSubtitle = "Track every ride"
+            appIcon = "Wheelie-iOS-Default-1024x1024"
+        } else {
+            appName = "Away Message"
+            appSubtitle = "Digital sticky notes for your real friends"
+            appIcon = "away message icon-iOS-Default-1024x1024"
         }
-        
+
+        cell.textLabel?.text = appName
+        cell.detailTextLabel?.text = appSubtitle
+        let iconAsset = UIImage(named: appIcon)
+        let resolved = iconAsset?.imageAsset?.image(with: traitCollection) ?? iconAsset
+        let size = CGSize(width: 30, height: 30)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let scaledImage = renderer.image { _ in
+            resolved?.draw(in: CGRect(origin: .zero, size: size))
+        }
+        cell.imageView?.image = scaledImage
+        cell.imageView?.layer.cornerRadius = 6
+        cell.imageView?.clipsToBounds = true
+        cell.accessoryType = .disclosureIndicator
+        cell.editingAccessoryType = .disclosureIndicator
+        cell.accessibilityLabel = appName
+        cell.accessibilityValue = appSubtitle
+        cell.accessibilityHint = "Double tap to open the App Store page."
+
+        let bg = PencilSectionBackgroundView()
+        let rows = tableView.numberOfRows(inSection: indexPath.section)
+        if rows == 1 {
+            bg.position = .single
+        } else if indexPath.row == 0 {
+            bg.position = .top
+        } else if indexPath.row == rows - 1 {
+            bg.position = .bottom
+        } else {
+            bg.position = .middle
+        }
+        cell.backgroundView = bg
+
+        return cell
+    }
+
+    private func configureAttributionCell(_ tableView: UITableView, indexPath: IndexPath) -> UITableViewCell {
+        let footerCell = tableView.dequeueReusableCell(withIdentifier: "FooterCell", for: indexPath)
+        footerCell.contentView.subviews.forEach { $0.removeFromSuperview() }
+        footerCell.backgroundColor = .clear
+        footerCell.selectionStyle = .none
+        footerCell.isAccessibilityElement = true
+        footerCell.accessibilityTraits = .staticText
+        footerCell.accessibilityLabel = "Made with LOVE in Philadelphia by Colin Weir. Statistical data is sourced via public API and is the proprietary property of MLB Advanced Media, L.P. This application is an independent project and is not officially affiliated with Major League Baseball."
+
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.alignment = .fill
+        stack.spacing = 24
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        footerCell.contentView.addSubview(stack)
+
+        let font = AppFont.patrick(14, textStyle: .footnote, compatibleWith: traitCollection)
+        let color = AppColors.pencil.withAlphaComponent(0.6)
+        let symbolHeight = UIFontMetrics(forTextStyle: .footnote).scaledValue(for: 14, compatibleWith: traitCollection)
+        let symbolWidth = UIFontMetrics(forTextStyle: .footnote).scaledValue(for: 16, compatibleWith: traitCollection)
+
+        // Signature line (centered)
+        let signatureStack = UIStackView()
+        signatureStack.axis = .horizontal
+        signatureStack.alignment = .center
+        signatureStack.spacing = 0
+
+        let label1 = UILabel()
+        label1.text = "Made with "
+        label1.font = font
+        label1.textColor = color
+        label1.isAccessibilityElement = false
+        label1.adjustsFontForContentSizeCategory = true
+
+        let loveIcon = UIImageView(image: UIImage(named: "PhiladelphiaLove.symbols")?.withRenderingMode(.alwaysTemplate))
+        loveIcon.tintColor = .systemRed
+        loveIcon.contentMode = .scaleAspectFit
+        loveIcon.setContentHuggingPriority(.required, for: .horizontal)
+        loveIcon.setContentCompressionResistancePriority(.required, for: .horizontal)
+        loveIcon.isAccessibilityElement = false
+
+        let label2 = UILabel()
+        label2.text = " in Philadelphia by Colin Weir"
+        label2.font = font
+        label2.textColor = color
+        label2.isAccessibilityElement = false
+        label2.adjustsFontForContentSizeCategory = true
+        label2.numberOfLines = 1
+
+        signatureStack.addArrangedSubview(label1)
+        signatureStack.addArrangedSubview(loveIcon)
+        signatureStack.addArrangedSubview(label2)
+
+        let signatureContainer = UIView()
+        signatureContainer.addSubview(signatureStack)
+        signatureStack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            signatureStack.centerXAnchor.constraint(equalTo: signatureContainer.centerXAnchor),
+            signatureStack.topAnchor.constraint(equalTo: signatureContainer.topAnchor),
+            signatureStack.bottomAnchor.constraint(equalTo: signatureContainer.bottomAnchor),
+            signatureStack.leadingAnchor.constraint(greaterThanOrEqualTo: signatureContainer.leadingAnchor),
+            signatureStack.trailingAnchor.constraint(lessThanOrEqualTo: signatureContainer.trailingAnchor)
+        ])
+
+        stack.addArrangedSubview(signatureContainer)
+
+        // MLB Attribution (left-aligned)
+        let mlbLabel = UILabel()
+        mlbLabel.text = "Statistical data is sourced via public API and is the proprietary property of MLB Advanced Media, L.P. All Major League Baseball trademarks, service marks, team names, and logos are the property of MLB Advanced Media, L.P. and its respective member clubs.\n\nThis application is an independent project and is not officially affiliated with, endorsed by, or sponsored by Major League Baseball or any of its affiliates."
+        mlbLabel.font = AppFont.patrick(11, textStyle: .caption2, compatibleWith: traitCollection)
+        mlbLabel.textColor = color.withAlphaComponent(0.4)
+        mlbLabel.textAlignment = .left
+        mlbLabel.numberOfLines = 0
+        mlbLabel.adjustsFontForContentSizeCategory = true
+
+        stack.addArrangedSubview(mlbLabel)
+
+        let bottomConstraint = stack.bottomAnchor.constraint(equalTo: footerCell.contentView.bottomAnchor, constant: -32)
+        bottomConstraint.priority = UILayoutPriority(999)
+
+        NSLayoutConstraint.activate([
+            loveIcon.heightAnchor.constraint(equalToConstant: symbolHeight),
+            loveIcon.widthAnchor.constraint(equalToConstant: symbolWidth),
+            stack.leadingAnchor.constraint(equalTo: footerCell.contentView.leadingAnchor, constant: 20),
+            stack.trailingAnchor.constraint(equalTo: footerCell.contentView.trailingAnchor, constant: -20),
+            stack.topAnchor.constraint(equalTo: footerCell.contentView.topAnchor, constant: 16),
+            bottomConstraint
+        ])
+        return footerCell
+    }
+
+    private func configureSettingsCell(_ tableView: UITableView, indexPath: IndexPath) -> UITableViewCell {
         // Dequeue standard cell
         let cell = tableView.dequeueReusableCell(withIdentifier: "SettingsCell", for: indexPath)
-        
+
         // Reset cell to clean state
         cell.backgroundColor = .clear
         cell.selectionStyle = .default
@@ -471,7 +479,7 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
         cell.textLabel?.isAccessibilityElement = false
         cell.detailTextLabel?.isAccessibilityElement = false
         cell.imageView?.image = nil
-        
+
         let bg = PencilSectionBackgroundView()
         let rows = tableView.numberOfRows(inSection: indexPath.section)
         if rows == 1 {
@@ -484,21 +492,21 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
             bg.position = .middle
         }
         cell.backgroundView = bg
-        
+
         switch indexPath.section {
         case 0:
             if indexPath.row == 0 {
                 let currentTheme = ThemeService.shared.theme
                 cell.textLabel?.text = "Appearance"
                 cell.detailTextLabel?.text = currentTheme.displayName
-                
+
                 let config = UIImage.SymbolConfiguration(pointSize: 14, weight: .medium)
                 let ellipsisImg = UIImage(systemName: "ellipsis", withConfiguration: config)
                 let ellipsisView = UIImageView(image: ellipsisImg)
                 ellipsisView.tintColor = AppColors.pencil.withAlphaComponent(0.6)
                 cell.accessoryView = ellipsisView
                 cell.editingAccessoryView = ellipsisView
-                
+
                 cell.accessibilityLabel = "Appearance"
                 cell.accessibilityValue = currentTheme.displayName
                 cell.accessibilityHint = "Double tap to choose the app appearance."
@@ -515,32 +523,32 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
                 let tintName = currentTeamName ?? (currentTint == nil ? "Pencil" : "Custom")
                 cell.textLabel?.text = "Tint Color"
                 cell.detailTextLabel?.text = tintName
-                
+
                 let config = UIImage.SymbolConfiguration(pointSize: 14, weight: .medium)
                 let ellipsisImg = UIImage(systemName: "ellipsis", withConfiguration: config)
                 let ellipsisView = UIImageView(image: ellipsisImg)
                 ellipsisView.tintColor = AppColors.pencil.withAlphaComponent(0.6)
                 cell.accessoryView = ellipsisView
                 cell.editingAccessoryView = ellipsisView
-                
+
                 cell.accessibilityLabel = "Tint color"
                 cell.accessibilityValue = tintName
                 cell.accessibilityHint = "Double tap to choose the tint color."
             }
-            
+
         case 1:
             if indexPath.row < favoriteTeamIds.count {
                 let teamId = favoriteTeamIds[indexPath.row]
                 let teamName = favoriteTeamName(for: teamId)
                 cell.textLabel?.text = teamName
                 cell.detailTextLabel?.text = nil
-                
+
                 let config = UIImage.SymbolConfiguration(pointSize: 14, weight: .medium)
                 let ellipsisImg = UIImage(systemName: "ellipsis", withConfiguration: config)
                 let ellipsisView = UIImageView(image: ellipsisImg)
                 ellipsisView.tintColor = AppColors.pencil.withAlphaComponent(0.6)
                 cell.editingAccessoryView = ellipsisView
-                
+
                 cell.accessibilityLabel = teamName
                 cell.accessibilityValue = "Favorite team"
                 cell.accessibilityHint = "Double tap to manage options for this team."
@@ -559,11 +567,11 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
                 cell.accessibilityTraits = hasAvailableTeams ? .button : .staticText
                 cell.showsReorderControl = false
             }
-            
+
         default:
             break
         }
-        
+
         return cell
     }
     

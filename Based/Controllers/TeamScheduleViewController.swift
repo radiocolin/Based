@@ -452,7 +452,25 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
 
     // MARK: - Stats
 
-    private func populateStats(from games: [ScheduleGame]) {
+    private struct TeamSeasonStats {
+        let wins: Int
+        let losses: Int
+        let homeWins: Int
+        let homeLosses: Int
+        let awayWins: Int
+        let awayLosses: Int
+        let runsFor: Int
+        let runsAgainst: Int
+        let oneRunWins: Int
+        let oneRunLosses: Int
+        let currentStreak: Int
+        let streakType: Character
+        let bestWinStreak: Int
+        let worstLossStreak: Int
+        let last10Wins: Int
+    }
+
+    private func calculateSeasonStats(from games: [ScheduleGame]) -> TeamSeasonStats {
         let completed = games.filter { gamePhase($0) == .completed }
 
         var wins = 0, losses = 0, homeW = 0, homeL = 0, awayW = 0, awayL = 0
@@ -511,9 +529,31 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
             return ts > os
         }.count
 
-        let total = wins + losses
-        let pct = total > 0 ? String(format: ".%03d", wins * 1000 / total) : ".000"
-        let rd = runsFor - runsAgainst
+        return TeamSeasonStats(
+            wins: wins,
+            losses: losses,
+            homeWins: homeW,
+            homeLosses: homeL,
+            awayWins: awayW,
+            awayLosses: awayL,
+            runsFor: runsFor,
+            runsAgainst: runsAgainst,
+            oneRunWins: oneRunW,
+            oneRunLosses: oneRunL,
+            currentStreak: streak,
+            streakType: streakType,
+            bestWinStreak: bestStreak,
+            worstLossStreak: worstStreak,
+            last10Wins: last10W
+        )
+    }
+
+    private func populateStats(from games: [ScheduleGame]) {
+        let stats = calculateSeasonStats(from: games)
+
+        let total = stats.wins + stats.losses
+        let pct = total > 0 ? String(format: ".%03d", stats.wins * 1000 / total) : ".000"
+        let rd = stats.runsFor - stats.runsAgainst
         let rdStr = rd >= 0 ? "+\(rd)" : "\(rd)"
 
         let pc = pencilColor
@@ -521,7 +561,7 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
 
         // Record label
         let a = NSMutableAttributedString(
-            string: "\(wins)-\(losses)",
+            string: "\(stats.wins)-\(stats.losses)",
             attributes: [.font: AppFont.permanent(38, textStyle: .largeTitle), .foregroundColor: teamColor]
         )
         a.append(NSAttributedString(
@@ -537,44 +577,44 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
             winBarWidth.isActive = false
             winBarWidth = winBar.widthAnchor.constraint(
                 equalTo: winBar.superview!.widthAnchor,
-                multiplier: CGFloat(wins) / CGFloat(total)
+                multiplier: CGFloat(stats.wins) / CGFloat(total)
             )
             winBarWidth.isActive = true
         }
 
         // Row 1: Home, Away, Streak, L10
         let row1Items: [(String, String)] = [
-            ("HOME", "\(homeW)-\(homeL)"),
-            ("AWAY", "\(awayW)-\(awayL)"),
-            ("STRK", "\(streakType)\(streak)"),
-            ("L10", "\(last10W)-\(10 - last10W)"),
+            ("HOME", "\(stats.homeWins)-\(stats.homeLosses)"),
+            ("AWAY", "\(stats.awayWins)-\(stats.awayLosses)"),
+            ("STRK", "\(stats.streakType)\(stats.currentStreak)"),
+            ("L10", "\(stats.last10Wins)-\(10 - stats.last10Wins)"),
         ]
 
         // Row 2: Run diff, 1-Run, Best W, Worst L
         let row2Items: [(String, String)] = [
             ("RUN DIFF", rdStr),
-            ("1-RUN", "\(oneRunW)-\(oneRunL)"),
-            ("BEST W", "\(bestStreak)"),
-            ("WORST L", "\(worstStreak)"),
+            ("1-RUN", "\(stats.oneRunWins)-\(stats.oneRunLosses)"),
+            ("BEST W", "\(stats.bestWinStreak)"),
+            ("WORST L", "\(stats.worstLossStreak)"),
         ]
 
         // VoiceOver: record label reads as one element
         recordLabel.isAccessibilityElement = true
-        recordLabel.accessibilityLabel = "\(wins) wins, \(losses) losses, \(pct)"
+        recordLabel.accessibilityLabel = "\(stats.wins) wins, \(stats.losses) losses, \(pct)"
 
         // VoiceOver labels for stat columns are set in populateStatsRow
-        let streakSpoken = streakType == "W" ? "winning \(streak)" : "losing \(streak)"
+        let streakSpoken = stats.streakType == "W" ? "winning \(stats.currentStreak)" : "losing \(stats.currentStreak)"
         let row1Labels = [
-            "Home: \(homeW) and \(homeL)",
-            "Away: \(awayW) and \(awayL)",
+            "Home: \(stats.homeWins) and \(stats.homeLosses)",
+            "Away: \(stats.awayWins) and \(stats.awayLosses)",
             "Streak: \(streakSpoken)",
-            "Last 10: \(last10W) and \(10 - last10W)",
+            "Last 10: \(stats.last10Wins) and \(10 - stats.last10Wins)",
         ]
         let row2Labels = [
             "Run differential: \(rdStr)",
-            "One run games: \(oneRunW) and \(oneRunL)",
-            "Best win streak: \(bestStreak)",
-            "Worst loss streak: \(worstStreak)",
+            "One run games: \(stats.oneRunWins) and \(stats.oneRunLosses)",
+            "Best win streak: \(stats.bestWinStreak)",
+            "Worst loss streak: \(stats.worstLossStreak)",
         ]
         populateStatsRow(statsRow1, items: row1Items, accessibilityLabels: row1Labels)
         populateStatsRow(statsRow2, items: row2Items, accessibilityLabels: row2Labels)

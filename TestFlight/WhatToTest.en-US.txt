@@ -14,6 +14,7 @@ Enhanced Features:
 - Team Roster: View active rosters grouped by position with player profile links.
 - Schedule: Improved vertical alignment and clear rescheduling (strikethrough/From) indicators.
 - Navigation: Tap team names or long-press for favorites with haptic feedback.
+- Export: Image exports are now high-resolution PNGs, and a PDF option was added.
 
 What to test:
 - Verify standings rankings and stats accuracy.

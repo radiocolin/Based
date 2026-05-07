@@ -10,21 +10,19 @@ struct AtBatPresentation {
     }
 
     var isLive: Bool {
-        event.result == "LIVE"
+        event.result.isLive
     }
 
     var isCalledStrikeout: Bool {
-        event.result == "Ʞ"
+        event.result.isCalledStrikeout
     }
 
     var isScoringPlay: Bool {
-        event.result == "HR" || event.bases.home
+        event.result.isHomeRun || event.bases.home
     }
 
     var displayResult: String {
-        if isLive { return "LIVE" }
-        if event.isRunnerOnly { return "Z" }
-        return isCalledStrikeout ? "K" : event.result
+        event.result.displayText
     }
 
     var displayDescription: String {

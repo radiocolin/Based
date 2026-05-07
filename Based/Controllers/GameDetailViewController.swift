@@ -203,7 +203,15 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         
         let iconSize = BarAppearanceSupport.iconSize(for: traitCollection, base: 32, maximum: 32)
         let shareImg = UIImage.pencilStyledIcon(named: "square.and.arrow.up", color: pencilColor, size: iconSize, offset: CGPoint(x: -0.5, y: 0), scaleMultiplier: 0.9)
-        let shareItem = UIBarButtonItem(image: shareImg, style: .plain, target: self, action: #selector(shareScorecard))
+        let shareMenu = UIMenu(title: "", children: [
+            UIAction(title: "Share Image", image: UIImage(systemName: "photo")) { [weak self] _ in
+                self?.shareImage()
+            },
+            UIAction(title: "Save PDF", image: UIImage(systemName: "doc.richtext")) { [weak self] _ in
+                self?.sharePDF()
+            }
+        ])
+        let shareItem = UIBarButtonItem(image: shareImg, menu: shareMenu)
         shareItem.accessibilityLabel = "Share scorecard"
         
         let timelineSymbol = isTimelineMode ? "square.grid.3x2" : "calendar.day.timeline.left"
@@ -296,27 +304,64 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         teamSegmentedAdvisoryTopConstraint?.constant = inset
     }
 
-    @objc private func shareScorecard() {
+    private func shareImage() {
         guard let scorecard = currentScorecard else { return }
-        
+
         let activityIndicator = UIActivityIndicatorView(style: .large)
         activityIndicator.center = view.center
         activityIndicator.hidesWhenStopped = true
         view.addSubview(activityIndicator)
         activityIndicator.startAnimating()
-        
         view.isUserInteractionEnabled = false
-        
+
         Task {
             let generator = ScorecardImageGenerator()
             let image = await generator.generate(scorecard: scorecard, linescore: self.currentLinescore)
-            
+
             await MainActor.run {
                 activityIndicator.stopAnimating()
                 activityIndicator.removeFromSuperview()
                 self.view.isUserInteractionEnabled = true
-                
-                let activityVC = UIActivityViewController(activityItems: [image], applicationActivities: nil)
+
+                let awayName = scorecard.teams.away.name ?? "Away"
+                let homeName = scorecard.teams.home.name ?? "Home"
+                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(awayName) vs \(homeName) Scorecard.png")
+                try? image.pngData()?.write(to: tempURL)
+
+                let activityVC = UIActivityViewController(activityItems: [tempURL], applicationActivities: nil)
+                if let popover = activityVC.popoverPresentationController {
+                    popover.barButtonItem = self.navigationItem.rightBarButtonItem
+                }
+                self.present(activityVC, animated: true)
+            }
+        }
+    }
+
+    private func sharePDF() {
+        guard let scorecard = currentScorecard else { return }
+
+        let activityIndicator = UIActivityIndicatorView(style: .large)
+        activityIndicator.center = view.center
+        activityIndicator.hidesWhenStopped = true
+        view.addSubview(activityIndicator)
+        activityIndicator.startAnimating()
+        view.isUserInteractionEnabled = false
+
+        Task {
+            let generator = ScorecardImageGenerator()
+            let pdfData = await generator.generatePDF(scorecard: scorecard, linescore: self.currentLinescore)
+
+            await MainActor.run {
+                activityIndicator.stopAnimating()
+                activityIndicator.removeFromSuperview()
+                self.view.isUserInteractionEnabled = true
+
+                let awayName = scorecard.teams.away.name ?? "Away"
+                let homeName = scorecard.teams.home.name ?? "Home"
+                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(awayName) vs \(homeName) Scorecard.pdf")
+                try? pdfData.write(to: tempURL)
+
+                let activityVC = UIActivityViewController(activityItems: [tempURL], applicationActivities: nil)
                 if let popover = activityVC.popoverPresentationController {
                     popover.barButtonItem = self.navigationItem.rightBarButtonItem
                 }
@@ -357,32 +402,14 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     
     private func setupUI() {
         view.backgroundColor = AppColors.paper
-        
-        advisoryBanner.backgroundColor = AppColors.advisoryBackground
-        advisoryBanner.layer.cornerRadius = 8
-        advisoryBanner.layer.borderWidth = 1.0
-        advisoryBanner.layer.borderColor = UIColor.red.withAlphaComponent(0.3).cgColor
-        advisoryBanner.isHidden = true
-        advisoryBanner.translatesAutoresizingMaskIntoConstraints = false
-        
-        advisoryLabel.font = UIFont(name: "PatrickHand-Regular", size: 14)
-        advisoryLabel.textColor = .red
-        advisoryLabel.numberOfLines = 0
-        advisoryLabel.translatesAutoresizingMaskIntoConstraints = false
-        advisoryBanner.addSubview(advisoryLabel)
-        
-        advisoryCloseBtn.setTitle("✕", for: .normal)
-        advisoryCloseBtn.tintColor = .red
-        advisoryCloseBtn.accessibilityLabel = "Dismiss advisory"
-        advisoryCloseBtn.addTarget(self, action: #selector(closeAdvisory), for: .touchUpInside)
-        advisoryCloseBtn.translatesAutoresizingMaskIntoConstraints = false
-        advisoryBanner.addSubview(advisoryCloseBtn)
-        
+
+        setupAdvisoryBanner()
+
         [teamSegmentedControl, segmentedOverlay, gameHeaderView, stickyHeaderContainer, mainScrollView, timelineView, currentStateView, advisoryBanner].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview($0)
         }
-        
+
         timelineView.isHidden = true
         timelineView.alpha = 0
         timelineView.delegate = self
@@ -390,137 +417,45 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         topLeftLabel.isAccessibilityElement = false
         horizontalScrollView.isAccessibilityElement = false
         rightHeaderStack.isAccessibilityElement = false
-        
-        // Sticky Header Setup
-        stickyHeaderContainer.backgroundColor = AppColors.paper
-        
-        [topLeftLabel, horizontalScrollView].forEach {
-            $0.translatesAutoresizingMaskIntoConstraints = false
-            stickyHeaderContainer.addSubview($0)
-        }
-        
-        horizontalScrollView.addSubview(rightHeaderStack)
-        rightHeaderStack.translatesAutoresizingMaskIntoConstraints = false
-        rightHeaderStack.axis = .horizontal
-        rightHeaderStack.distribution = .fillEqually
-        horizontalScrollView.showsHorizontalScrollIndicator = false
-        horizontalScrollView.delegate = self
-        
-        // Main Scroll Setup
-        mainScrollView.addSubview(mainStackView)
-        mainScrollView.delegate = self
-        mainStackView.translatesAutoresizingMaskIntoConstraints = false
-        mainStackView.axis = .vertical
-        mainStackView.spacing = 4 
-        
-        // Umpires and Game Info side by side
-        infoColumnsStack.axis = .horizontal
-        infoColumnsStack.alignment = .top
-        infoColumnsStack.distribution = .fill
-        infoColumnsStack.spacing = 12
-        infoColumnsStack.addArrangedSubview(umpireLabel)
-        infoColumnsStack.addArrangedSubview(gameInfoLabel)
-        
-        let gameInfoWidth = gameInfoLabel.widthAnchor.constraint(equalToConstant: 200)
-        gameInfoWidth.priority = .init(999)
-        gameInfoWidth.isActive = true
-        
-        let footerSpacer = UIView()
-        footerSpacer.translatesAutoresizingMaskIntoConstraints = false
-        footerSpacer.heightAnchor.constraint(equalToConstant: 12).isActive = true
 
-        [scorecardView, pitcherContainer, footerSpacer, infoColumnsStack, placeholderLabel].forEach {
-            mainStackView.addArrangedSubview($0)
-        }
-        
-        let placeholderHeight = placeholderLabel.heightAnchor.constraint(greaterThanOrEqualToConstant: 200)
-        placeholderHeight.priority = .init(999)
-        placeholderHeight.isActive = true
-        
-        scorecardView.setHeadersVisible(false)
-        scorecardView.delegate = self
-        
-        gameHeaderView.onTeamTapped = { [weak self] teamId, teamName in
-            self?.navigationItem.backBarButtonItem = UIBarButtonItem(title: "Game", style: .plain, target: nil, action: nil)
-            let scheduleVC = TeamScheduleViewController(teamId: teamId, teamName: teamName)
-            self?.navigationController?.pushViewController(scheduleVC, animated: true)
-        }
-        
-        currentStateView.tapAction = { [weak self] in
-            self?.showLiveAtBatDetail()
-        }
-        
-        currentStateView.longPressAction = { [weak self] in
-            self?.syncWithActiveAtBat()
-        }
-        
-        // Bidirectional sync for horizontal scrolling
-        scorecardView.horizontalScrollCallback = { [weak self] offset in
-            if self?.horizontalScrollView.contentOffset.x != offset {
-                self?.horizontalScrollView.contentOffset.x = offset
-            }
-        }
-        
-        umpireLabel.numberOfLines = 0
-        gameInfoLabel.numberOfLines = 0
-        
-        let font = UIFont(name: "PatrickHand-Regular", size: 18) ?? .systemFont(ofSize: 18)
-        
-        teamSegmentedControl.selectedSegmentIndex = 0
-        teamSegmentedControl.accessibilityLabel = "Batting team"
-        teamSegmentedControl.accessibilityHint = "Choose the away or home scorecard."
-        teamSegmentedControl.addTarget(self, action: #selector(teamChanged), for: .valueChanged)
-        let segTap = UITapGestureRecognizer(target: self, action: #selector(segmentTapped))
-        segTap.cancelsTouchesInView = false
-        teamSegmentedControl.addGestureRecognizer(segTap)
-        
-        // Strip all native chrome — pencil overlay provides the visuals
-        let clear = UIImage()
-        teamSegmentedControl.setBackgroundImage(clear, for: .normal, barMetrics: .default)
-        teamSegmentedControl.setBackgroundImage(clear, for: .selected, barMetrics: .default)
-        teamSegmentedControl.setBackgroundImage(clear, for: .highlighted, barMetrics: .default)
-        teamSegmentedControl.setDividerImage(clear, forLeftSegmentState: .normal, rightSegmentState: .normal, barMetrics: .default)
-        teamSegmentedControl.setDividerImage(clear, forLeftSegmentState: .selected, rightSegmentState: .normal, barMetrics: .default)
-        teamSegmentedControl.setDividerImage(clear, forLeftSegmentState: .normal, rightSegmentState: .selected, barMetrics: .default)
-        
-        let normalAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: AppColors.pencil.withAlphaComponent(0.6)]
-        let selectedAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: AppColors.pencil]
-        teamSegmentedControl.setTitleTextAttributes(normalAttrs, for: .normal)
-        teamSegmentedControl.setTitleTextAttributes(selectedAttrs, for: .selected)
-        
+        setupStickyHeader()
+        setupMainContent()
+        setupCallbacks()
+        setupSegmentedControlAppearance()
+
         NSLayoutConstraint.activate([
             advisoryBanner.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 4),
             advisoryBanner.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             advisoryBanner.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            
+
             advisoryLabel.topAnchor.constraint(equalTo: advisoryBanner.topAnchor, constant: 8),
             advisoryLabel.leadingAnchor.constraint(equalTo: advisoryBanner.leadingAnchor, constant: 12),
             advisoryLabel.trailingAnchor.constraint(equalTo: advisoryCloseBtn.leadingAnchor, constant: -8),
             advisoryLabel.bottomAnchor.constraint(equalTo: advisoryBanner.bottomAnchor, constant: -8),
-            
+
             advisoryCloseBtn.centerYAnchor.constraint(equalTo: advisoryBanner.centerYAnchor),
             advisoryCloseBtn.trailingAnchor.constraint(equalTo: advisoryBanner.trailingAnchor, constant: -8),
             advisoryCloseBtn.widthAnchor.constraint(equalToConstant: 30),
         ])
-        
+
         teamSegmentedSafeTopConstraint = teamSegmentedControl.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: isTimelineMode ? hiddenSegmentedTopInset : visibleSegmentedTopInset)
         teamSegmentedAdvisoryTopConstraint = teamSegmentedControl.topAnchor.constraint(equalTo: advisoryBanner.bottomAnchor, constant: isTimelineMode ? hiddenSegmentedTopInset : visibleSegmentedTopInset)
-        
+
         NSLayoutConstraint.activate([
             teamSegmentedSafeTopConstraint!,
             teamSegmentedControl.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             teamSegmentedControl.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
             teamSegmentedControl.heightAnchor.constraint(equalToConstant: 40),
-            
+
             segmentedOverlay.topAnchor.constraint(equalTo: teamSegmentedControl.topAnchor),
             segmentedOverlay.leadingAnchor.constraint(equalTo: teamSegmentedControl.leadingAnchor),
             segmentedOverlay.trailingAnchor.constraint(equalTo: teamSegmentedControl.trailingAnchor),
             segmentedOverlay.bottomAnchor.constraint(equalTo: teamSegmentedControl.bottomAnchor),
-            
+
             gameHeaderView.topAnchor.constraint(equalTo: teamSegmentedControl.bottomAnchor, constant: 8),
             gameHeaderView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             gameHeaderView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            
+
             // Sticky Container
             stickyHeaderContainer.topAnchor.constraint(equalTo: gameHeaderView.bottomAnchor, constant: 8),
             stickyHeaderContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
@@ -530,16 +465,16 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
                 c.priority = .init(999)
                 return c
             }(),
-            
+
             topLeftLabel.leadingAnchor.constraint(equalTo: stickyHeaderContainer.leadingAnchor),
             topLeftLabel.topAnchor.constraint(equalTo: stickyHeaderContainer.topAnchor),
             topLeftLabel.bottomAnchor.constraint(equalTo: stickyHeaderContainer.bottomAnchor),
-            
+
             horizontalScrollView.leadingAnchor.constraint(equalTo: topLeftLabel.trailingAnchor),
             horizontalScrollView.topAnchor.constraint(equalTo: stickyHeaderContainer.topAnchor),
             horizontalScrollView.trailingAnchor.constraint(equalTo: stickyHeaderContainer.trailingAnchor),
             horizontalScrollView.bottomAnchor.constraint(equalTo: stickyHeaderContainer.bottomAnchor),
-            
+
             rightHeaderStack.topAnchor.constraint(equalTo: horizontalScrollView.contentLayoutGuide.topAnchor),
             rightHeaderStack.leadingAnchor.constraint(equalTo: horizontalScrollView.contentLayoutGuide.leadingAnchor),
             rightHeaderStack.trailingAnchor.constraint(equalTo: horizontalScrollView.contentLayoutGuide.trailingAnchor),
@@ -554,7 +489,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
                 c.priority = UILayoutPriority(999)
                 return c
             }(),
-            
+
             // Timeline
             timelineView.topAnchor.constraint(equalTo: gameHeaderView.bottomAnchor, constant: 8),
             timelineView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -563,7 +498,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
                 c.priority = UILayoutPriority(999)
                 return c
             }(),
-            
+
             mainStackView.topAnchor.constraint(equalTo: mainScrollView.contentLayoutGuide.topAnchor),
             mainStackView.leadingAnchor.constraint(equalTo: mainScrollView.contentLayoutGuide.leadingAnchor, constant: 16),
             {
@@ -573,7 +508,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             }(),
             mainStackView.bottomAnchor.constraint(equalTo: mainScrollView.contentLayoutGuide.bottomAnchor, constant: -24),
             mainStackView.widthAnchor.constraint(equalTo: mainScrollView.frameLayoutGuide.widthAnchor, constant: -32),
-            
+
             currentStateView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             currentStateView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             {
@@ -583,18 +518,144 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             }(),
             currentStateView.heightAnchor.constraint(equalToConstant: 190)
         ])
-        
+
         // Start with live panel hidden; scroll view fills to bottom
         currentStateView.isHidden = true
         scrollBottomConstraint = mainScrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         scrollBottomConstraint?.isActive = true
-        
+
         timelineBottomConstraint = timelineView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         timelineBottomConstraint?.isActive = true
-        
+
         stickyNameWidthConstraint = topLeftLabel.widthAnchor.constraint(equalToConstant: 90)
         stickyNameWidthConstraint?.priority = .init(999)
         stickyNameWidthConstraint?.isActive = true
+    }
+
+    private func setupAdvisoryBanner() {
+        advisoryBanner.backgroundColor = AppColors.advisoryBackground
+        advisoryBanner.layer.cornerRadius = 8
+        advisoryBanner.layer.borderWidth = 1.0
+        advisoryBanner.layer.borderColor = UIColor.red.withAlphaComponent(0.3).cgColor
+        advisoryBanner.isHidden = true
+        advisoryBanner.translatesAutoresizingMaskIntoConstraints = false
+
+        advisoryLabel.font = UIFont(name: "PatrickHand-Regular", size: 14)
+        advisoryLabel.textColor = .red
+        advisoryLabel.numberOfLines = 0
+        advisoryLabel.translatesAutoresizingMaskIntoConstraints = false
+        advisoryBanner.addSubview(advisoryLabel)
+
+        advisoryCloseBtn.setTitle("✕", for: .normal)
+        advisoryCloseBtn.tintColor = .red
+        advisoryCloseBtn.accessibilityLabel = "Dismiss advisory"
+        advisoryCloseBtn.addTarget(self, action: #selector(closeAdvisory), for: .touchUpInside)
+        advisoryCloseBtn.translatesAutoresizingMaskIntoConstraints = false
+        advisoryBanner.addSubview(advisoryCloseBtn)
+    }
+
+    private func setupStickyHeader() {
+        stickyHeaderContainer.backgroundColor = AppColors.paper
+
+        [topLeftLabel, horizontalScrollView].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+            stickyHeaderContainer.addSubview($0)
+        }
+
+        horizontalScrollView.addSubview(rightHeaderStack)
+        rightHeaderStack.translatesAutoresizingMaskIntoConstraints = false
+        rightHeaderStack.axis = .horizontal
+        rightHeaderStack.distribution = .fillEqually
+        horizontalScrollView.showsHorizontalScrollIndicator = false
+        horizontalScrollView.delegate = self
+    }
+
+    private func setupMainContent() {
+        mainScrollView.addSubview(mainStackView)
+        mainScrollView.delegate = self
+        mainStackView.translatesAutoresizingMaskIntoConstraints = false
+        mainStackView.axis = .vertical
+        mainStackView.spacing = 4
+
+        // Umpires and Game Info side by side
+        infoColumnsStack.axis = .horizontal
+        infoColumnsStack.alignment = .top
+        infoColumnsStack.distribution = .fill
+        infoColumnsStack.spacing = 12
+        infoColumnsStack.addArrangedSubview(umpireLabel)
+        infoColumnsStack.addArrangedSubview(gameInfoLabel)
+
+        let gameInfoWidth = gameInfoLabel.widthAnchor.constraint(equalToConstant: 200)
+        gameInfoWidth.priority = .init(999)
+        gameInfoWidth.isActive = true
+
+        let footerSpacer = UIView()
+        footerSpacer.translatesAutoresizingMaskIntoConstraints = false
+        footerSpacer.heightAnchor.constraint(equalToConstant: 12).isActive = true
+
+        [scorecardView, pitcherContainer, footerSpacer, infoColumnsStack, placeholderLabel].forEach {
+            mainStackView.addArrangedSubview($0)
+        }
+
+        let placeholderHeight = placeholderLabel.heightAnchor.constraint(greaterThanOrEqualToConstant: 200)
+        placeholderHeight.priority = .init(999)
+        placeholderHeight.isActive = true
+
+        scorecardView.setHeadersVisible(false)
+    }
+
+    private func setupCallbacks() {
+        scorecardView.delegate = self
+
+        gameHeaderView.onTeamTapped = { [weak self] teamId, teamName in
+            self?.navigationItem.backBarButtonItem = UIBarButtonItem(title: "Game", style: .plain, target: nil, action: nil)
+            let scheduleVC = TeamScheduleViewController(teamId: teamId, teamName: teamName)
+            self?.navigationController?.pushViewController(scheduleVC, animated: true)
+        }
+
+        currentStateView.tapAction = { [weak self] in
+            self?.showLiveAtBatDetail()
+        }
+
+        currentStateView.longPressAction = { [weak self] in
+            self?.syncWithActiveAtBat()
+        }
+
+        // Bidirectional sync for horizontal scrolling
+        scorecardView.horizontalScrollCallback = { [weak self] offset in
+            if self?.horizontalScrollView.contentOffset.x != offset {
+                self?.horizontalScrollView.contentOffset.x = offset
+            }
+        }
+
+        umpireLabel.numberOfLines = 0
+        gameInfoLabel.numberOfLines = 0
+    }
+
+    private func setupSegmentedControlAppearance() {
+        let font = UIFont(name: "PatrickHand-Regular", size: 18) ?? .systemFont(ofSize: 18)
+
+        teamSegmentedControl.selectedSegmentIndex = 0
+        teamSegmentedControl.accessibilityLabel = "Batting team"
+        teamSegmentedControl.accessibilityHint = "Choose the away or home scorecard."
+        teamSegmentedControl.addTarget(self, action: #selector(teamChanged), for: .valueChanged)
+        let segTap = UITapGestureRecognizer(target: self, action: #selector(segmentTapped))
+        segTap.cancelsTouchesInView = false
+        teamSegmentedControl.addGestureRecognizer(segTap)
+
+        // Strip all native chrome — pencil overlay provides the visuals
+        let clear = UIImage()
+        teamSegmentedControl.setBackgroundImage(clear, for: .normal, barMetrics: .default)
+        teamSegmentedControl.setBackgroundImage(clear, for: .selected, barMetrics: .default)
+        teamSegmentedControl.setBackgroundImage(clear, for: .highlighted, barMetrics: .default)
+        teamSegmentedControl.setDividerImage(clear, forLeftSegmentState: .normal, rightSegmentState: .normal, barMetrics: .default)
+        teamSegmentedControl.setDividerImage(clear, forLeftSegmentState: .selected, rightSegmentState: .normal, barMetrics: .default)
+        teamSegmentedControl.setDividerImage(clear, forLeftSegmentState: .normal, rightSegmentState: .selected, barMetrics: .default)
+
+        let normalAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: AppColors.pencil.withAlphaComponent(0.6)]
+        let selectedAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: AppColors.pencil]
+        teamSegmentedControl.setTitleTextAttributes(normalAttrs, for: .normal)
+        teamSegmentedControl.setTitleTextAttributes(selectedAttrs, for: .selected)
     }
 
     private func updateStickyHeaders() {
@@ -975,7 +1036,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
                 return nil
             }
             return eventsInInning[index - 1].pitcherName
-        } else if event.result == "LIVE" || event.atBatIndex == scorecard.liveCurrentAtBat?.atBatIndex {
+        } else if event.result.isLive || event.atBatIndex == scorecard.liveCurrentAtBat?.atBatIndex {
             // Event is the live at-bat (not yet in innings)
             guard let lastEvent = eventsInInning.last,
                   event.pitcherId != lastEvent.pitcherId else {

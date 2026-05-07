@@ -170,7 +170,7 @@ class TimelineCell: UITableViewCell {
         diamondView.configure(
             with: event.bases,
             style: presentation.diamondStyle,
-            isRun: event.result == "HR",
+            isRun: event.result.isHomeRun,
             accentColor: presentation.diamondAccentColor
         )
         

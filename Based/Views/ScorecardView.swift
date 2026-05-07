@@ -387,6 +387,17 @@ class ScorecardView: UIView {
         return ceil(maxWidth + 20)
     }
 
+    private func mergedWidth(fromInning startInning: Int, toInning endInning: Int) -> CGFloat {
+        guard startInning <= endInning else { return 0 }
+        var totalWidth: CGFloat = 0
+        for i in startInning...endInning {
+            if let layout = columnLayout.layout(forInning: i) {
+                totalWidth += inningWidth * CGFloat(layout.subColumnCount)
+            }
+        }
+        return totalWidth
+    }
+
     private func computeColumnLayout() -> ColumnLayout {
         guard let data = scorecardData else {
             let innings = (1...9).map { InningColumnLayout(inningNum: $0, subColumnCount: 1, startColumn: $0 - 1) }
@@ -543,30 +554,15 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate, U
                     let isAfterExit = inningNum > exitInning
                     
                     if isBeforeEntry {
-                        // Merge all columns from 1 to entry-1 into the first possible cell
                         if inningNum == 1 && subIndex == 0 {
-                            let endInning = (batter.inningEntered ?? 1) - 1
-                            var totalWidth: CGFloat = 0
-                            for i in 1...endInning {
-                                if let layout = columnLayout.layout(forInning: i) {
-                                    totalWidth += inningWidth * CGFloat(layout.subColumnCount)
-                                }
-                            }
-                            return CGSize(width: totalWidth, height: rowHeight)
+                            return CGSize(width: mergedWidth(fromInning: 1, toInning: (batter.inningEntered ?? 1) - 1), height: rowHeight)
                         } else {
                             return CGSize(width: 0, height: rowHeight)
                         }
                     } else if isAfterExit {
-                        // Merge all columns from exit+1 to end into the first cell after exit
                         if inningNum == exitInning + 1 && subIndex == 0 {
                             let maxInning = columnLayout.innings.last?.inningNum ?? 9
-                            var totalWidth: CGFloat = 0
-                            for i in (exitInning + 1)...maxInning {
-                                if let layout = columnLayout.layout(forInning: i) {
-                                    totalWidth += inningWidth * CGFloat(layout.subColumnCount)
-                                }
-                            }
-                            return CGSize(width: totalWidth, height: rowHeight)
+                            return CGSize(width: mergedWidth(fromInning: exitInning + 1, toInning: maxInning), height: rowHeight)
                         } else {
                             return CGSize(width: 0, height: rowHeight)
                         }
@@ -585,236 +581,219 @@ extension ScorecardView: UICollectionViewDataSource, UICollectionViewDelegate, U
         let totalCols = columnLayout.totalColumns
         let rowIndex = (collectionView == leftCollectionView) ? indexPath.item : indexPath.item / totalCols
         let totalRows = lineup.count
-        
         let isTotalsRow = rowIndex == lineup.count
         let rowBackgroundColor = rowIndex % 2 == 0 ? UIColor.clear : AppColors.alternateRow
-        
+
         if collectionView == leftCollectionView {
-            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "NameCell", for: indexPath) as! LabelCell
-            if isTotalsRow {
-                cell.label.text = "TOTALS"
-                cell.label.font = AppFont.ibmPlexCondensed(16, textStyle: .headline)
-                cell.label.textAlignment = .center
-                cell.backgroundColor = AppColors.header
-                cell.accessibilityLabel = "Totals row"
-                cell.accessibilityTraits = .staticText
-                return cell
-            }
-            
-            let batter = lineup[rowIndex]
-            let nameAttrs: [NSAttributedString.Key: Any] = [.font: UIFont(name: "PermanentMarker-Regular", size: 16) ?? .systemFont(ofSize: 16), .foregroundColor: AppColors.pencil]
-            let posAttrs: [NSAttributedString.Key: Any] = [.font: UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14), .foregroundColor: AppColors.pencil.withAlphaComponent(0.5)]
-            
-            let text = NSMutableAttributedString(string: "\(batter.abbreviation)\n", attributes: nameAttrs)
-            var posText = batter.position
-            if let num = batter.jerseyNumber { posText += " #\(num)" }
-            if let entryInning = batter.inningEntered { posText += " (\(entryInning))" }
-            text.append(NSAttributedString(string: posText, attributes: posAttrs))
-            
-            cell.label.attributedText = text
-            cell.label.textAlignment = .left
-            cell.backgroundColor = rowBackgroundColor
-            cell.accessibilityLabel = nameAccessibilityLabel(for: batter, rowIndex: rowIndex, totalRows: totalRows)
-            cell.accessibilityHint = "Double tap for player details."
-            cell.accessibilityTraits = .button
-            return cell
-        } else {
-            let col = indexPath.item % totalCols
-            
-            // Handle Stat Columns
-            if let statType = columnLayout.statInfo(forColumn: col) {
-                let cell = collectionView.dequeueReusableCell(withReuseIdentifier: LabelCell.reuseIdentifier, for: indexPath) as! LabelCell
-                cell.label.font = UIFont(name: "PermanentMarker-Regular", size: 16) ?? .systemFont(ofSize: 16)
-                cell.label.textColor = AppColors.pencil
-                
-                if isTotalsRow {
-                    var totalValue = 0
-                    for batter in lineup {
-                        let stats = calculatePlayerStats(for: batter.id)
-                        switch statType {
-                        case "AB": totalValue += stats.atBats
-                        case "R": totalValue += stats.runs
-                        case "H": totalValue += stats.hits
-                        case "RBI": totalValue += stats.rbi
-                        default: break
-                        }
-                    }
-                    cell.label.text = "\(totalValue)"
-                    cell.label.font = UIFont(name: "PermanentMarker-Regular", size: 18) ?? .systemFont(ofSize: 18, weight: .bold)
-                    if statType == "R", totalValue > 0 {
-                        cell.label.textColor = teamAccentColor
-                    }
-                    cell.backgroundColor = AppColors.header
-                    cell.accessibilityLabel = statAccessibilityLabel(
-                        statType: statType,
-                        value: "\(totalValue)",
-                        batter: nil,
-                        rowIndex: rowIndex,
-                        totalRows: totalRows,
-                        isTotalsRow: true
-                    )
-                } else {
-                    let batter = lineup[rowIndex]
-                    let stats = calculatePlayerStats(for: batter.id)
-                    let value: Int
-                    switch statType {
-                    case "AB":
-                        value = stats.atBats
-                        cell.label.text = "\(value)"
-                    case "R":
-                        value = stats.runs
-                        cell.label.text = "\(value)"
-                        if value > 0 {
-                            cell.label.textColor = teamAccentColor
-                        }
-                    case "H":
-                        value = stats.hits
-                        cell.label.text = "\(value)"
-                    case "RBI":
-                        value = stats.rbi
-                        cell.label.text = "\(value)"
-                    default:
-                        cell.label.text = "-"
-                    }
-                    cell.backgroundColor = rowBackgroundColor
-                    cell.accessibilityLabel = statAccessibilityLabel(
-                        statType: statType,
-                        value: cell.label.text ?? "0",
-                        batter: batter,
-                        rowIndex: rowIndex,
-                        totalRows: totalRows,
-                        isTotalsRow: false
-                    )
-                }
-                cell.accessibilityTraits = .staticText
-                return cell
-            }
-            
-            // Handle Inning Columns
-            if isTotalsRow {
-                let cell = collectionView.dequeueReusableCell(withReuseIdentifier: LabelCell.reuseIdentifier, for: indexPath) as! LabelCell
-                cell.label.font = UIFont(name: "PermanentMarker-Regular", size: 18) ?? .systemFont(ofSize: 18, weight: .bold)
-                cell.label.textColor = AppColors.pencil
-                if let (inningNum, subIndex) = columnLayout.inningInfo(forColumn: col) {
-                    if subIndex == 0 {
-                        let inningObj = data.innings.first { $0.num == inningNum }
-                        let events = isHomeTeam ? (inningObj?.home ?? []) : (inningObj?.away ?? [])
-                        // Prefer authoritative linescore runs (always correct during transitions)
-                        // Fall back to counting PBP events if linescore data isn't available yet
-                        let linescoreRuns = isHomeTeam ? inningObj?.homeRuns : inningObj?.awayRuns
-                        let derivedRuns = events.filter { $0.bases.home }.count
-                        let runs = linescoreRuns ?? derivedRuns
-                        cell.label.text = runs > 0 ? "\(runs)" : ""
-                        cell.label.textColor = (runs > 0) ? teamAccentColor : AppColors.pencil
-                        cell.contentView.layer.borderWidth = 0.5
-                        cell.accessibilityLabel = inningTotalsAccessibilityLabel(inningNum: inningNum, runs: runs)
-                        cell.isAccessibilityElement = true
-                    } else {
-                        cell.label.text = ""
-                        cell.contentView.layer.borderWidth = 0
-                        cell.isAccessibilityElement = false
-                    }
-                } else {
-                    cell.label.text = ""
-                    cell.contentView.layer.borderWidth = 0.5
-                    cell.accessibilityLabel = nil
-                    cell.isAccessibilityElement = false
-                }
-                cell.backgroundColor = AppColors.header
-                cell.accessibilityTraits = .staticText
-                return cell
-            }
-            
-            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: ScorecardCell.reuseIdentifier, for: indexPath) as! ScorecardCell
-            cell.setAccentColor(teamAccentColor)
-            let batter = lineup[rowIndex]
-            
-            guard let (inningNum, subIndex) = columnLayout.inningInfo(forColumn: col) else {
-                cell.configure(with: nil)
-                cell.setInactive(false)
-                return cell
-            }
-            
-            // Inning data
-            let inningObj = data.innings.first { $0.num == inningNum }
-            let events = isHomeTeam ? inningObj?.home : inningObj?.away
-            let batterEvents = events?.filter { $0.batterId == batter.id } ?? []
-            let event: AtBatEvent? = subIndex < batterEvents.count ? batterEvents[subIndex] : nil
-            
-            cell.configure(with: event)
+            return configureNameCell(collectionView, indexPath: indexPath, data: data, lineup: lineup, rowIndex: rowIndex, totalRows: totalRows, isTotalsRow: isTotalsRow, rowBackgroundColor: rowBackgroundColor)
+        }
 
-            var isPitchingChange = false
-            if event != nil, let allEvents = events {
-                var batterOccurrence = 0
-                for (i, e) in allEvents.enumerated() {
-                    if e.batterId == batter.id {
-                        if batterOccurrence == subIndex {
-                            if i > 0 && e.pitcherId != allEvents[i - 1].pitcherId {
-                                isPitchingChange = true
-                            }
-                            break
-                        }
-                        batterOccurrence += 1
-                    }
-                }
-            }
-            cell.showPitchingChange(isPitchingChange)
+        let col = indexPath.item % totalCols
 
-            let isBeforeEntry = inningNum < (batter.inningEntered ?? 1)
-            let exitInning = batter.inningExited ?? 99
-            let isAfterExit = inningNum > exitInning
-            
-            // For merged cells, hide borders on the non-primary ones
-            let isPrimaryMerged = (isBeforeEntry && inningNum == 1 && subIndex == 0) || 
-                                 (isAfterExit && inningNum == exitInning + 1 && subIndex == 0)
-            let isHiddenMerged = (isBeforeEntry && !isPrimaryMerged) || (isAfterExit && !isPrimaryMerged)
-            
-            if isBeforeEntry || isAfterExit {
-                cell.backgroundColor = AppColors.inactive
-                cell.setInactive(true)
-            } else {
-                cell.backgroundColor = rowBackgroundColor
-                cell.setInactive(false)
-            }
-            
-            // Highlight current active cell
-            let isCurrentInning = data.currentInning == inningNum
-            let isCurrentHalf = data.isTopInning == !isHomeTeam
-            let isCurrentBatter = data.currentBatterId == batter.id
-            let isActiveSubColumn = subIndex == activeSubcolumnIndex(for: batterEvents)
-            let isCurrentCell = isLive && isCurrentInning && isCurrentHalf && isCurrentBatter && isActiveSubColumn
-            
-            if isCurrentCell {
-                cell.contentView.layer.borderWidth = 3.0
-                cell.contentView.layer.borderColor = UIColor.systemBlue.cgColor
-                cell.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.08)
-            } else {
-                cell.contentView.layer.borderWidth = isHiddenMerged ? 0 : 0.5
-                cell.contentView.layer.borderColor = AppColors.grid.cgColor
-            }
-            cell.isAccessibilityElement = !isHiddenMerged
-            if !isHiddenMerged {
-                let totalSubColumns = columnLayout.layout(forInning: inningNum)?.subColumnCount ?? 1
-                cell.setAccessibility(
-                    label: inningAccessibilityLabel(
-                        for: event,
-                        batter: batter,
-                        inningNum: inningNum,
-                        subIndex: subIndex,
-                        totalSubColumns: totalSubColumns,
-                        rowIndex: rowIndex,
-                        totalRows: totalRows,
-                        isCurrentCell: isCurrentCell,
-                        isBeforeEntry: isBeforeEntry,
-                        isAfterExit: isAfterExit
-                    ),
-                    hint: isCurrentCell ? "Double tap for the live at-bat." : (event != nil ? "Double tap for at-bat details." : nil),
-                    traits: (isCurrentCell || event != nil) ? .button : .staticText
-                )
-            }
-            
+        if let statType = columnLayout.statInfo(forColumn: col) {
+            return configureStatCell(collectionView, indexPath: indexPath, data: data, lineup: lineup, statType: statType, rowIndex: rowIndex, totalRows: totalRows, isTotalsRow: isTotalsRow, rowBackgroundColor: rowBackgroundColor)
+        }
+
+        if isTotalsRow {
+            return configureTotalsInningCell(collectionView, indexPath: indexPath, data: data, col: col)
+        }
+
+        return configureInningCell(collectionView, indexPath: indexPath, data: data, lineup: lineup, batter: lineup[rowIndex], col: col, rowIndex: rowIndex, totalRows: totalRows, rowBackgroundColor: rowBackgroundColor)
+    }
+
+    private func configureNameCell(_ collectionView: UICollectionView, indexPath: IndexPath, data: ScorecardData, lineup: [ScorecardBatter], rowIndex: Int, totalRows: Int, isTotalsRow: Bool, rowBackgroundColor: UIColor) -> UICollectionViewCell {
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "NameCell", for: indexPath) as! LabelCell
+        if isTotalsRow {
+            cell.label.text = "TOTALS"
+            cell.label.font = AppFont.ibmPlexCondensed(16, textStyle: .headline)
+            cell.label.textAlignment = .center
+            cell.backgroundColor = AppColors.header
+            cell.accessibilityLabel = "Totals row"
+            cell.accessibilityTraits = .staticText
             return cell
         }
+
+        let batter = lineup[rowIndex]
+        let nameAttrs: [NSAttributedString.Key: Any] = [.font: UIFont(name: "PermanentMarker-Regular", size: 16) ?? .systemFont(ofSize: 16), .foregroundColor: AppColors.pencil]
+        let posAttrs: [NSAttributedString.Key: Any] = [.font: UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14), .foregroundColor: AppColors.pencil.withAlphaComponent(0.5)]
+
+        let text = NSMutableAttributedString(string: "\(batter.abbreviation)\n", attributes: nameAttrs)
+        var posText = batter.position
+        if let num = batter.jerseyNumber { posText += " #\(num)" }
+        if let entryInning = batter.inningEntered { posText += " (\(entryInning))" }
+        text.append(NSAttributedString(string: posText, attributes: posAttrs))
+
+        cell.label.attributedText = text
+        cell.label.textAlignment = .left
+        cell.backgroundColor = rowBackgroundColor
+        cell.accessibilityLabel = nameAccessibilityLabel(for: batter, rowIndex: rowIndex, totalRows: totalRows)
+        cell.accessibilityHint = "Double tap for player details."
+        cell.accessibilityTraits = .button
+        return cell
+    }
+
+    private func configureStatCell(_ collectionView: UICollectionView, indexPath: IndexPath, data: ScorecardData, lineup: [ScorecardBatter], statType: String, rowIndex: Int, totalRows: Int, isTotalsRow: Bool, rowBackgroundColor: UIColor) -> UICollectionViewCell {
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: LabelCell.reuseIdentifier, for: indexPath) as! LabelCell
+        cell.label.font = UIFont(name: "PermanentMarker-Regular", size: 16) ?? .systemFont(ofSize: 16)
+        cell.label.textColor = AppColors.pencil
+
+        if isTotalsRow {
+            var totalValue = 0
+            for batter in lineup {
+                let stats = calculatePlayerStats(for: batter.id)
+                switch statType {
+                case "AB": totalValue += stats.atBats
+                case "R": totalValue += stats.runs
+                case "H": totalValue += stats.hits
+                case "RBI": totalValue += stats.rbi
+                default: break
+                }
+            }
+            cell.label.text = "\(totalValue)"
+            cell.label.font = UIFont(name: "PermanentMarker-Regular", size: 18) ?? .systemFont(ofSize: 18, weight: .bold)
+            if statType == "R", totalValue > 0 {
+                cell.label.textColor = teamAccentColor
+            }
+            cell.backgroundColor = AppColors.header
+            cell.accessibilityLabel = statAccessibilityLabel(
+                statType: statType, value: "\(totalValue)", batter: nil,
+                rowIndex: rowIndex, totalRows: totalRows, isTotalsRow: true
+            )
+        } else {
+            let batter = lineup[rowIndex]
+            let stats = calculatePlayerStats(for: batter.id)
+            switch statType {
+            case "AB": cell.label.text = "\(stats.atBats)"
+            case "R":
+                cell.label.text = "\(stats.runs)"
+                if stats.runs > 0 { cell.label.textColor = teamAccentColor }
+            case "H": cell.label.text = "\(stats.hits)"
+            case "RBI": cell.label.text = "\(stats.rbi)"
+            default: cell.label.text = "-"
+            }
+            cell.backgroundColor = rowBackgroundColor
+            cell.accessibilityLabel = statAccessibilityLabel(
+                statType: statType, value: cell.label.text ?? "0", batter: batter,
+                rowIndex: rowIndex, totalRows: totalRows, isTotalsRow: false
+            )
+        }
+        cell.accessibilityTraits = .staticText
+        return cell
+    }
+
+    private func configureTotalsInningCell(_ collectionView: UICollectionView, indexPath: IndexPath, data: ScorecardData, col: Int) -> UICollectionViewCell {
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: LabelCell.reuseIdentifier, for: indexPath) as! LabelCell
+        cell.label.font = UIFont(name: "PermanentMarker-Regular", size: 18) ?? .systemFont(ofSize: 18, weight: .bold)
+        cell.label.textColor = AppColors.pencil
+        if let (inningNum, subIndex) = columnLayout.inningInfo(forColumn: col) {
+            if subIndex == 0 {
+                let inningObj = data.innings.first { $0.num == inningNum }
+                let events = isHomeTeam ? (inningObj?.home ?? []) : (inningObj?.away ?? [])
+                let linescoreRuns = isHomeTeam ? inningObj?.homeRuns : inningObj?.awayRuns
+                let derivedRuns = events.filter { $0.bases.home }.count
+                let runs = linescoreRuns ?? derivedRuns
+                cell.label.text = runs > 0 ? "\(runs)" : ""
+                cell.label.textColor = (runs > 0) ? teamAccentColor : AppColors.pencil
+                cell.contentView.layer.borderWidth = 0.5
+                cell.accessibilityLabel = inningTotalsAccessibilityLabel(inningNum: inningNum, runs: runs)
+                cell.isAccessibilityElement = true
+            } else {
+                cell.label.text = ""
+                cell.contentView.layer.borderWidth = 0
+                cell.isAccessibilityElement = false
+            }
+        } else {
+            cell.label.text = ""
+            cell.contentView.layer.borderWidth = 0.5
+            cell.accessibilityLabel = nil
+            cell.isAccessibilityElement = false
+        }
+        cell.backgroundColor = AppColors.header
+        cell.accessibilityTraits = .staticText
+        return cell
+    }
+
+    private func configureInningCell(_ collectionView: UICollectionView, indexPath: IndexPath, data: ScorecardData, lineup: [ScorecardBatter], batter: ScorecardBatter, col: Int, rowIndex: Int, totalRows: Int, rowBackgroundColor: UIColor) -> UICollectionViewCell {
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: ScorecardCell.reuseIdentifier, for: indexPath) as! ScorecardCell
+        cell.setAccentColor(teamAccentColor)
+
+        guard let (inningNum, subIndex) = columnLayout.inningInfo(forColumn: col) else {
+            cell.configure(with: nil)
+            cell.setInactive(false)
+            return cell
+        }
+
+        let inningObj = data.innings.first { $0.num == inningNum }
+        let events = isHomeTeam ? inningObj?.home : inningObj?.away
+        let batterEvents = events?.filter { $0.batterId == batter.id } ?? []
+        let event: AtBatEvent? = subIndex < batterEvents.count ? batterEvents[subIndex] : nil
+
+        cell.configure(with: event)
+
+        var isPitchingChange = false
+        if event != nil, let allEvents = events {
+            var batterOccurrence = 0
+            for (i, e) in allEvents.enumerated() {
+                if e.batterId == batter.id {
+                    if batterOccurrence == subIndex {
+                        if i > 0 && e.pitcherId != allEvents[i - 1].pitcherId {
+                            isPitchingChange = true
+                        }
+                        break
+                    }
+                    batterOccurrence += 1
+                }
+            }
+        }
+        cell.showPitchingChange(isPitchingChange)
+
+        let isBeforeEntry = inningNum < (batter.inningEntered ?? 1)
+        let exitInning = batter.inningExited ?? 99
+        let isAfterExit = inningNum > exitInning
+
+        let isPrimaryMerged = (isBeforeEntry && inningNum == 1 && subIndex == 0) ||
+                             (isAfterExit && inningNum == exitInning + 1 && subIndex == 0)
+        let isHiddenMerged = (isBeforeEntry && !isPrimaryMerged) || (isAfterExit && !isPrimaryMerged)
+
+        if isBeforeEntry || isAfterExit {
+            cell.backgroundColor = AppColors.inactive
+            cell.setInactive(true)
+        } else {
+            cell.backgroundColor = rowBackgroundColor
+            cell.setInactive(false)
+        }
+
+        let isCurrentInning = data.currentInning == inningNum
+        let isCurrentHalf = data.isTopInning == !isHomeTeam
+        let isCurrentBatter = data.currentBatterId == batter.id
+        let isActiveSubColumn = subIndex == activeSubcolumnIndex(for: batterEvents)
+        let isCurrentCell = isLive && isCurrentInning && isCurrentHalf && isCurrentBatter && isActiveSubColumn
+
+        if isCurrentCell {
+            cell.contentView.layer.borderWidth = 3.0
+            cell.contentView.layer.borderColor = UIColor.systemBlue.cgColor
+            cell.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.08)
+        } else {
+            cell.contentView.layer.borderWidth = isHiddenMerged ? 0 : 0.5
+            cell.contentView.layer.borderColor = AppColors.grid.cgColor
+        }
+        cell.isAccessibilityElement = !isHiddenMerged
+        if !isHiddenMerged {
+            let totalSubColumns = columnLayout.layout(forInning: inningNum)?.subColumnCount ?? 1
+            cell.setAccessibility(
+                label: inningAccessibilityLabel(
+                    for: event, batter: batter, inningNum: inningNum,
+                    subIndex: subIndex, totalSubColumns: totalSubColumns,
+                    rowIndex: rowIndex, totalRows: totalRows,
+                    isCurrentCell: isCurrentCell,
+                    isBeforeEntry: isBeforeEntry, isAfterExit: isAfterExit
+                ),
+                hint: isCurrentCell ? "Double tap for the live at-bat." : (event != nil ? "Double tap for at-bat details." : nil),
+                traits: (isCurrentCell || event != nil) ? .button : .staticText
+            )
+        }
+
+        return cell
     }
     
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {

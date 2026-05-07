@@ -406,6 +406,21 @@ class GameHeaderView: UIView {
         awayName.textColor = awayColor
         homeName.textColor = homeColor
 
+        configureTeamStats(linescore: linescore, awayColor: awayColor, homeColor: homeColor, zeroColor: zeroColor)
+        configureInningScores(linescore: linescore, awayColor: awayColor, homeColor: homeColor, zeroColor: zeroColor, isFinal: isFinal)
+        configureVenueWeather(linescore: linescore, awayActual: awayActual, homeActual: homeActual)
+
+        setNeedsLayout()
+        layoutIfNeeded()
+        if inningCount > 9 {
+            let maxOffset = max(0, inningsScrollView.contentSize.width - inningsScrollView.bounds.width)
+            inningsScrollView.setContentOffset(CGPoint(x: maxOffset, y: 0), animated: false)
+        } else {
+            inningsScrollView.setContentOffset(.zero, animated: false)
+        }
+    }
+
+    private func configureTeamStats(linescore: Linescore, awayColor: UIColor, homeColor: UIColor, zeroColor: UIColor) {
         if let runs = linescore.teams?.away?.runs {
             awayR.text = "\(runs)"
             awayR.textColor = runs > 0 ? awayColor : zeroColor
@@ -447,7 +462,9 @@ class GameHeaderView: UIView {
         } else {
             homeE.text = ""
         }
+    }
 
+    private func configureInningScores(linescore: Linescore, awayColor: UIColor, homeColor: UIColor, zeroColor: UIColor, isFinal: Bool) {
         awayInningLabels.forEach {
             $0.text = ""
             $0.textColor = pencilColor
@@ -483,7 +500,9 @@ class GameHeaderView: UIView {
                 }
             }
         }
+    }
 
+    private func configureVenueWeather(linescore: Linescore, awayActual: String, homeActual: String) {
         var venueWeatherParts: [String] = []
         if let venue = linescore.venue {
             var venueText = venue.name ?? "Unknown Venue"
@@ -508,15 +527,6 @@ class GameHeaderView: UIView {
             "\(homeActual), \(homeR.text ?? "-") runs, \(homeH.text ?? "-") hits, \(homeE.text ?? "-") errors",
             venueWeatherLabel.text
         ])
-
-        setNeedsLayout()
-        layoutIfNeeded()
-        if inningCount > 9 {
-            let maxOffset = max(0, inningsScrollView.contentSize.width - inningsScrollView.bounds.width)
-            inningsScrollView.setContentOffset(CGPoint(x: maxOffset, y: 0), animated: false)
-        } else {
-            inningsScrollView.setContentOffset(.zero, animated: false)
-        }
     }
 
     private func abbreviation(for teamName: String) -> String {

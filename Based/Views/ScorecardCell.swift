@@ -115,7 +115,7 @@ class ScorecardCell: UICollectionViewCell {
     }
     
     func configure(with event: AtBatEvent?) {
-        guard let event = event, event.result != "LIVE" else {
+        guard let event = event, !event.result.isLive else {
             resultLabel.text = ""
             resultLabel.attributedText = nil
             resultLabel.textColor = AppColors.pencil
@@ -149,7 +149,7 @@ class ScorecardCell: UICollectionViewCell {
         diamondView.configure(
             with: event.bases,
             style: presentation.diamondStyle,
-            isRun: event.result == "HR",
+            isRun: event.result.isHomeRun,
             accentColor: presentation.diamondAccentColor
         )
     }

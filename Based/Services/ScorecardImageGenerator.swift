@@ -8,7 +8,7 @@ final class ScorecardImageGenerator {
         let imageWidth: CGFloat = 2400
         let margin: CGFloat = 80
         let columnGap: CGFloat = 100
-        let rowHeight: CGFloat = 70
+        let rowHeight: CGFloat = 60
         let headerHeight: CGFloat = 40
         let nameWidth: CGFloat = 220
         let inningWidth: CGFloat = 60
@@ -27,8 +27,8 @@ final class ScorecardImageGenerator {
         let headerFont = UIFont(name: "PatrickHand-Regular", size: 24) ?? .systemFont(ofSize: 24, weight: .bold)
         let nameFont = UIFont(name: "PermanentMarker-Regular", size: 20) ?? .systemFont(ofSize: 20)
         let posFont = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16)
-        let resultFont = UIFont(name: "PermanentMarker-Regular", size: 24) ?? .systemFont(ofSize: 24)
-        let legibilityFont = UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14)
+        let resultFont = UIFont(name: "PermanentMarker-Regular", size: 18) ?? .systemFont(ofSize: 18)
+        let legibilityFont = UIFont(name: "PatrickHand-Regular", size: 12) ?? .systemFont(ofSize: 12)
         
         let sectionTitleFont = UIFont(name: "PatrickHand-Regular", size: 32) ?? .systemFont(ofSize: 32, weight: .bold)
         let footerHeaderFont = UIFont(name: "PatrickHand-Regular", size: 18) ?? .systemFont(ofSize: 18, weight: .bold)
@@ -38,108 +38,175 @@ final class ScorecardImageGenerator {
     
     private let config = Config()
     
+
+    private struct LayoutInfo {
+        let filteredInfo: [GameInfoItem]
+        let contentWidth: CGFloat
+        let colWidth: CGFloat
+        let awayLayout: ColumnLayout
+        let homeLayout: ColumnLayout
+        let scorecardSectionHeight: CGFloat
+        let pitcherSectionHeight: CGFloat
+        let gameInfoHeight: CGFloat
+        let sbWidth: CGFloat
+        let totalHeight: CGFloat
+    }
+
     func generate(scorecard: ScorecardData, linescore: Linescore?) async -> UIImage {
-        // 1. Filter and Prepare Info
+        let pdfData = await generatePDF(scorecard: scorecard, linescore: linescore)
+        guard let provider = CGDataProvider(data: pdfData as CFData),
+              let pdf = CGPDFDocument(provider),
+              let page = pdf.page(at: 1) else {
+            return UIImage()
+        }
+        let pageRect = page.getBoxRect(.mediaBox)
+        let scale: CGFloat = 8
+        let size = CGSize(width: pageRect.width * scale, height: pageRect.height * scale)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
+        return renderer.image { context in
+            let ctx = context.cgContext
+            self.config.paperColor.setFill()
+            ctx.fill(CGRect(origin: .zero, size: size))
+            ctx.translateBy(x: 0, y: size.height)
+            ctx.scaleBy(x: scale, y: -scale)
+            ctx.drawPDFPage(page)
+        }
+    }
+
+    func generatePDF(scorecard: ScorecardData, linescore: Linescore?) async -> Data {
+        let layout = computeLayout(scorecard: scorecard, linescore: linescore)
+        let pageWidth: CGFloat = 792
+        let pageHeight: CGFloat = 612
+        let pageRect = CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight)
+        let pdfMargin: CGFloat = 36
+        let printableWidth = pageWidth - 2 * pdfMargin
+        let printableHeight = pageHeight - 2 * pdfMargin
+        let scale = min(printableWidth / config.imageWidth, printableHeight / layout.totalHeight)
+        let scaledWidth = config.imageWidth * scale
+        let scaledHeight = layout.totalHeight * scale
+        let offsetX = (pageWidth - scaledWidth) / 2
+        let offsetY = (pageHeight - scaledHeight) / 2
+
+        let renderer = UIGraphicsPDFRenderer(bounds: pageRect)
+        return renderer.pdfData { context in
+            context.beginPage()
+            let ctx = context.cgContext
+            self.config.paperColor.setFill()
+            ctx.fill(pageRect)
+            ctx.saveGState()
+            ctx.translateBy(x: offsetX, y: offsetY)
+            ctx.scaleBy(x: scale, y: scale)
+            self.drawAllContent(scorecard: scorecard, linescore: linescore, layout: layout, ctx: ctx)
+            ctx.restoreGState()
+        }
+    }
+
+    private func computeLayout(scorecard: ScorecardData, linescore: Linescore?) -> LayoutInfo {
         let importantLabels = ["Venue", "Weather", "Att", "T", "First pitch"]
         let filteredInfo = scorecard.gameInfo.filter { item in
             importantLabels.contains(where: { item.label.contains($0) })
         }
-        
-        // 2. Pre-calculate layout
+
         let contentWidth = config.imageWidth - (config.margin * 2)
         let colWidth = (contentWidth - config.columnGap) / 2
-        
+
         let awayLayout = computeColumnLayout(for: scorecard, isHome: false)
         let homeLayout = computeColumnLayout(for: scorecard, isHome: true)
-        
+
         let awayHeight = CGFloat(scorecard.lineups.away.count + 1) * config.rowHeight + config.headerHeight
         let homeHeight = CGFloat(scorecard.lineups.home.count + 1) * config.rowHeight + config.headerHeight
         let scorecardSectionHeight = max(awayHeight, homeHeight)
-        
+
         let awayPHeight = config.headerHeight + CGFloat(scorecard.pitchers.away.count) * config.pRowHeight
         let homePHeight = config.headerHeight + CGFloat(scorecard.pitchers.home.count) * config.pRowHeight
         let pitcherSectionHeight = max(awayPHeight, homePHeight)
-        
+
         let gameInfoHeight: CGFloat = filteredInfo.isEmpty ? 0 : 100
-        
+
         let inningCount = max(9, linescore?.innings?.count ?? 9)
         let sbTeamCol: CGFloat = 140
         let sbInningCol: CGFloat = 65
         let sbStatCol: CGFloat = 70
         let sbSepGap: CGFloat = 15
         let sbWidth: CGFloat = sbTeamCol + CGFloat(inningCount) * sbInningCol + sbSepGap + 3 * sbStatCol
-        
+
         var totalHeight: CGFloat = config.margin
-        totalHeight += 120 // Scoreboard
-        totalHeight += 80 // Spacing
-        totalHeight += 80 // Team Titles
+        totalHeight += 120
+        totalHeight += 80
+        totalHeight += 80
         totalHeight += scorecardSectionHeight
-        totalHeight += 80 // Spacing
-        totalHeight += 50 // "PITCHERS" titles
+        totalHeight += 80
+        totalHeight += 50
         totalHeight += pitcherSectionHeight
-        totalHeight += 80 // Spacing
+        totalHeight += 80
         totalHeight += gameInfoHeight
-        totalHeight += config.margin // Bottom margin
-        
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: config.imageWidth, height: totalHeight))
-        return renderer.image { context in
-            let ctx = context.cgContext
-            
-            // Background
-            config.paperColor.setFill()
-            ctx.fill(CGRect(x: 0, y: 0, width: config.imageWidth, height: totalHeight))
-            
-            var currentY = config.margin
-            
-            // 2. Scoreboard (Top Centered)
-            let sbRect = CGRect(x: (config.imageWidth - sbWidth) / 2, y: currentY, width: sbWidth, height: 120)
-            drawScoreboard(in: sbRect, linescore: linescore, scorecard: scorecard, ctx: ctx)
-            currentY += 200
-            
-            // 3. Team Titles (Actual names in color, PermanentMarker)
-            let titleY = currentY
-            let rawAwayName = scorecard.teams.away.name ?? "Away"
-            let rawHomeName = scorecard.teams.home.name ?? "Home"
-            
-            let awayColor = TeamColorProvider.color(for: rawAwayName)
-            let homeColor = TeamColorProvider.color(for: rawHomeName)
-            
-            NSAttributedString(string: rawAwayName.uppercased(), attributes: [.font: config.teamTitleFont, .foregroundColor: awayColor]).draw(at: CGPoint(x: config.margin, y: titleY))
-            NSAttributedString(string: rawHomeName.uppercased(), attributes: [.font: config.teamTitleFont, .foregroundColor: homeColor]).draw(at: CGPoint(x: config.margin + colWidth + config.columnGap, y: titleY))
-            currentY += 80
-            
-            // 4. Side-by-Side Scorecards
-            let awayRect = CGRect(x: config.margin, y: currentY, width: colWidth, height: scorecardSectionHeight)
-            drawScorecard(in: awayRect, data: scorecard, layout: awayLayout, isHome: false, ctx: ctx)
-            
-            let homeRect = CGRect(x: config.margin + colWidth + config.columnGap, y: currentY, width: colWidth, height: scorecardSectionHeight)
-            drawScorecard(in: homeRect, data: scorecard, layout: homeLayout, isHome: true, ctx: ctx)
-            
-            currentY += scorecardSectionHeight + 80
-            
-            // 5. Pitcher Tables
-            let pTitleY = currentY
-            let pTitleAttrs: [NSAttributedString.Key: Any] = [.font: config.sectionTitleFont, .foregroundColor: config.pencilColor]
-            NSAttributedString(string: "\(rawAwayName.uppercased()) PITCHERS", attributes: pTitleAttrs).draw(at: CGPoint(x: config.margin, y: pTitleY))
-            NSAttributedString(string: "\(rawHomeName.uppercased()) PITCHERS", attributes: pTitleAttrs).draw(at: CGPoint(x: config.margin + colWidth + config.columnGap, y: pTitleY))
-            currentY += 50
-            
-            let awayPRect = CGRect(x: config.margin, y: currentY, width: colWidth, height: pitcherSectionHeight)
-            drawPitcherTable(in: awayPRect, pitchers: scorecard.pitchers.away, ctx: ctx)
-            
-            let homePRect = CGRect(x: config.margin + colWidth + config.columnGap, y: currentY, width: colWidth, height: pitcherSectionHeight)
-            drawPitcherTable(in: homePRect, pitchers: scorecard.pitchers.home, ctx: ctx)
-            
-            currentY += pitcherSectionHeight + 80
-            
-            // 6. Game Info (Centered Row)
-            if !filteredInfo.isEmpty {
-                let infoRect = CGRect(x: config.margin, y: currentY, width: contentWidth, height: gameInfoHeight)
-                drawSimpleGameInfo(in: infoRect, info: filteredInfo, ctx: ctx)
-            }
+        totalHeight += config.margin
+
+        return LayoutInfo(
+            filteredInfo: filteredInfo,
+            contentWidth: contentWidth,
+            colWidth: colWidth,
+            awayLayout: awayLayout,
+            homeLayout: homeLayout,
+            scorecardSectionHeight: scorecardSectionHeight,
+            pitcherSectionHeight: pitcherSectionHeight,
+            gameInfoHeight: gameInfoHeight,
+            sbWidth: sbWidth,
+            totalHeight: totalHeight
+        )
+    }
+
+    private func drawAllContent(scorecard: ScorecardData, linescore: Linescore?, layout: LayoutInfo, ctx: CGContext) {
+        config.paperColor.setFill()
+        ctx.fill(CGRect(x: 0, y: 0, width: config.imageWidth, height: layout.totalHeight))
+
+        var currentY = config.margin
+
+        let sbRect = CGRect(x: (config.imageWidth - layout.sbWidth) / 2, y: currentY, width: layout.sbWidth, height: 120)
+        drawScoreboard(in: sbRect, linescore: linescore, scorecard: scorecard, ctx: ctx)
+        currentY += 200
+
+        let titleY = currentY
+        let rawAwayName = scorecard.teams.away.name ?? "Away"
+        let rawHomeName = scorecard.teams.home.name ?? "Home"
+
+        let awayColor = TeamColorProvider.color(for: rawAwayName)
+        let homeColor = TeamColorProvider.color(for: rawHomeName)
+
+        NSAttributedString(string: rawAwayName.uppercased(), attributes: [.font: config.teamTitleFont, .foregroundColor: awayColor]).draw(at: CGPoint(x: config.margin, y: titleY))
+        NSAttributedString(string: rawHomeName.uppercased(), attributes: [.font: config.teamTitleFont, .foregroundColor: homeColor]).draw(at: CGPoint(x: config.margin + layout.colWidth + config.columnGap, y: titleY))
+        currentY += 80
+
+        let awayRect = CGRect(x: config.margin, y: currentY, width: layout.colWidth, height: layout.scorecardSectionHeight)
+        drawScorecard(in: awayRect, data: scorecard, layout: layout.awayLayout, isHome: false, ctx: ctx)
+
+        let homeRect = CGRect(x: config.margin + layout.colWidth + config.columnGap, y: currentY, width: layout.colWidth, height: layout.scorecardSectionHeight)
+        drawScorecard(in: homeRect, data: scorecard, layout: layout.homeLayout, isHome: true, ctx: ctx)
+
+        currentY += layout.scorecardSectionHeight + 80
+
+        let pTitleY = currentY
+        let pTitleAttrs: [NSAttributedString.Key: Any] = [.font: config.sectionTitleFont, .foregroundColor: config.pencilColor]
+        NSAttributedString(string: "\(rawAwayName.uppercased()) PITCHERS", attributes: pTitleAttrs).draw(at: CGPoint(x: config.margin, y: pTitleY))
+        NSAttributedString(string: "\(rawHomeName.uppercased()) PITCHERS", attributes: pTitleAttrs).draw(at: CGPoint(x: config.margin + layout.colWidth + config.columnGap, y: pTitleY))
+        currentY += 50
+
+        let awayPRect = CGRect(x: config.margin, y: currentY, width: layout.colWidth, height: layout.pitcherSectionHeight)
+        drawPitcherTable(in: awayPRect, pitchers: scorecard.pitchers.away, ctx: ctx)
+
+        let homePRect = CGRect(x: config.margin + layout.colWidth + config.columnGap, y: currentY, width: layout.colWidth, height: layout.pitcherSectionHeight)
+        drawPitcherTable(in: homePRect, pitchers: scorecard.pitchers.home, ctx: ctx)
+
+        currentY += layout.pitcherSectionHeight + 80
+
+        if !layout.filteredInfo.isEmpty {
+            let infoRect = CGRect(x: config.margin, y: currentY, width: layout.contentWidth, height: layout.gameInfoHeight)
+            drawSimpleGameInfo(in: infoRect, info: layout.filteredInfo, ctx: ctx)
         }
     }
-    
+
     // MARK: - Drawing Helpers
     
     private func drawScoreboard(in rect: CGRect, linescore: Linescore?, scorecard: ScorecardData, ctx: CGContext) {
@@ -324,11 +391,42 @@ final class ScorecardImageGenerator {
             for col in 0..<(layout.totalColumns - layout.statColumns.count) {
                 if let (inningNum, subIndex) = layout.inningInfo(forColumn: col) {
                     let inningObj = data.innings.first { $0.num == inningNum }
-                    let batterEvents = (isHome ? inningObj?.home : inningObj?.away)?.filter { $0.batterId == batter.id } ?? []
+                    let allEvents = (isHome ? inningObj?.home : inningObj?.away) ?? []
+                    let batterEvents = allEvents.filter { $0.batterId == batter.id }
                     if subIndex < batterEvents.count {
+                        let cellRect = CGRect(x: actualX, y: rowY, width: config.inningWidth, height: config.rowHeight)
+                        let event = batterEvents[subIndex]
+
+                        var isPitchingChange = false
+                        var batterOccurrence = 0
+                        for (i, e) in allEvents.enumerated() {
+                            if e.batterId == batter.id {
+                                if batterOccurrence == subIndex {
+                                    if i > 0 && e.pitcherId != allEvents[i - 1].pitcherId {
+                                        isPitchingChange = true
+                                    }
+                                    break
+                                }
+                                batterOccurrence += 1
+                            }
+                        }
+
+                        if isPitchingChange {
+                            ctx.saveGState()
+                            ctx.setStrokeColor(config.pencilColor.cgColor)
+                            ctx.setLineWidth(2.5)
+                            ctx.setLineCap(.round)
+                            UIBezierPath.pencilLine(
+                                from: CGPoint(x: cellRect.minX - 0.5, y: cellRect.minY + 0.5),
+                                to: CGPoint(x: cellRect.maxX + 0.5, y: cellRect.minY + 0.5),
+                                jitter: 0.4
+                            ).stroke()
+                            ctx.restoreGState()
+                        }
+
                         drawAtBatCell(
-                            in: CGRect(x: actualX, y: rowY, width: config.inningWidth, height: config.rowHeight),
-                            event: batterEvents[subIndex],
+                            in: cellRect,
+                            event: event,
                             accentColor: data.teamAccentColor(isHomeTeam: isHome),
                             ctx: ctx
                         )
@@ -449,21 +547,29 @@ final class ScorecardImageGenerator {
     }
     
     private func drawAtBatCell(in rect: CGRect, event: AtBatEvent, accentColor: UIColor, ctx: CGContext) {
-        let dRect = rect.insetBy(dx: 8, dy: 8)
+        let dRect = CGRect(
+            x: rect.minX + 2,
+            y: rect.minY + 4,
+            width: rect.width - 4,
+            height: rect.height - 8
+        )
         let baseSize = max(5, min(dRect.width, dRect.height) * 0.11)
         let baseStrokeWidth = max(0.5, min(1.5, min(dRect.width, dRect.height) * 0.015))
         let progressLineWidth = max(1.5, min(4, min(dRect.width, dRect.height) * 0.035))
-        let lineToFirst = event.bases.lineToFirst ?? event.bases.first
-        let lineToSecond = event.bases.lineToSecond ?? event.bases.second
-        let lineToThird = event.bases.lineToThird ?? event.bases.third
-        let lineToHome = event.bases.lineToHome ?? event.bases.home
-        let shouldUseAccent = event.result == "HR" || event.bases.home
+        let shouldUseAccent = event.result.isHomeRun || event.bases.home
         let diamondColor = shouldUseAccent ? accentColor : config.pencilColor
         let home = CGPoint(x: dRect.midX, y: dRect.maxY)
         let first = CGPoint(x: dRect.maxX, y: dRect.midY)
         let second = CGPoint(x: dRect.midX, y: dRect.minY)
         let third = CGPoint(x: dRect.minX, y: dRect.midY)
 
+        drawDiamondShape(in: dRect, home: home, first: first, second: second, third: third, shouldUseAccent: shouldUseAccent, diamondColor: diamondColor, ctx: ctx)
+        drawProgressPath(in: dRect, event: event, home: home, first: first, second: second, third: third, diamondColor: diamondColor, progressLineWidth: progressLineWidth, ctx: ctx)
+        drawBaseBoxes(event: event, home: home, first: first, second: second, third: third, diamondColor: diamondColor, baseSize: baseSize, baseStrokeWidth: baseStrokeWidth, ctx: ctx)
+        drawResultAndCounts(in: rect, dRect: dRect, event: event, diamondColor: diamondColor, ctx: ctx)
+    }
+
+    private func drawDiamondShape(in dRect: CGRect, home: CGPoint, first: CGPoint, second: CGPoint, third: CGPoint, shouldUseAccent: Bool, diamondColor: UIColor, ctx: CGContext) {
         let diamondPath = UIBezierPath()
         diamondPath.move(to: home)
         diamondPath.addLine(to: first)
@@ -486,6 +592,13 @@ final class ScorecardImageGenerator {
             UIBezierPath.pencilScribble(in: dRect, jitter: 0.8, spacing: max(1.5, min(3.0, min(dRect.width, dRect.height) * 0.02))).stroke()
             ctx.restoreGState()
         }
+    }
+
+    private func drawProgressPath(in dRect: CGRect, event: AtBatEvent, home: CGPoint, first: CGPoint, second: CGPoint, third: CGPoint, diamondColor: UIColor, progressLineWidth: CGFloat, ctx: CGContext) {
+        let lineToFirst = event.bases.lineToFirst ?? event.bases.first
+        let lineToSecond = event.bases.lineToSecond ?? event.bases.second
+        let lineToThird = event.bases.lineToThird ?? event.bases.third
+        let lineToHome = event.bases.lineToHome ?? event.bases.home
 
         let progressPath = UIBezierPath()
         func addSegment(from: CGPoint, to: CGPoint, wasOut: Bool?) {
@@ -530,7 +643,9 @@ final class ScorecardImageGenerator {
         ctx.setLineCap(.round)
         ctx.setLineJoin(.round)
         progressPath.stroke()
+    }
 
+    private func drawBaseBoxes(event: AtBatEvent, home: CGPoint, first: CGPoint, second: CGPoint, third: CGPoint, diamondColor: UIColor, baseSize: CGFloat, baseStrokeWidth: CGFloat, ctx: CGContext) {
         func drawBaseBox(at vertex: CGPoint, occupied: Bool, base: Int) {
             let half = baseSize / 2
             let bPath = UIBezierPath()
@@ -571,16 +686,34 @@ final class ScorecardImageGenerator {
         drawBaseBox(at: second, occupied: event.bases.second, base: 2)
         drawBaseBox(at: third, occupied: event.bases.third, base: 3)
         drawBaseBox(at: home, occupied: event.bases.home, base: 0)
+    }
 
-        let res = event.result == "Ʞ" ? "K" : event.result
-        let attrs: [NSAttributedString.Key: Any] = [.font: config.resultFont, .foregroundColor: diamondColor], size = (res as NSString).size(withAttributes: attrs)
-        if event.result == "Ʞ" {
+    private func drawResultAndCounts(in rect: CGRect, dRect: CGRect, event: AtBatEvent, diamondColor: UIColor, ctx: CGContext) {
+        let res = event.result.displayText
+        var font = config.resultFont
+        let maxWidth = rect.width * 0.8
+        var size = (res as NSString).size(withAttributes: [.font: font])
+        if size.width > maxWidth {
+            let scale = max(0.5, maxWidth / size.width)
+            font = font.withSize(font.pointSize * scale)
+            size = (res as NSString).size(withAttributes: [.font: font])
+        }
+        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: diamondColor]
+        if event.result.isCalledStrikeout {
             ctx.saveGState(); ctx.translateBy(x: rect.midX, y: rect.midY); ctx.scaleBy(x: -1, y: 1); NSAttributedString(string: res, attributes: attrs).draw(at: CGPoint(x: -size.width/2, y: -size.height/2)); ctx.restoreGState()
         } else { NSAttributedString(string: res, attributes: attrs).draw(at: CGPoint(x: rect.midX - size.width/2, y: rect.midY - size.height/2)) }
         let cAttrs: [NSAttributedString.Key: Any] = [.font: config.legibilityFont, .foregroundColor: diamondColor.withAlphaComponent(0.7)]
-        if event.balls > 0 { NSAttributedString(string: "\(event.balls)B", attributes: cAttrs).draw(at: CGPoint(x: rect.minX + 4, y: rect.minY + 2)) }
-        if event.strikes > 0 { NSAttributedString(string: "\(event.strikes)S", attributes: cAttrs).draw(at: CGPoint(x: rect.maxX - 22, y: rect.minY + 2)) }
-        if event.outs > 0 { NSAttributedString(string: "\(event.outs)", attributes: cAttrs).draw(at: CGPoint(x: rect.maxX - 15, y: rect.maxY - 18)) }
+        if event.balls > 0 { NSAttributedString(string: "\(event.balls)B", attributes: cAttrs).draw(at: CGPoint(x: rect.minX + 2, y: rect.minY + 2)) }
+        if event.strikes > 0 {
+            let sText = "\(event.strikes)S"
+            let sSize = (sText as NSString).size(withAttributes: cAttrs)
+            NSAttributedString(string: sText, attributes: cAttrs).draw(at: CGPoint(x: rect.maxX - sSize.width - 2, y: rect.minY + 2))
+        }
+        if event.outs > 0 {
+            let oText = "\(event.outs)"
+            let oSize = (oText as NSString).size(withAttributes: cAttrs)
+            NSAttributedString(string: oText, attributes: cAttrs).draw(at: CGPoint(x: rect.maxX - oSize.width - 2, y: rect.maxY - oSize.height - 2))
+        }
         if let annotations = event.bases.annotations {
             drawAnnotations(annotations, in: rect, diamondRect: dRect, color: diamondColor)
         }
