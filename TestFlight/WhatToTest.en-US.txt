@@ -14,7 +14,12 @@ Enhanced Features:
 - Team Roster: View active rosters grouped by position with player profile links.
 - Schedule: Improved vertical alignment and clear rescheduling (strikethrough/From) indicators.
 - Navigation: Tap team names or long-press for favorites with haptic feedback.
-- Export: Image exports are now high-resolution PNGs, and a PDF option was added.
+
+Scorecard Export:
+- Share button now offers "Share Image" or "Save PDF" via popup menu.
+- Image export produces a high-resolution PNG (rendered through a vector PDF pipeline for crisp zooming).
+- PDF export generates a vectorized 8.5x11 landscape document suitable for printing.
+- Exported scorecards now include pitching change indicators matching the in-app display.
 
 What to test:
 - Verify standings rankings and stats accuracy.
@@ -23,3 +28,5 @@ What to test:
 - Check "replaces [Pitcher]" labels in At-Bat details after pitching changes.
 - Ensure team colors and alignment remain readable and consistent.
 - Verify VoiceOver announcements for standings and schedule details.
+- Export a scorecard as image and PDF; verify image is crisp when zoomed and PDF prints well at full page size.
+- Check that pitching change lines appear on exported scorecards where expected.

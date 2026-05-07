@@ -695,6 +695,16 @@ class GameService {
 
         let activePlay = playByPlay.currentPlay?.about?.isComplete == false ? playByPlay.currentPlay : nil
 
+        let gameDate: String? = {
+            guard let iso = allPlays.first?.about?.startTime else { return nil }
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            guard let date = formatter.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) else { return nil }
+            let display = DateFormatter()
+            display.dateFormat = "EEEE, MMMM d, yyyy"
+            return display.string(from: date)
+        }()
+
         return ScorecardData(
             teams: ScorecardTeams(home: boxscore.teams?.home?.team ?? Team(id: 0, name: "Home", link: ""), away: boxscore.teams?.away?.team ?? Team(id: 0, name: "Away", link: "")),
             lineups: lineups,
@@ -705,6 +715,7 @@ class GameService {
             advisories: Array(advisories.prefix(3)),
             umpires: umpires,
             gameInfo: gameInfo,
+            gameDate: gameDate,
             currentInning: linescore?.currentInning ?? activePlay?.about?.inning,
             isTopInning: linescore?.isTopInning ?? activePlay?.about?.isTopInning,
             currentBatterId: linescore?.offense?.batter?.id ?? activePlay?.matchup?.batter?.id

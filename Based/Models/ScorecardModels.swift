@@ -283,6 +283,7 @@ struct ScorecardData: Codable, Sendable, Equatable {
     let advisories: [String]
     let umpires: [ScorecardUmpire]
     let gameInfo: [GameInfoItem]
+    let gameDate: String?
     let currentInning: Int?
     let isTopInning: Bool?
     let currentBatterId: Int?

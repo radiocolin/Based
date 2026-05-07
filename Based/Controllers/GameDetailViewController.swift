@@ -209,6 +209,9 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             },
             UIAction(title: "Save PDF", image: UIImage(systemName: "doc.richtext")) { [weak self] _ in
                 self?.sharePDF()
+            },
+            UIAction(title: "Customize…", image: UIImage(systemName: "slider.horizontal.3")) { [weak self] _ in
+                self?.showExportCustomizer()
             }
         ])
         let shareItem = UIBarButtonItem(image: shareImg, menu: shareMenu)
@@ -368,6 +371,13 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
                 self.present(activityVC, animated: true)
             }
         }
+    }
+
+    private func showExportCustomizer() {
+        guard let scorecard = currentScorecard else { return }
+        let exportVC = ScorecardExportViewController(scorecard: scorecard, linescore: currentLinescore)
+        let nav = UINavigationController(rootViewController: exportVC)
+        present(nav, animated: true)
     }
 
     private func configurePlainBarButtonAppearance(_ appearance: UIBarButtonItemAppearance, font: UIFont, color: UIColor) {

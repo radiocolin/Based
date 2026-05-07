@@ -2,18 +2,26 @@ import UIKit
 
 /// A dedicated service to generate a high-quality, landscape scorecard graphic.
 /// Draws directly into a CGContext for maximum precision and to bypass UIKit off-screen rendering limitations.
+struct ScorecardExportOptions {
+    var showScoreboard: Bool = true
+    var showGameInfo: Bool = true
+    var showLineup: Bool = true
+    var showAtBatResults: Bool = true
+    var showPitchers: Bool = true
+    var showUmpires: Bool = true
+}
+
 final class ScorecardImageGenerator {
-    
+
     struct Config {
-        let imageWidth: CGFloat = 2400
-        let margin: CGFloat = 80
-        let columnGap: CGFloat = 100
+        let margin: CGFloat = 5
+        let columnGap: CGFloat = 16
         let rowHeight: CGFloat = 60
         let headerHeight: CGFloat = 40
         let nameWidth: CGFloat = 220
         let inningWidth: CGFloat = 60
         let statWidth: CGFloat = 50
-        
+
         // Pitcher Table Config
         let pNameWidth: CGFloat = 250
         let pStatWidth: CGFloat = 60
@@ -24,36 +32,44 @@ final class ScorecardImageGenerator {
         let gridColor = AppColors.grid
         
         let teamTitleFont = UIFont(name: "PermanentMarker-Regular", size: 48) ?? .systemFont(ofSize: 48, weight: .bold)
-        let headerFont = UIFont(name: "PatrickHand-Regular", size: 24) ?? .systemFont(ofSize: 24, weight: .bold)
-        let nameFont = UIFont(name: "PermanentMarker-Regular", size: 20) ?? .systemFont(ofSize: 20)
-        let posFont = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16)
+        let headerFont = UIFont(name: "IBMPlexSansCond-Bold", size: 18) ?? .systemFont(ofSize: 18, weight: .bold)
+        let nameFont = UIFont(name: "PermanentMarker-Regular", size: 16) ?? .systemFont(ofSize: 16)
+        let posFont = UIFont(name: "PatrickHand-Regular", size: 14) ?? .systemFont(ofSize: 14)
         let resultFont = UIFont(name: "PermanentMarker-Regular", size: 18) ?? .systemFont(ofSize: 18)
         let legibilityFont = UIFont(name: "PatrickHand-Regular", size: 12) ?? .systemFont(ofSize: 12)
-        
-        let sectionTitleFont = UIFont(name: "PatrickHand-Regular", size: 32) ?? .systemFont(ofSize: 32, weight: .bold)
-        let footerHeaderFont = UIFont(name: "PatrickHand-Regular", size: 18) ?? .systemFont(ofSize: 18, weight: .bold)
-        let footerBodyFont = UIFont(name: "PatrickHand-Regular", size: 20) ?? .systemFont(ofSize: 20)
-        let footerDataFont = UIFont(name: "PermanentMarker-Regular", size: 18) ?? .systemFont(ofSize: 18)
+
+        let sectionTitleFont = UIFont(name: "IBMPlexSansCond-Bold", size: 28) ?? .systemFont(ofSize: 28, weight: .bold)
+        let footerHeaderFont = UIFont(name: "IBMPlexSansCond-Bold", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
+        let footerBodyFont = UIFont(name: "IBMPlexSansCond-Regular", size: 16) ?? .systemFont(ofSize: 16)
+        let footerDataFont = UIFont(name: "PermanentMarker-Regular", size: 16) ?? .systemFont(ofSize: 16)
     }
     
     private let config = Config()
+
+    static let defaultUmpirePositions: [ScorecardUmpire] = [
+        ScorecardUmpire(fullName: "", type: "HP"),
+        ScorecardUmpire(fullName: "", type: "1B"),
+        ScorecardUmpire(fullName: "", type: "2B"),
+        ScorecardUmpire(fullName: "", type: "3B"),
+    ]
     
 
     private struct LayoutInfo {
         let filteredInfo: [GameInfoItem]
+        let imageWidth: CGFloat
         let contentWidth: CGFloat
         let colWidth: CGFloat
         let awayLayout: ColumnLayout
         let homeLayout: ColumnLayout
         let scorecardSectionHeight: CGFloat
         let pitcherSectionHeight: CGFloat
-        let gameInfoHeight: CGFloat
+        let umpireHeight: CGFloat
         let sbWidth: CGFloat
         let totalHeight: CGFloat
     }
 
-    func generate(scorecard: ScorecardData, linescore: Linescore?) async -> UIImage {
-        let pdfData = await generatePDF(scorecard: scorecard, linescore: linescore)
+    func generate(scorecard: ScorecardData, linescore: Linescore?, options: ScorecardExportOptions = ScorecardExportOptions()) async -> UIImage {
+        let pdfData = await generatePDF(scorecard: scorecard, linescore: linescore, options: options)
         guard let provider = CGDataProvider(data: pdfData as CFData),
               let pdf = CGPDFDocument(provider),
               let page = pdf.page(at: 1) else {
@@ -75,16 +91,16 @@ final class ScorecardImageGenerator {
         }
     }
 
-    func generatePDF(scorecard: ScorecardData, linescore: Linescore?) async -> Data {
-        let layout = computeLayout(scorecard: scorecard, linescore: linescore)
+    func generatePDF(scorecard: ScorecardData, linescore: Linescore?, options: ScorecardExportOptions = ScorecardExportOptions()) async -> Data {
+        let layout = computeLayout(scorecard: scorecard, linescore: linescore, options: options)
         let pageWidth: CGFloat = 792
         let pageHeight: CGFloat = 612
         let pageRect = CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight)
-        let pdfMargin: CGFloat = 36
+        let pdfMargin: CGFloat = 8
         let printableWidth = pageWidth - 2 * pdfMargin
         let printableHeight = pageHeight - 2 * pdfMargin
-        let scale = min(printableWidth / config.imageWidth, printableHeight / layout.totalHeight)
-        let scaledWidth = config.imageWidth * scale
+        let scale = min(printableWidth / layout.imageWidth, printableHeight / layout.totalHeight)
+        let scaledWidth = layout.imageWidth * scale
         let scaledHeight = layout.totalHeight * scale
         let offsetX = (pageWidth - scaledWidth) / 2
         let offsetY = (pageHeight - scaledHeight) / 2
@@ -98,32 +114,33 @@ final class ScorecardImageGenerator {
             ctx.saveGState()
             ctx.translateBy(x: offsetX, y: offsetY)
             ctx.scaleBy(x: scale, y: scale)
-            self.drawAllContent(scorecard: scorecard, linescore: linescore, layout: layout, ctx: ctx)
+            self.drawAllContent(scorecard: scorecard, linescore: linescore, layout: layout, imageWidth: layout.imageWidth, options: options, ctx: ctx)
             ctx.restoreGState()
         }
     }
 
-    private func computeLayout(scorecard: ScorecardData, linescore: Linescore?) -> LayoutInfo {
+    private func actualColumnWidth(layout: ColumnLayout) -> CGFloat {
+        var w = config.nameWidth
+        for inning in layout.innings { w += CGFloat(inning.subColumnCount) * config.inningWidth }
+        for _ in layout.statColumns { w += config.statWidth }
+        return w
+    }
+
+    private func computeLayout(scorecard: ScorecardData, linescore: Linescore?, options: ScorecardExportOptions = ScorecardExportOptions()) -> LayoutInfo {
         let importantLabels = ["Venue", "Weather", "Att", "T", "First pitch"]
-        let filteredInfo = scorecard.gameInfo.filter { item in
+        var filteredInfo = scorecard.gameInfo.filter { item in
             importantLabels.contains(where: { item.label.contains($0) })
         }
-
-        let contentWidth = config.imageWidth - (config.margin * 2)
-        let colWidth = (contentWidth - config.columnGap) / 2
+        if let date = scorecard.gameDate {
+            filteredInfo.insert(GameInfoItem(label: "Date", value: date), at: 0)
+        }
 
         let awayLayout = computeColumnLayout(for: scorecard, isHome: false)
         let homeLayout = computeColumnLayout(for: scorecard, isHome: true)
 
-        let awayHeight = CGFloat(scorecard.lineups.away.count + 1) * config.rowHeight + config.headerHeight
-        let homeHeight = CGFloat(scorecard.lineups.home.count + 1) * config.rowHeight + config.headerHeight
-        let scorecardSectionHeight = max(awayHeight, homeHeight)
-
-        let awayPHeight = config.headerHeight + CGFloat(scorecard.pitchers.away.count) * config.pRowHeight
-        let homePHeight = config.headerHeight + CGFloat(scorecard.pitchers.home.count) * config.pRowHeight
-        let pitcherSectionHeight = max(awayPHeight, homePHeight)
-
-        let gameInfoHeight: CGFloat = filteredInfo.isEmpty ? 0 : 100
+        let awayColWidth = actualColumnWidth(layout: awayLayout)
+        let homeColWidth = actualColumnWidth(layout: homeLayout)
+        let colWidth = max(awayColWidth, homeColWidth)
 
         let inningCount = max(9, linescore?.innings?.count ?? 9)
         let sbTeamCol: CGFloat = 140
@@ -132,41 +149,83 @@ final class ScorecardImageGenerator {
         let sbSepGap: CGFloat = 15
         let sbWidth: CGFloat = sbTeamCol + CGFloat(inningCount) * sbInningCol + sbSepGap + 3 * sbStatCol
 
+        let pitcherTableWidth = config.pNameWidth + 6 * config.pStatWidth
+
+        let scorecardTotalWidth = config.margin + colWidth + config.columnGap + colWidth + config.margin
+        let scoreboardTotalWidth = sbWidth + 2 * config.margin
+        let pitcherTotalWidth = config.margin + pitcherTableWidth + config.columnGap + pitcherTableWidth + config.margin
+        let imageWidth = max(scorecardTotalWidth, max(scoreboardTotalWidth, pitcherTotalWidth))
+        let contentWidth = imageWidth - (config.margin * 2)
+
+        let defaultLineupRows = 9
+        let hasAwayLineup = !scorecard.lineups.away.isEmpty
+        let hasHomeLineup = !scorecard.lineups.home.isEmpty
+        let awayRows = (options.showLineup && hasAwayLineup) ? max(scorecard.lineups.away.count, defaultLineupRows) : defaultLineupRows
+        let homeRows = (options.showLineup && hasHomeLineup) ? max(scorecard.lineups.home.count, defaultLineupRows) : defaultLineupRows
+        let awayHeight = CGFloat(awayRows + 1) * config.rowHeight + config.headerHeight
+        let homeHeight = CGFloat(homeRows + 1) * config.rowHeight + config.headerHeight
+        let scorecardSectionHeight = max(awayHeight, homeHeight)
+
+        let defaultPitcherRows = 5
+        let hasAwayPitchers = !scorecard.pitchers.away.isEmpty
+        let hasHomePitchers = !scorecard.pitchers.home.isEmpty
+        let awayPRows = (options.showPitchers && hasAwayPitchers) ? max(scorecard.pitchers.away.count, defaultPitcherRows) : defaultPitcherRows
+        let homePRows = (options.showPitchers && hasHomePitchers) ? max(scorecard.pitchers.home.count, defaultPitcherRows) : defaultPitcherRows
+        let awayPHeight = config.headerHeight + CGFloat(awayPRows) * config.pRowHeight
+        let homePHeight = config.headerHeight + CGFloat(homePRows) * config.pRowHeight
+        let pitcherSectionHeight = max(awayPHeight, homePHeight)
+
+        let umpireHeight: CGFloat = 24
+
         var totalHeight: CGFloat = config.margin
-        totalHeight += 120
-        totalHeight += 80
-        totalHeight += 80
+        totalHeight += 120                    // scoreboard + game info (side by side)
+        totalHeight += 10                     // gap after top section
+        totalHeight += 55                     // team titles
         totalHeight += scorecardSectionHeight
-        totalHeight += 80
-        totalHeight += 50
+        totalHeight += 8                      // gap before pitcher title
+        totalHeight += 34                     // pitcher section title
         totalHeight += pitcherSectionHeight
-        totalHeight += 80
-        totalHeight += gameInfoHeight
+        totalHeight += 8                      // gap before umpires
+        totalHeight += umpireHeight
         totalHeight += config.margin
 
         return LayoutInfo(
             filteredInfo: filteredInfo,
+            imageWidth: imageWidth,
             contentWidth: contentWidth,
             colWidth: colWidth,
             awayLayout: awayLayout,
             homeLayout: homeLayout,
             scorecardSectionHeight: scorecardSectionHeight,
             pitcherSectionHeight: pitcherSectionHeight,
-            gameInfoHeight: gameInfoHeight,
+            umpireHeight: umpireHeight,
             sbWidth: sbWidth,
             totalHeight: totalHeight
         )
     }
 
-    private func drawAllContent(scorecard: ScorecardData, linescore: Linescore?, layout: LayoutInfo, ctx: CGContext) {
+    private func drawAllContent(scorecard: ScorecardData, linescore: Linescore?, layout: LayoutInfo, imageWidth: CGFloat, options: ScorecardExportOptions = ScorecardExportOptions(), ctx: CGContext) {
         config.paperColor.setFill()
-        ctx.fill(CGRect(x: 0, y: 0, width: config.imageWidth, height: layout.totalHeight))
+        ctx.fill(CGRect(x: 0, y: 0, width: imageWidth, height: layout.totalHeight))
 
         var currentY = config.margin
 
-        let sbRect = CGRect(x: (config.imageWidth - layout.sbWidth) / 2, y: currentY, width: layout.sbWidth, height: 120)
-        drawScoreboard(in: sbRect, linescore: linescore, scorecard: scorecard, ctx: ctx)
-        currentY += 200
+        let hasLinescore = linescore?.innings != nil && !(linescore?.innings?.isEmpty ?? true)
+        let hasAwayLineup = !scorecard.lineups.away.isEmpty
+        let hasHomeLineup = !scorecard.lineups.home.isEmpty
+        let hasAwayPitchers = !scorecard.pitchers.away.isEmpty
+        let hasHomePitchers = !scorecard.pitchers.home.isEmpty
+        let hasUmpires = !scorecard.umpires.isEmpty
+
+        let sbRect = CGRect(x: config.margin, y: currentY, width: layout.sbWidth, height: 120)
+        drawScoreboard(in: sbRect, linescore: linescore, scorecard: scorecard, drawData: options.showScoreboard && hasLinescore, ctx: ctx)
+
+        if !layout.filteredInfo.isEmpty {
+            let infoX = config.margin + layout.sbWidth + 30
+            let infoRect = CGRect(x: infoX, y: currentY, width: imageWidth - infoX - config.margin, height: 120)
+            drawGameInfoTable(in: infoRect, info: layout.filteredInfo, drawData: options.showGameInfo, ctx: ctx)
+        }
+        currentY += 130
 
         let titleY = currentY
         let rawAwayName = scorecard.teams.away.name ?? "Away"
@@ -177,39 +236,39 @@ final class ScorecardImageGenerator {
 
         NSAttributedString(string: rawAwayName.uppercased(), attributes: [.font: config.teamTitleFont, .foregroundColor: awayColor]).draw(at: CGPoint(x: config.margin, y: titleY))
         NSAttributedString(string: rawHomeName.uppercased(), attributes: [.font: config.teamTitleFont, .foregroundColor: homeColor]).draw(at: CGPoint(x: config.margin + layout.colWidth + config.columnGap, y: titleY))
-        currentY += 80
+        currentY += 55
 
         let awayRect = CGRect(x: config.margin, y: currentY, width: layout.colWidth, height: layout.scorecardSectionHeight)
-        drawScorecard(in: awayRect, data: scorecard, layout: layout.awayLayout, isHome: false, ctx: ctx)
+        drawScorecard(in: awayRect, data: scorecard, layout: layout.awayLayout, isHome: false, drawLineup: options.showLineup && hasAwayLineup, drawResults: options.showAtBatResults, ctx: ctx)
 
         let homeRect = CGRect(x: config.margin + layout.colWidth + config.columnGap, y: currentY, width: layout.colWidth, height: layout.scorecardSectionHeight)
-        drawScorecard(in: homeRect, data: scorecard, layout: layout.homeLayout, isHome: true, ctx: ctx)
+        drawScorecard(in: homeRect, data: scorecard, layout: layout.homeLayout, isHome: true, drawLineup: options.showLineup && hasHomeLineup, drawResults: options.showAtBatResults, ctx: ctx)
 
-        currentY += layout.scorecardSectionHeight + 80
+        currentY += layout.scorecardSectionHeight
 
+        currentY += 8
         let pTitleY = currentY
         let pTitleAttrs: [NSAttributedString.Key: Any] = [.font: config.sectionTitleFont, .foregroundColor: config.pencilColor]
         NSAttributedString(string: "\(rawAwayName.uppercased()) PITCHERS", attributes: pTitleAttrs).draw(at: CGPoint(x: config.margin, y: pTitleY))
         NSAttributedString(string: "\(rawHomeName.uppercased()) PITCHERS", attributes: pTitleAttrs).draw(at: CGPoint(x: config.margin + layout.colWidth + config.columnGap, y: pTitleY))
-        currentY += 50
+        currentY += 34
 
         let awayPRect = CGRect(x: config.margin, y: currentY, width: layout.colWidth, height: layout.pitcherSectionHeight)
-        drawPitcherTable(in: awayPRect, pitchers: scorecard.pitchers.away, ctx: ctx)
+        drawPitcherTable(in: awayPRect, pitchers: scorecard.pitchers.away, drawData: options.showPitchers && hasAwayPitchers, ctx: ctx)
 
         let homePRect = CGRect(x: config.margin + layout.colWidth + config.columnGap, y: currentY, width: layout.colWidth, height: layout.pitcherSectionHeight)
-        drawPitcherTable(in: homePRect, pitchers: scorecard.pitchers.home, ctx: ctx)
+        drawPitcherTable(in: homePRect, pitchers: scorecard.pitchers.home, drawData: options.showPitchers && hasHomePitchers, ctx: ctx)
 
-        currentY += layout.pitcherSectionHeight + 80
+        currentY += layout.pitcherSectionHeight
 
-        if !layout.filteredInfo.isEmpty {
-            let infoRect = CGRect(x: config.margin, y: currentY, width: layout.contentWidth, height: layout.gameInfoHeight)
-            drawSimpleGameInfo(in: infoRect, info: layout.filteredInfo, ctx: ctx)
-        }
+        currentY += 8
+        let umpires = hasUmpires ? scorecard.umpires : ScorecardImageGenerator.defaultUmpirePositions
+        drawUmpireLine(in: CGRect(x: config.margin, y: currentY, width: layout.contentWidth, height: layout.umpireHeight), umpires: umpires, drawData: options.showUmpires && hasUmpires, ctx: ctx)
     }
 
     // MARK: - Drawing Helpers
     
-    private func drawScoreboard(in rect: CGRect, linescore: Linescore?, scorecard: ScorecardData, ctx: CGContext) {
+    private func drawScoreboard(in rect: CGRect, linescore: Linescore?, scorecard: ScorecardData, drawData: Bool = true, ctx: CGContext) {
         let awayName = linescore?.teams?.away?.team?.name ?? scorecard.teams.away.name ?? "Away"
         let homeName = linescore?.teams?.home?.team?.name ?? scorecard.teams.home.name ?? "Home"
         let awayAbbr = teamAbbreviation(for: awayName)
@@ -219,7 +278,7 @@ final class ScorecardImageGenerator {
         
         let abbrFont = UIFont(name: "PermanentMarker-Regular", size: 30) ?? .systemFont(ofSize: 30, weight: .bold)
         let scoreFont = UIFont(name: "PermanentMarker-Regular", size: 26) ?? .systemFont(ofSize: 26, weight: .bold)
-        let headerFont = UIFont(name: "PatrickHand-Regular", size: 20) ?? .systemFont(ofSize: 20)
+        let headerFont = UIFont(name: "IBMPlexSansCond-Regular", size: 18) ?? .systemFont(ofSize: 18)
         let inningRFont = UIFont(name: "PermanentMarker-Regular", size: 22) ?? .systemFont(ofSize: 22)
         
         // Table dimensions (must match sbWidth calculation)
@@ -280,47 +339,51 @@ final class ScorecardImageGenerator {
         // Row 1 — Away team
         let awayRowY = tableY + rowHeight
         drawCentered(awayAbbr, in: CGRect(x: tableX, y: awayRowY, width: teamColWidth, height: rowHeight), attrs: [.font: abbrFont, .foregroundColor: teamColorA])
-        for i in 0..<inningCount {
-            if let inning = linescore?.innings?.first(where: { $0.num == i + 1 }) {
-                let runs = inning.away?.runs ?? 0
+        if drawData {
+            for i in 0..<inningCount {
+                if let inning = linescore?.innings?.first(where: { $0.num == i + 1 }) {
+                    let runs = inning.away?.runs ?? 0
+                    let attrs: [NSAttributedString.Key: Any] = [
+                        .font: inningRFont,
+                        .foregroundColor: runs > 0 ? teamColorA : config.pencilColor
+                    ]
+                    drawCentered("\(runs)", in: CGRect(x: tableX + teamColWidth + CGFloat(i) * inningColWidth, y: awayRowY, width: inningColWidth, height: rowHeight), attrs: attrs)
+                }
+            }
+            let awayRuns = linescore?.teams?.away?.runs ?? 0
+            let awayRHE = ["\(awayRuns)", "\(linescore?.teams?.away?.hits ?? 0)", "\(linescore?.teams?.away?.errors ?? 0)"]
+            for (i, val) in awayRHE.enumerated() {
                 let attrs: [NSAttributedString.Key: Any] = [
-                    .font: inningRFont,
-                    .foregroundColor: runs > 0 ? teamColorA : config.pencilColor
+                    .font: scoreFont,
+                    .foregroundColor: i == 0 && awayRuns > 0 ? teamColorA : config.pencilColor
                 ]
-                drawCentered("\(runs)", in: CGRect(x: tableX + teamColWidth + CGFloat(i) * inningColWidth, y: awayRowY, width: inningColWidth, height: rowHeight), attrs: attrs)
+                drawCentered(val, in: CGRect(x: rheStartX + CGFloat(i) * statColWidth, y: awayRowY, width: statColWidth, height: rowHeight), attrs: attrs)
             }
         }
-        let awayRuns = linescore?.teams?.away?.runs ?? 0
-        let awayRHE = ["\(awayRuns)", "\(linescore?.teams?.away?.hits ?? 0)", "\(linescore?.teams?.away?.errors ?? 0)"]
-        for (i, val) in awayRHE.enumerated() {
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: scoreFont,
-                .foregroundColor: i == 0 && awayRuns > 0 ? teamColorA : config.pencilColor
-            ]
-            drawCentered(val, in: CGRect(x: rheStartX + CGFloat(i) * statColWidth, y: awayRowY, width: statColWidth, height: rowHeight), attrs: attrs)
-        }
-        
+
         // Row 2 — Home team
         let homeRowY = tableY + 2 * rowHeight
         drawCentered(homeAbbr, in: CGRect(x: tableX, y: homeRowY, width: teamColWidth, height: rowHeight), attrs: [.font: abbrFont, .foregroundColor: teamColorH])
-        for i in 0..<inningCount {
-            if let inning = linescore?.innings?.first(where: { $0.num == i + 1 }) {
-                let runs = inning.home?.runs ?? 0
-                let attrs: [NSAttributedString.Key: Any] = [
-                    .font: inningRFont,
-                    .foregroundColor: runs > 0 ? teamColorH : config.pencilColor
-                ]
-                drawCentered("\(runs)", in: CGRect(x: tableX + teamColWidth + CGFloat(i) * inningColWidth, y: homeRowY, width: inningColWidth, height: rowHeight), attrs: attrs)
+        if drawData {
+            for i in 0..<inningCount {
+                if let inning = linescore?.innings?.first(where: { $0.num == i + 1 }) {
+                    let runs = inning.home?.runs ?? 0
+                    let attrs: [NSAttributedString.Key: Any] = [
+                        .font: inningRFont,
+                        .foregroundColor: runs > 0 ? teamColorH : config.pencilColor
+                    ]
+                    drawCentered("\(runs)", in: CGRect(x: tableX + teamColWidth + CGFloat(i) * inningColWidth, y: homeRowY, width: inningColWidth, height: rowHeight), attrs: attrs)
+                }
             }
-        }
-        let homeRuns = linescore?.teams?.home?.runs ?? 0
-        let homeRHE = ["\(homeRuns)", "\(linescore?.teams?.home?.hits ?? 0)", "\(linescore?.teams?.home?.errors ?? 0)"]
-        for (i, val) in homeRHE.enumerated() {
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: scoreFont,
-                .foregroundColor: i == 0 && homeRuns > 0 ? teamColorH : config.pencilColor
-            ]
-            drawCentered(val, in: CGRect(x: rheStartX + CGFloat(i) * statColWidth, y: homeRowY, width: statColWidth, height: rowHeight), attrs: attrs)
+            let homeRuns = linescore?.teams?.home?.runs ?? 0
+            let homeRHE = ["\(homeRuns)", "\(linescore?.teams?.home?.hits ?? 0)", "\(linescore?.teams?.home?.errors ?? 0)"]
+            for (i, val) in homeRHE.enumerated() {
+                let attrs: [NSAttributedString.Key: Any] = [
+                    .font: scoreFont,
+                    .foregroundColor: i == 0 && homeRuns > 0 ? teamColorH : config.pencilColor
+                ]
+                drawCentered(val, in: CGRect(x: rheStartX + CGFloat(i) * statColWidth, y: homeRowY, width: statColWidth, height: rowHeight), attrs: attrs)
+            }
         }
     }
     
@@ -338,8 +401,9 @@ final class ScorecardImageGenerator {
         return map[teamName] ?? String(teamName.prefix(3)).uppercased()
     }
     
-    private func drawScorecard(in rect: CGRect, data: ScorecardData, layout: ColumnLayout, isHome: Bool, ctx: CGContext) {
+    private func drawScorecard(in rect: CGRect, data: ScorecardData, layout: ColumnLayout, isHome: Bool, drawLineup: Bool = true, drawResults: Bool = true, ctx: CGContext) {
         let lineup = isHome ? data.lineups.home : data.lineups.away
+        let rowCount = drawLineup ? max(lineup.count, 9) + 1 : 10
         
         var actualWidth = config.nameWidth
         for inning in layout.innings { actualWidth += CGFloat(inning.subColumnCount) * config.inningWidth }
@@ -349,7 +413,6 @@ final class ScorecardImageGenerator {
         ctx.fill(CGRect(x: rect.minX, y: rect.minY, width: actualWidth, height: config.headerHeight))
         
         ctx.setStrokeColor(config.gridColor.cgColor); ctx.setLineWidth(0.5)
-        let rowCount = lineup.count + 1
         let totalHeight = CGFloat(rowCount) * config.rowHeight + config.headerHeight
         
         var currentX = rect.minX
@@ -380,112 +443,139 @@ final class ScorecardImageGenerator {
             currentX += config.statWidth
         }
         
-        for (idx, batter) in lineup.enumerated() {
+        let hasAnyResults = !data.timeline.isEmpty
+        for idx in 0..<rowCount {
             let rowY = rect.minY + config.headerHeight + CGFloat(idx) * config.rowHeight
-            let nameAttrs: [NSAttributedString.Key: Any] = [.font: config.nameFont, .foregroundColor: config.pencilColor]
-            let posAttrs: [NSAttributedString.Key: Any] = [.font: config.posFont, .foregroundColor: config.pencilColor.withAlphaComponent(0.6)]
-            NSAttributedString(string: batter.abbreviation, attributes: nameAttrs).draw(at: CGPoint(x: rect.minX + 10, y: rowY + 10))
-            NSAttributedString(string: batter.position + (batter.jerseyNumber.map { " #\($0)" } ?? ""), attributes: posAttrs).draw(at: CGPoint(x: rect.minX + 10, y: rowY + 38))
             
+            if drawLineup && idx < lineup.count {
+                let batter = lineup[idx]
+                let nameAttrs: [NSAttributedString.Key: Any] = [.font: config.nameFont, .foregroundColor: config.pencilColor]
+                let posAttrs: [NSAttributedString.Key: Any] = [.font: config.posFont, .foregroundColor: config.pencilColor.withAlphaComponent(0.6)]
+                NSAttributedString(string: batter.abbreviation, attributes: nameAttrs).draw(at: CGPoint(x: rect.minX + 10, y: rowY + 10))
+                NSAttributedString(string: batter.position + (batter.jerseyNumber.map { " #\($0)" } ?? ""), attributes: posAttrs).draw(at: CGPoint(x: rect.minX + 10, y: rowY + 38))
+            }
+
             var actualX = rect.minX + config.nameWidth
             for col in 0..<(layout.totalColumns - layout.statColumns.count) {
-                if let (inningNum, subIndex) = layout.inningInfo(forColumn: col) {
-                    let inningObj = data.innings.first { $0.num == inningNum }
-                    let allEvents = (isHome ? inningObj?.home : inningObj?.away) ?? []
-                    let batterEvents = allEvents.filter { $0.batterId == batter.id }
-                    if subIndex < batterEvents.count {
-                        let cellRect = CGRect(x: actualX, y: rowY, width: config.inningWidth, height: config.rowHeight)
-                        let event = batterEvents[subIndex]
+                let cellRect = CGRect(x: actualX, y: rowY, width: config.inningWidth, height: config.rowHeight)
+                
+                let batterId = (drawLineup && idx < lineup.count) ? lineup[idx].id : nil
+                
+                if drawResults && hasAnyResults, let bId = batterId {
+                    if let (inningNum, subIndex) = layout.inningInfo(forColumn: col) {
+                        let inningObj = data.innings.first { $0.num == inningNum }
+                        let allEvents = (isHome ? inningObj?.home : inningObj?.away) ?? []
+                        let batterEvents = allEvents.filter { $0.batterId == bId }
+                        if subIndex < batterEvents.count {
+                            let event = batterEvents[subIndex]
 
-                        var isPitchingChange = false
-                        var batterOccurrence = 0
-                        for (i, e) in allEvents.enumerated() {
-                            if e.batterId == batter.id {
-                                if batterOccurrence == subIndex {
-                                    if i > 0 && e.pitcherId != allEvents[i - 1].pitcherId {
-                                        isPitchingChange = true
+                            var isPitchingChange = false
+                            var batterOccurrence = 0
+                            for (i, e) in allEvents.enumerated() {
+                                if e.batterId == bId {
+                                    if batterOccurrence == subIndex {
+                                        if i > 0 && e.pitcherId != allEvents[i - 1].pitcherId {
+                                            isPitchingChange = true
+                                        }
+                                        break
                                     }
-                                    break
+                                    batterOccurrence += 1
                                 }
-                                batterOccurrence += 1
                             }
-                        }
 
-                        if isPitchingChange {
-                            ctx.saveGState()
-                            ctx.setStrokeColor(config.pencilColor.cgColor)
-                            ctx.setLineWidth(2.5)
-                            ctx.setLineCap(.round)
-                            UIBezierPath.pencilLine(
-                                from: CGPoint(x: cellRect.minX - 0.5, y: cellRect.minY + 0.5),
-                                to: CGPoint(x: cellRect.maxX + 0.5, y: cellRect.minY + 0.5),
-                                jitter: 0.4
-                            ).stroke()
-                            ctx.restoreGState()
-                        }
+                            if isPitchingChange {
+                                ctx.saveGState()
+                                ctx.setStrokeColor(config.pencilColor.cgColor)
+                                ctx.setLineWidth(2.5)
+                                ctx.setLineCap(.round)
+                                UIBezierPath.pencilLine(
+                                    from: CGPoint(x: cellRect.minX - 0.5, y: cellRect.minY + 0.5),
+                                    to: CGPoint(x: cellRect.maxX + 0.5, y: cellRect.minY + 0.5),
+                                    jitter: 0.4
+                                ).stroke()
+                                ctx.restoreGState()
+                            }
 
-                        drawAtBatCell(
-                            in: cellRect,
-                            event: event,
-                            accentColor: data.teamAccentColor(isHomeTeam: isHome),
-                            ctx: ctx
-                        )
+                            drawAtBatCell(
+                                in: cellRect,
+                                event: event,
+                                accentColor: data.teamAccentColor(isHomeTeam: isHome),
+                                ctx: ctx
+                            )
+                        } else {
+                            drawEmptyDiamond(in: cellRect, ctx: ctx)
+                        }
+                    } else {
+                        drawEmptyDiamond(in: cellRect, ctx: ctx)
                     }
+                } else if idx < rowCount - 1 {
+                    // Only draw diamonds for the 9 batting rows, not the totals row
+                    drawEmptyDiamond(in: cellRect, ctx: ctx)
                 }
                 actualX += config.inningWidth
             }
-            let stats = data.calculatePlayerStats(for: batter.id, isHome: isHome)
-            for val in [stats.atBats, stats.runs, stats.hits, stats.rbi] {
-                let str = "\(val)", size = (str as NSString).size(withAttributes: nameAttrs)
-                NSAttributedString(string: str, attributes: nameAttrs).draw(at: CGPoint(x: actualX + (config.statWidth - size.width)/2, y: rowY + (config.rowHeight - size.height)/2))
+            
+            if drawResults && drawLineup && idx < lineup.count {
+                let batter = lineup[idx]
+                var actualStatsX = rect.minX + config.nameWidth + CGFloat(layout.totalColumns - layout.statColumns.count) * config.inningWidth
+                let stats = data.calculatePlayerStats(for: batter.id, isHome: isHome)
+                let nameAttrs: [NSAttributedString.Key: Any] = [.font: config.nameFont, .foregroundColor: config.pencilColor]
+                for val in [stats.atBats, stats.runs, stats.hits, stats.rbi] {
+                    let str = "\(val)", size = (str as NSString).size(withAttributes: nameAttrs)
+                    NSAttributedString(string: str, attributes: nameAttrs).draw(at: CGPoint(x: actualStatsX + (config.statWidth - size.width)/2, y: rowY + (config.rowHeight - size.height)/2))
+                    actualStatsX += config.statWidth
+                }
+            }
+        }
+
+
+        let totalsY = rect.minY + config.headerHeight + CGFloat(rowCount - 1) * config.rowHeight
+        let tLabel = "TOTALS", tSize = (tLabel as NSString).size(withAttributes: hAttrs)
+        NSAttributedString(string: tLabel, attributes: hAttrs).draw(at: CGPoint(x: rect.minX + (config.nameWidth - tSize.width)/2, y: totalsY + (config.rowHeight - tSize.height)/2))
+
+        if drawResults {
+            var actualX = rect.minX + config.nameWidth
+            for inning in layout.innings {
+                let inningObj = data.innings.first { $0.num == inning.inningNum }
+                let events = isHome ? (inningObj?.home ?? []) : (inningObj?.away ?? [])
+                let linescoreRuns = isHome ? inningObj?.homeRuns : inningObj?.awayRuns
+                let derivedRuns = events.filter { $0.bases.home }.count
+                let runs = linescoreRuns ?? derivedRuns
+
+                if runs > 0 {
+                    let str = "\(runs)"
+                    let attrs: [NSAttributedString.Key: Any] = [
+                        .font: config.nameFont,
+                        .foregroundColor: data.teamAccentColor(isHomeTeam: isHome)
+                    ]
+                    let size = (str as NSString).size(withAttributes: attrs)
+                    let inningWidth = CGFloat(inning.subColumnCount) * config.inningWidth
+                    NSAttributedString(string: str, attributes: attrs).draw(
+                        at: CGPoint(
+                            x: actualX + (inningWidth - size.width) / 2,
+                            y: totalsY + (config.rowHeight - size.height) / 2
+                        )
+                    )
+                }
+
+                actualX += CGFloat(inning.subColumnCount) * config.inningWidth
+            }
+
+            var tAB = 0, tR = 0, tH = 0, tRBI = 0
+            for b in lineup { let s = data.calculatePlayerStats(for: b.id, isHome: isHome); tAB += s.atBats; tR += s.runs; tH += s.hits; tRBI += s.rbi }
+            for val in [tAB, tR, tH, tRBI] {
+                let str = "\(val)", sAttrs: [NSAttributedString.Key: Any] = [.font: config.nameFont, .foregroundColor: config.pencilColor]
+                let size = (str as NSString).size(withAttributes: sAttrs)
+                NSAttributedString(string: str, attributes: sAttrs).draw(at: CGPoint(x: actualX + (config.statWidth - size.width)/2, y: totalsY + (config.rowHeight - size.height)/2))
                 actualX += config.statWidth
             }
         }
-        
-        let totalsY = rect.minY + config.headerHeight + CGFloat(lineup.count) * config.rowHeight
-        let tLabel = "TOTALS", tSize = (tLabel as NSString).size(withAttributes: hAttrs)
-        NSAttributedString(string: tLabel, attributes: hAttrs).draw(at: CGPoint(x: rect.minX + (config.nameWidth - tSize.width)/2, y: totalsY + (config.rowHeight - tSize.height)/2))
-        
-        var actualX = rect.minX + config.nameWidth
-        for inning in layout.innings {
-            let inningObj = data.innings.first { $0.num == inning.inningNum }
-            let events = isHome ? (inningObj?.home ?? []) : (inningObj?.away ?? [])
-            let linescoreRuns = isHome ? inningObj?.homeRuns : inningObj?.awayRuns
-            let derivedRuns = events.filter { $0.bases.home }.count
-            let runs = linescoreRuns ?? derivedRuns
-
-            if runs > 0 {
-                let str = "\(runs)"
-                let attrs: [NSAttributedString.Key: Any] = [
-                    .font: config.nameFont,
-                    .foregroundColor: data.teamAccentColor(isHomeTeam: isHome)
-                ]
-                let size = (str as NSString).size(withAttributes: attrs)
-                let inningWidth = CGFloat(inning.subColumnCount) * config.inningWidth
-                NSAttributedString(string: str, attributes: attrs).draw(
-                    at: CGPoint(
-                        x: actualX + (inningWidth - size.width) / 2,
-                        y: totalsY + (config.rowHeight - size.height) / 2
-                    )
-                )
-            }
-
-            actualX += CGFloat(inning.subColumnCount) * config.inningWidth
-        }
-
-        var tAB = 0, tR = 0, tH = 0, tRBI = 0
-        for b in lineup { let s = data.calculatePlayerStats(for: b.id, isHome: isHome); tAB += s.atBats; tR += s.runs; tH += s.hits; tRBI += s.rbi }
-        for val in [tAB, tR, tH, tRBI] {
-            let str = "\(val)", sAttrs: [NSAttributedString.Key: Any] = [.font: config.nameFont, .foregroundColor: config.pencilColor]
-            let size = (str as NSString).size(withAttributes: sAttrs)
-            NSAttributedString(string: str, attributes: sAttrs).draw(at: CGPoint(x: actualX + (config.statWidth - size.width)/2, y: totalsY + (config.rowHeight - size.height)/2))
-            actualX += config.statWidth
-        }
     }
     
-    private func drawPitcherTable(in rect: CGRect, pitchers: [ScorecardPitcher], ctx: CGContext) {
+    private func drawPitcherTable(in rect: CGRect, pitchers: [ScorecardPitcher], drawData: Bool = true, ctx: CGContext) {
         let tableWidth = config.pNameWidth + 6 * config.pStatWidth
-        let totalHeight = config.headerHeight + CGFloat(pitchers.count) * config.pRowHeight
+        let gridRows = Int((rect.height - config.headerHeight) / config.pRowHeight)
+        let totalHeight = config.headerHeight + CGFloat(gridRows) * config.pRowHeight
         ctx.setStrokeColor(config.gridColor.cgColor); ctx.setLineWidth(0.5)
         var currentX = rect.minX
         func drawVLine(_ x: CGFloat) { UIBezierPath.pencilLine(from: CGPoint(x: x, y: rect.minY), to: CGPoint(x: x, y: rect.minY + totalHeight), jitter: 0.5).stroke() }
@@ -494,7 +584,7 @@ final class ScorecardImageGenerator {
         var currentY = rect.minY
         func drawHLine(_ y: CGFloat) { UIBezierPath.pencilLine(from: CGPoint(x: rect.minX, y: y), to: CGPoint(x: rect.minX + tableWidth, y: y), jitter: 0.5).stroke() }
         drawHLine(currentY); currentY += config.headerHeight; drawHLine(currentY)
-        for _ in 0..<pitchers.count { currentY += config.pRowHeight; drawHLine(currentY) }
+        for _ in 0..<gridRows { currentY += config.pRowHeight; drawHLine(currentY) }
         let hAttrs: [NSAttributedString.Key: Any] = [.font: config.footerHeaderFont, .foregroundColor: config.pencilColor]
         NSAttributedString(string: "NAME", attributes: hAttrs).draw(at: CGPoint(x: rect.minX + 10, y: rect.minY + 10))
         let stats = ["IP", "H", "R", "ER", "BB", "K"]
@@ -502,50 +592,183 @@ final class ScorecardImageGenerator {
             let x = rect.minX + config.pNameWidth + CGFloat(i) * config.pStatWidth, size = (s as NSString).size(withAttributes: hAttrs)
             NSAttributedString(string: s, attributes: hAttrs).draw(at: CGPoint(x: x + (config.pStatWidth - size.width)/2, y: rect.minY + 10))
         }
-        let nAttrs: [NSAttributedString.Key: Any] = [.font: config.footerDataFont, .foregroundColor: config.pencilColor]
-        for (i, p) in pitchers.enumerated() {
-            let rowY = rect.minY + config.headerHeight + CGFloat(i) * config.pRowHeight
-            NSAttributedString(string: p.fullName, attributes: nAttrs).draw(at: CGPoint(x: rect.minX + 10, y: rowY + 8))
-            let vals = [p.ip, "\(p.h)", "\(p.r)", "\(p.er)", "\(p.bb)", "\(p.k)"]
-            for (vi, v) in vals.enumerated() {
-                let x = rect.minX + config.pNameWidth + CGFloat(vi) * config.pStatWidth, size = (v as NSString).size(withAttributes: nAttrs)
-                NSAttributedString(string: v, attributes: nAttrs).draw(at: CGPoint(x: x + (config.pStatWidth - size.width)/2, y: rowY + 10))
+        if drawData {
+            let nAttrs: [NSAttributedString.Key: Any] = [.font: config.footerDataFont, .foregroundColor: config.pencilColor]
+            for (i, p) in pitchers.enumerated() {
+                let rowY = rect.minY + config.headerHeight + CGFloat(i) * config.pRowHeight
+                NSAttributedString(string: p.fullName, attributes: nAttrs).draw(at: CGPoint(x: rect.minX + 10, y: rowY + 8))
+                let vals = [p.ip, "\(p.h)", "\(p.r)", "\(p.er)", "\(p.bb)", "\(p.k)"]
+                for (vi, v) in vals.enumerated() {
+                    let x = rect.minX + config.pNameWidth + CGFloat(vi) * config.pStatWidth, size = (v as NSString).size(withAttributes: nAttrs)
+                    NSAttributedString(string: v, attributes: nAttrs).draw(at: CGPoint(x: x + (config.pStatWidth - size.width)/2, y: rowY + 10))
+                }
             }
         }
     }
     
-    private func drawSimpleGameInfo(in rect: CGRect, info: [GameInfoItem], ctx: CGContext) {
-        let tAttrs: [NSAttributedString.Key: Any] = [.font: config.sectionTitleFont, .foregroundColor: config.pencilColor]
-        let tSize = ("GAME INFO" as NSString).size(withAttributes: tAttrs)
-        NSAttributedString(string: "GAME INFO", attributes: tAttrs).draw(at: CGPoint(x: rect.midX - tSize.width/2, y: rect.minY))
-        
-        let labelAttrs: [NSAttributedString.Key: Any] = [.font: config.footerBodyFont, .foregroundColor: config.pencilColor.withAlphaComponent(0.7)]
-        let valAttrs: [NSAttributedString.Key: Any] = [.font: config.footerDataFont, .foregroundColor: config.pencilColor]
-        
-        let infoStrings: [NSAttributedString] = info.map { item in
-            let label = item.label.replacingOccurrences(of: ":", with: "")
-            let value = item.value ?? ""
+    private func drawGameInfoTable(in rect: CGRect, info: [GameInfoItem], drawData: Bool = true, ctx: CGContext) {
+        let labelFont = UIFont(name: "IBMPlexSansCond-SemiBold", size: 14) ?? .systemFont(ofSize: 14, weight: .semibold)
+        let labelAttrs: [NSAttributedString.Key: Any] = [.font: labelFont, .foregroundColor: config.pencilColor.withAlphaComponent(0.45)]
+
+        let cleanLabels: [(String, String)] = {
+            let labelMap = ["T": "Duration", "Att": "Attendance"]
+            return info.compactMap { item in
+                let raw = item.label.replacingOccurrences(of: ":", with: "").trimmingCharacters(in: .whitespaces)
+                let display = labelMap[raw] ?? raw
+                let value = (item.value ?? "").trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ".", with: "")
+                guard !value.isEmpty else { return nil }
+                return (display.uppercased(), value)
+            }
+        }()
+
+        guard !cleanLabels.isEmpty else { return }
+
+        let colCount = cleanLabels.count
+        let colWidth = rect.width / CGFloat(colCount)
+        let headerHeight: CGFloat = 24
+        let tableX = rect.minX
+        let tableY = rect.minY
+        let pad: CGFloat = 8
+
+        ctx.setStrokeColor(config.gridColor.cgColor)
+        ctx.setLineWidth(0.5)
+
+        UIBezierPath.pencilLine(from: CGPoint(x: tableX, y: tableY), to: CGPoint(x: tableX + rect.width, y: tableY), jitter: 0.3).stroke()
+        UIBezierPath.pencilLine(from: CGPoint(x: tableX, y: tableY + headerHeight), to: CGPoint(x: tableX + rect.width, y: tableY + headerHeight), jitter: 0.3).stroke()
+        UIBezierPath.pencilLine(from: CGPoint(x: tableX, y: tableY + rect.height), to: CGPoint(x: tableX + rect.width, y: tableY + rect.height), jitter: 0.3).stroke()
+
+        for col in 0...colCount {
+            let x = tableX + CGFloat(col) * colWidth
+            UIBezierPath.pencilLine(from: CGPoint(x: x, y: tableY), to: CGPoint(x: x, y: tableY + rect.height), jitter: 0.3).stroke()
+        }
+
+        let maxCellWidth = colWidth - pad * 2
+        let valueAreaHeight = rect.height - headerHeight - pad * 2
+
+        let parStyle = NSMutableParagraphStyle()
+        parStyle.alignment = .center
+        parStyle.lineBreakMode = .byWordWrapping
+
+        func fittedSize(for text: String, maxFontSize: CGFloat) -> CGFloat {
+            var sz = maxFontSize
+            while sz > 12 {
+                let font = UIFont(name: "PatrickHand-Regular", size: sz) ?? .systemFont(ofSize: sz)
+                let bounds = (text as NSString).boundingRect(
+                    with: CGSize(width: maxCellWidth, height: .greatestFiniteMagnitude),
+                    options: [.usesLineFragmentOrigin, .usesFontLeading],
+                    attributes: [.font: font, .paragraphStyle: parStyle],
+                    context: nil
+                )
+                if bounds.height <= valueAreaHeight { return sz }
+                sz -= 1
+            }
+            return sz
+        }
+
+        // Find the base size from the longest (multi-line) values
+        var baseSize: CGFloat = 60
+        for pair in cleanLabels {
+            let fitted = fittedSize(for: pair.1, maxFontSize: 60)
+            baseSize = min(baseSize, fitted)
+        }
+        // Short single-word values get a small bump (20%) for visual weight balance
+        let bumpedSize = min(baseSize * 1.2, 60)
+
+        for (i, pair) in cleanLabels.enumerated() {
+            let cellX = tableX + CGFloat(i) * colWidth
+            let labelSize = (pair.0 as NSString).size(withAttributes: labelAttrs)
+            NSAttributedString(string: pair.0, attributes: labelAttrs).draw(
+                at: CGPoint(x: cellX + (colWidth - labelSize.width) / 2, y: tableY + (headerHeight - labelSize.height) / 2)
+            )
+
+            if drawData {
+                let singleLineFont = UIFont(name: "PatrickHand-Regular", size: baseSize) ?? .systemFont(ofSize: baseSize)
+                let singleLineWidth = (pair.1 as NSString).size(withAttributes: [.font: singleLineFont]).width
+                let fitsOnOneLine = singleLineWidth <= maxCellWidth
+                let fontSize = fitsOnOneLine ? bumpedSize : baseSize
+                let valFont = UIFont(name: "PatrickHand-Regular", size: fontSize) ?? .systemFont(ofSize: fontSize)
+
+                let valAttrs: [NSAttributedString.Key: Any] = [.font: valFont, .foregroundColor: config.pencilColor, .paragraphStyle: parStyle]
+                let valSize = (pair.1 as NSString).boundingRect(
+                    with: CGSize(width: maxCellWidth, height: .greatestFiniteMagnitude),
+                    options: [.usesLineFragmentOrigin, .usesFontLeading],
+                    attributes: valAttrs,
+                    context: nil
+                ).size
+                let drawRect = CGRect(
+                    x: cellX + pad,
+                    y: tableY + headerHeight + (valueAreaHeight + pad * 2 - ceil(valSize.height)) / 2,
+                    width: maxCellWidth,
+                    height: ceil(valSize.height)
+                )
+                (pair.1 as NSString).draw(with: drawRect, options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: valAttrs, context: nil)
+            }
+        }
+    }
+
+    private func drawUmpireLine(in rect: CGRect, umpires: [ScorecardUmpire], drawData: Bool = true, ctx: CGContext) {
+        let labelAttrs: [NSAttributedString.Key: Any] = [.font: config.footerBodyFont, .foregroundColor: config.pencilColor.withAlphaComponent(0.5)]
+
+        let nameAttrs: [NSAttributedString.Key: Any] = [.font: config.footerDataFont, .foregroundColor: config.pencilColor]
+
+        let blankWidth: CGFloat = 100
+
+        var parts: [NSAttributedString] = []
+        for ump in umpires {
             let ms = NSMutableAttributedString()
-            if value.isEmpty {
-                ms.append(NSAttributedString(string: label, attributes: valAttrs))
-            } else {
-                ms.append(NSAttributedString(string: "\(label): ", attributes: labelAttrs))
-                ms.append(NSAttributedString(string: value, attributes: valAttrs))
+            ms.append(NSAttributedString(string: "\(ump.type): ", attributes: labelAttrs))
+            if drawData {
+                ms.append(NSAttributedString(string: ump.fullName, attributes: nameAttrs))
             }
-            return ms
+            parts.append(ms)
         }
-        
-        let spacing: CGFloat = 60
-        let totalWidth = infoStrings.reduce(0) { $0 + $1.size().width } + CGFloat(infoStrings.count - 1) * spacing
-        var currentX = rect.midX - totalWidth/2
-        let y = rect.minY + 60
-        
-        for s in infoStrings {
-            s.draw(at: CGPoint(x: currentX, y: y))
-            currentX += s.size().width + spacing
+
+        let spacing: CGFloat = 30
+        let partWidths = parts.map { drawData ? $0.size().width : $0.size().width + blankWidth }
+        let totalWidth = partWidths.reduce(0, +) + CGFloat(max(parts.count - 1, 0)) * spacing
+        var currentX = rect.midX - totalWidth / 2
+
+        for (i, part) in parts.enumerated() {
+            let size = part.size()
+            part.draw(at: CGPoint(x: currentX, y: rect.midY - size.height / 2))
+            if !drawData {
+                let lineY = rect.midY + size.height / 2 - 2
+                let lineStartX = currentX + size.width + 2
+                ctx.setStrokeColor(config.gridColor.cgColor)
+                ctx.setLineWidth(0.5)
+                UIBezierPath.pencilLine(
+                    from: CGPoint(x: lineStartX, y: lineY),
+                    to: CGPoint(x: lineStartX + blankWidth - 4, y: lineY),
+                    jitter: 0.3
+                ).stroke()
+            }
+            currentX += partWidths[i] + spacing
         }
     }
     
+    private func drawEmptyDiamond(in rect: CGRect, ctx: CGContext) {
+        let dRect = CGRect(
+            x: rect.minX + 2,
+            y: rect.minY + 4,
+            width: rect.width - 4,
+            height: rect.height - 8
+        )
+        let home = CGPoint(x: dRect.midX, y: dRect.maxY)
+        let first = CGPoint(x: dRect.maxX, y: dRect.midY)
+        let second = CGPoint(x: dRect.midX, y: dRect.minY)
+        let third = CGPoint(x: dRect.minX, y: dRect.midY)
+
+        drawDiamondShape(in: dRect, home: home, first: first, second: second, third: third, shouldUseAccent: false, diamondColor: config.pencilColor, ctx: ctx)
+        
+        let baseSize = max(5, min(dRect.width, dRect.height) * 0.11)
+        let baseStrokeWidth = max(0.5, min(1.5, min(dRect.width, dRect.height) * 0.015))
+        
+        drawBaseBox(at: first, occupied: false, base: 1, diamondColor: config.pencilColor, baseSize: baseSize, baseStrokeWidth: baseStrokeWidth, ctx: ctx)
+        drawBaseBox(at: second, occupied: false, base: 2, diamondColor: config.pencilColor, baseSize: baseSize, baseStrokeWidth: baseStrokeWidth, ctx: ctx)
+        drawBaseBox(at: third, occupied: false, base: 3, diamondColor: config.pencilColor, baseSize: baseSize, baseStrokeWidth: baseStrokeWidth, ctx: ctx)
+        drawBaseBox(at: home, occupied: false, base: 0, diamondColor: config.pencilColor, baseSize: baseSize, baseStrokeWidth: baseStrokeWidth, ctx: ctx)
+    }
+
     private func drawAtBatCell(in rect: CGRect, event: AtBatEvent, accentColor: UIColor, ctx: CGContext) {
         let dRect = CGRect(
             x: rect.minX + 2,
@@ -646,46 +869,46 @@ final class ScorecardImageGenerator {
     }
 
     private func drawBaseBoxes(event: AtBatEvent, home: CGPoint, first: CGPoint, second: CGPoint, third: CGPoint, diamondColor: UIColor, baseSize: CGFloat, baseStrokeWidth: CGFloat, ctx: CGContext) {
-        func drawBaseBox(at vertex: CGPoint, occupied: Bool, base: Int) {
-            let half = baseSize / 2
-            let bPath = UIBezierPath()
-            if base == 0 {
-                let width = baseSize * 1.2
-                let height = baseSize * 1.2
-                let topY = vertex.y - height
-                let midY = vertex.y - height / 2
-                bPath.move(to: CGPoint(x: vertex.x, y: vertex.y))
-                bPath.addLine(to: CGPoint(x: vertex.x - width / 2, y: midY))
-                bPath.addLine(to: CGPoint(x: vertex.x - width / 2, y: topY))
-                bPath.addLine(to: CGPoint(x: vertex.x + width / 2, y: topY))
-                bPath.addLine(to: CGPoint(x: vertex.x + width / 2, y: midY))
-                bPath.close()
-            } else {
-                var center = vertex
-                switch base {
-                case 1: center.x -= half
-                case 2: center.y += half
-                case 3: center.x += half
-                default: break
-                }
-                bPath.move(to: CGPoint(x: center.x, y: center.y - half))
-                bPath.addLine(to: CGPoint(x: center.x + half, y: center.y))
-                bPath.addLine(to: CGPoint(x: center.x, y: center.y + half))
-                bPath.addLine(to: CGPoint(x: center.x - half, y: center.y))
-                bPath.close()
-            }
+        drawBaseBox(at: first, occupied: event.bases.first, base: 1, diamondColor: diamondColor, baseSize: baseSize, baseStrokeWidth: baseStrokeWidth, ctx: ctx)
+        drawBaseBox(at: second, occupied: event.bases.second, base: 2, diamondColor: diamondColor, baseSize: baseSize, baseStrokeWidth: baseStrokeWidth, ctx: ctx)
+        drawBaseBox(at: third, occupied: event.bases.third, base: 3, diamondColor: diamondColor, baseSize: baseSize, baseStrokeWidth: baseStrokeWidth, ctx: ctx)
+        drawBaseBox(at: home, occupied: event.bases.home, base: 0, diamondColor: diamondColor, baseSize: baseSize, baseStrokeWidth: baseStrokeWidth, ctx: ctx)
+    }
 
-            (occupied ? diamondColor : AppColors.baseEmpty).setFill()
-            bPath.fill()
-            ctx.setStrokeColor(diamondColor.withAlphaComponent(0.4).cgColor)
-            ctx.setLineWidth(baseStrokeWidth)
-            bPath.stroke()
+    private func drawBaseBox(at vertex: CGPoint, occupied: Bool, base: Int, diamondColor: UIColor, baseSize: CGFloat, baseStrokeWidth: CGFloat, ctx: CGContext) {
+        let half = baseSize / 2
+        let bPath = UIBezierPath()
+        if base == 0 {
+            let width = baseSize * 1.2
+            let height = baseSize * 1.2
+            let topY = vertex.y - height
+            let midY = vertex.y - height / 2
+            bPath.move(to: CGPoint(x: vertex.x, y: vertex.y))
+            bPath.addLine(to: CGPoint(x: vertex.x - width / 2, y: midY))
+            bPath.addLine(to: CGPoint(x: vertex.x - width / 2, y: topY))
+            bPath.addLine(to: CGPoint(x: vertex.x + width / 2, y: topY))
+            bPath.addLine(to: CGPoint(x: vertex.x + width / 2, y: midY))
+            bPath.close()
+        } else {
+            var center = vertex
+            switch base {
+            case 1: center.x -= half
+            case 2: center.y += half
+            case 3: center.x += half
+            default: break
+            }
+            bPath.move(to: CGPoint(x: center.x, y: center.y - half))
+            bPath.addLine(to: CGPoint(x: center.x + half, y: center.y))
+            bPath.addLine(to: CGPoint(x: center.x, y: center.y + half))
+            bPath.addLine(to: CGPoint(x: center.x - half, y: center.y))
+            bPath.close()
         }
 
-        drawBaseBox(at: first, occupied: event.bases.first, base: 1)
-        drawBaseBox(at: second, occupied: event.bases.second, base: 2)
-        drawBaseBox(at: third, occupied: event.bases.third, base: 3)
-        drawBaseBox(at: home, occupied: event.bases.home, base: 0)
+        (occupied ? diamondColor : AppColors.baseEmpty).setFill()
+        bPath.fill()
+        ctx.setStrokeColor(diamondColor.withAlphaComponent(0.4).cgColor)
+        ctx.setLineWidth(baseStrokeWidth)
+        bPath.stroke()
     }
 
     private func drawResultAndCounts(in rect: CGRect, dRect: CGRect, event: AtBatEvent, diamondColor: UIColor, ctx: CGContext) {
