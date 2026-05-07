@@ -456,12 +456,18 @@ final class ScorecardImageGenerator {
             }
 
             var actualX = rect.minX + config.nameWidth
+            let showFullGrid = !drawResults || !hasAnyResults || !drawLineup
+
             for col in 0..<(layout.totalColumns - layout.statColumns.count) {
                 let cellRect = CGRect(x: actualX, y: rowY, width: config.inningWidth, height: config.rowHeight)
                 
-                let batterId = (drawLineup && idx < lineup.count) ? lineup[idx].id : nil
-                
-                if drawResults && hasAnyResults, let bId = batterId {
+                if showFullGrid {
+                    if idx < rowCount - 1 {
+                        // In full grid mode (blank template or results disabled), fill every batting cell
+                        drawEmptyDiamond(in: cellRect, ctx: ctx)
+                    }
+                } else if let bId = (idx < lineup.count ? lineup[idx].id : nil) {
+                    // In sparse grid mode (live game with results), only draw where events exist
                     if let (inningNum, subIndex) = layout.inningInfo(forColumn: col) {
                         let inningObj = data.innings.first { $0.num == inningNum }
                         let allEvents = (isHome ? inningObj?.home : inningObj?.away) ?? []
@@ -502,15 +508,8 @@ final class ScorecardImageGenerator {
                                 accentColor: data.teamAccentColor(isHomeTeam: isHome),
                                 ctx: ctx
                             )
-                        } else {
-                            drawEmptyDiamond(in: cellRect, ctx: ctx)
                         }
-                    } else {
-                        drawEmptyDiamond(in: cellRect, ctx: ctx)
                     }
-                } else if idx < rowCount - 1 {
-                    // Only draw diamonds for the 9 batting rows, not the totals row
-                    drawEmptyDiamond(in: cellRect, ctx: ctx)
                 }
                 actualX += config.inningWidth
             }
