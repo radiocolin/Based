@@ -262,4 +262,5 @@ struct RosterEntry: Codable, Sendable {
     let person: Player?
     let jerseyNumber: String?
     let position: Position?
+    let title: String?
 }

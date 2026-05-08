@@ -141,4 +141,12 @@ extension MLBAPIClient {
         )
         return response.roster ?? []
     }
+
+    func fetchManagerName(teamId: Int) async throws -> String? {
+        let response = try await fetch(
+            RosterResponse.self,
+            endpoint: "/api/v1/teams/\(teamId)/roster/coach"
+        )
+        return response.roster?.first { $0.title?.contains("Manager") == true }?.person?.fullName
+    }
 }

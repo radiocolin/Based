@@ -4,7 +4,7 @@ class ScorecardExportViewController: UIViewController {
 
     private let scorecard: ScorecardData
     private let linescore: Linescore?
-    private var options = ScorecardExportOptions()
+    private var selectedMode: ScorecardExportMode = .full
 
     private let scrollView = UIScrollView()
     private let previewImageView: UIImageView = {
@@ -17,7 +17,7 @@ class ScorecardExportViewController: UIViewController {
         iv.backgroundColor = AppColors.paper
         return iv
     }()
-    private let toggleStack: UIStackView = {
+    private let modeStack: UIStackView = {
         let s = UIStackView()
         s.axis = .vertical
         s.spacing = 0
@@ -31,7 +31,7 @@ class ScorecardExportViewController: UIViewController {
         return s
     }()
 
-    private var atBatResultsToggle: UISwitch?
+    private var modeRows: [UIView] = []
     private var previewTask: Task<Void, Never>?
 
     init(scorecard: ScorecardData, linescore: Linescore?) {
@@ -49,7 +49,7 @@ class ScorecardExportViewController: UIViewController {
         view.backgroundColor = AppColors.paper
         setupNavBar()
         setupLayout()
-        setupToggles()
+        setupModeList()
         setupButtons()
         refreshPreview()
     }
@@ -84,7 +84,7 @@ class ScorecardExportViewController: UIViewController {
         scrollView.addSubview(contentStack)
 
         previewImageView.translatesAutoresizingMaskIntoConstraints = false
-        toggleStack.translatesAutoresizingMaskIntoConstraints = false
+        modeStack.translatesAutoresizingMaskIntoConstraints = false
         buttonStack.translatesAutoresizingMaskIntoConstraints = false
 
         let previewContainer = UIView()
@@ -92,7 +92,7 @@ class ScorecardExportViewController: UIViewController {
         previewContainer.addSubview(previewImageView)
 
         contentStack.addArrangedSubview(previewContainer)
-        contentStack.addArrangedSubview(toggleStack)
+        contentStack.addArrangedSubview(modeStack)
         contentStack.addArrangedSubview(buttonStack)
 
         let spacer = UIView()
@@ -121,76 +121,86 @@ class ScorecardExportViewController: UIViewController {
         ])
     }
 
-    private func setupToggles() {
-        let items: [(String, Bool, WritableKeyPath<ScorecardExportOptions, Bool>)] = [
-            ("Scoreboard", options.showScoreboard, \.showScoreboard),
-            ("Game Info", options.showGameInfo, \.showGameInfo),
-            ("Lineup", options.showLineup, \.showLineup),
-            ("At-Bat Results", options.showAtBatResults, \.showAtBatResults),
-            ("Pitchers", options.showPitchers, \.showPitchers),
-            ("Umpires", options.showUmpires, \.showUmpires),
-        ]
-
-        for (label, isOn, keyPath) in items {
-            let row = makeToggleRow(title: label, isOn: isOn, keyPath: keyPath)
-            toggleStack.addArrangedSubview(row)
+    private func setupModeList() {
+        for mode in ScorecardExportMode.allCases {
+            let row = makeModeRow(for: mode)
+            modeStack.addArrangedSubview(row)
+            modeRows.append(row)
         }
+        updateCheckmarks()
     }
 
-    private func makeToggleRow(title: String, isOn: Bool, keyPath: WritableKeyPath<ScorecardExportOptions, Bool>) -> UIView {
+    private func makeModeRow(for mode: ScorecardExportMode) -> UIView {
         let container = UIView()
         container.translatesAutoresizingMaskIntoConstraints = false
+        container.tag = mode.rawValue
 
-        let label = UILabel()
-        label.text = title
-        label.font = UIFont(name: "PatrickHand-Regular", size: 20) ?? .systemFont(ofSize: 20)
-        label.textColor = AppColors.pencil
-        label.translatesAutoresizingMaskIntoConstraints = false
+        let checkmark = UIImageView()
+        checkmark.translatesAutoresizingMaskIntoConstraints = false
+        checkmark.tintColor = AppColors.pencil
+        checkmark.contentMode = .scaleAspectFit
+        checkmark.tag = 100
 
-        let toggle = UISwitch()
-        toggle.isOn = isOn
-        toggle.onTintColor = AppColors.pencil.withAlphaComponent(0.5)
-        toggle.translatesAutoresizingMaskIntoConstraints = false
-        toggle.addAction(UIAction { [weak self] action in
-            guard let self, let sw = action.sender as? UISwitch else { return }
-            self.options[keyPath: keyPath] = sw.isOn
-            if keyPath == \.showLineup {
-                if let abToggle = self.atBatResultsToggle {
-                    abToggle.isEnabled = sw.isOn
-                    if !sw.isOn {
-                        abToggle.setOn(false, animated: true)
-                        self.options.showAtBatResults = false
-                    }
-                }
-            }
-            self.refreshPreview()
-        }, for: .valueChanged)
+        let titleLabel = UILabel()
+        titleLabel.text = mode.title
+        titleLabel.font = UIFont(name: "PatrickHand-Regular", size: 20) ?? .systemFont(ofSize: 20)
+        titleLabel.textColor = AppColors.pencil
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        if keyPath == \.showAtBatResults {
-            atBatResultsToggle = toggle
-        }
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = mode.subtitle
+        subtitleLabel.font = UIFont(name: "IBMPlexSansCond-Regular", size: 14) ?? .systemFont(ofSize: 14)
+        subtitleLabel.textColor = AppColors.pencil.withAlphaComponent(0.6)
+        subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        let textStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
+        textStack.axis = .vertical
+        textStack.spacing = 2
+        textStack.translatesAutoresizingMaskIntoConstraints = false
 
         let separator = UIView()
         separator.backgroundColor = AppColors.grid
         separator.translatesAutoresizingMaskIntoConstraints = false
 
-        container.addSubview(label)
-        container.addSubview(toggle)
+        container.addSubview(checkmark)
+        container.addSubview(textStack)
         container.addSubview(separator)
 
         NSLayoutConstraint.activate([
-            container.heightAnchor.constraint(equalToConstant: 52),
-            label.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 4),
-            label.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            toggle.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -4),
-            toggle.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            container.heightAnchor.constraint(equalToConstant: 60),
+            checkmark.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 4),
+            checkmark.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            checkmark.widthAnchor.constraint(equalToConstant: 22),
+            checkmark.heightAnchor.constraint(equalToConstant: 22),
+            textStack.leadingAnchor.constraint(equalTo: checkmark.trailingAnchor, constant: 12),
+            textStack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -4),
+            textStack.centerYAnchor.constraint(equalTo: container.centerYAnchor),
             separator.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             separator.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             separator.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             separator.heightAnchor.constraint(equalToConstant: 0.5),
         ])
 
+        let tap = UITapGestureRecognizer(target: self, action: #selector(modeRowTapped(_:)))
+        container.addGestureRecognizer(tap)
+
         return container
+    }
+
+    @objc private func modeRowTapped(_ gesture: UITapGestureRecognizer) {
+        guard let row = gesture.view,
+              let mode = ScorecardExportMode(rawValue: row.tag) else { return }
+        selectedMode = mode
+        updateCheckmarks()
+        refreshPreview()
+    }
+
+    private func updateCheckmarks() {
+        for row in modeRows {
+            guard let checkmark = row.viewWithTag(100) as? UIImageView else { continue }
+            let isSelected = row.tag == selectedMode.rawValue
+            checkmark.image = isSelected ? UIImage(systemName: "checkmark") : nil
+        }
     }
 
     private func setupButtons() {
@@ -231,7 +241,7 @@ class ScorecardExportViewController: UIViewController {
         previewTask?.cancel()
         previewTask = Task {
             let generator = ScorecardImageGenerator()
-            let image = await generator.generate(scorecard: scorecard, linescore: linescore, options: options)
+            let image = await generator.generate(scorecard: scorecard, linescore: linescore, options: selectedMode)
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 self.previewImageView.image = image
@@ -244,8 +254,8 @@ class ScorecardExportViewController: UIViewController {
     }
 
     @objc private func shareImageTapped() {
-        exportWith { generator, sc, ls, opts in
-            await generator.generate(scorecard: sc, linescore: ls, options: opts)
+        exportWith { generator, sc, ls, mode in
+            await generator.generate(scorecard: sc, linescore: ls, options: mode)
         } present: { image in
             let awayName = self.scorecard.teams.away.name ?? "Away"
             let homeName = self.scorecard.teams.home.name ?? "Home"
@@ -256,8 +266,8 @@ class ScorecardExportViewController: UIViewController {
     }
 
     @objc private func sharePDFTapped() {
-        exportWith { generator, sc, ls, opts in
-            await generator.generatePDF(scorecard: sc, linescore: ls, options: opts)
+        exportWith { generator, sc, ls, mode in
+            await generator.generatePDF(scorecard: sc, linescore: ls, options: mode)
         } present: { data in
             let awayName = self.scorecard.teams.away.name ?? "Away"
             let homeName = self.scorecard.teams.home.name ?? "Home"
@@ -267,7 +277,7 @@ class ScorecardExportViewController: UIViewController {
         }
     }
 
-    private func exportWith<T>(generate: @escaping (ScorecardImageGenerator, ScorecardData, Linescore?, ScorecardExportOptions) async -> T, present: @escaping (T) -> URL) {
+    private func exportWith<T>(generate: @escaping (ScorecardImageGenerator, ScorecardData, Linescore?, ScorecardExportMode) async -> T, present: @escaping (T) -> URL) {
         let activityIndicator = UIActivityIndicatorView(style: .large)
         activityIndicator.center = view.center
         activityIndicator.hidesWhenStopped = true
@@ -275,13 +285,13 @@ class ScorecardExportViewController: UIViewController {
         activityIndicator.startAnimating()
         view.isUserInteractionEnabled = false
 
-        let opts = options
+        let mode = selectedMode
         let sc = scorecard
         let ls = linescore
 
         Task {
             let generator = ScorecardImageGenerator()
-            let result = await generate(generator, sc, ls, opts)
+            let result = await generate(generator, sc, ls, mode)
 
             await MainActor.run {
                 activityIndicator.stopAnimating()

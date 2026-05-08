@@ -24,6 +24,7 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
     private var winBarWidth: NSLayoutConstraint!
     private let statsRow1 = UIStackView()
     private let statsRow2 = UIStackView()
+    private let managerLabel = UILabel()
 
     private var pencilColor: UIColor { AppColors.pencil }
 
@@ -198,11 +199,15 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
             row.distribution = .fillEqually
         }
 
+        managerLabel.numberOfLines = 1
+        managerLabel.textAlignment = .right
+        managerLabel.isHidden = true
+
         let divider = UIView()
         divider.backgroundColor = pc.withAlphaComponent(0.1)
         divider.tag = 100
 
-        for v: UIView in [recordLabel, barRow, statsRow1, statsRow2, divider] {
+        for v: UIView in [recordLabel, managerLabel, barRow, statsRow1, statsRow2, divider] {
             statsContainer.addSubview(v)
             v.translatesAutoresizingMaskIntoConstraints = false
         }
@@ -211,7 +216,10 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
         NSLayoutConstraint.activate([
             recordLabel.topAnchor.constraint(equalTo: statsContainer.topAnchor, constant: 8),
             recordLabel.leadingAnchor.constraint(equalTo: statsContainer.leadingAnchor, constant: pad),
-            recordLabel.trailingAnchor.constraint(equalTo: statsContainer.trailingAnchor, constant: -pad),
+
+            managerLabel.lastBaselineAnchor.constraint(equalTo: recordLabel.lastBaselineAnchor),
+            managerLabel.trailingAnchor.constraint(equalTo: statsContainer.trailingAnchor, constant: -pad),
+            managerLabel.leadingAnchor.constraint(greaterThanOrEqualTo: recordLabel.trailingAnchor, constant: 8),
 
             barRow.topAnchor.constraint(equalTo: recordLabel.bottomAnchor, constant: 8),
             barRow.leadingAnchor.constraint(equalTo: statsContainer.leadingAnchor, constant: pad),
@@ -354,7 +362,11 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
 
         loadTask = Task {
             do {
-                let fetched = try await MLBAPIClient.shared.fetchTeamSchedule(teamId: teamId, season: season)
+                async let scheduleFetch = MLBAPIClient.shared.fetchTeamSchedule(teamId: teamId, season: season)
+                async let managerFetch = MLBAPIClient.shared.fetchManagerName(teamId: teamId)
+
+                let fetched = try await scheduleFetch
+                let managerName = try? await managerFetch
                 guard !Task.isCancelled else { return }
 
                 let sorted = fetched.sorted { scheduleDate(from: $0.gameDate) < scheduleDate(from: $1.gameDate) }
@@ -362,6 +374,7 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
                 self.nextGameIndexPath = findNextGameIndexPath()
                 self.loadingIndicator.stopAnimating()
                 self.populateStats(from: sorted)
+                self.populateManager(managerName)
                 self.statsContainer.isHidden = false
                 self.tableView.reloadData()
                 self.scrollToNextGame(animated: false)
@@ -618,6 +631,25 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
         ]
         populateStatsRow(statsRow1, items: row1Items, accessibilityLabels: row1Labels)
         populateStatsRow(statsRow2, items: row2Items, accessibilityLabels: row2Labels)
+    }
+
+    private func populateManager(_ name: String?) {
+        guard let name, !name.isEmpty else {
+            managerLabel.isHidden = true
+            return
+        }
+        let pc = pencilColor
+        let attr = NSMutableAttributedString(
+            string: "MGR  ",
+            attributes: [.font: AppFont.ibmPlexCondensed(11, textStyle: .caption2), .foregroundColor: pc.withAlphaComponent(0.4)]
+        )
+        attr.append(NSAttributedString(
+            string: name,
+            attributes: [.font: AppFont.patrick(16, textStyle: .body), .foregroundColor: pc]
+        ))
+        managerLabel.attributedText = attr
+        managerLabel.isHidden = false
+        managerLabel.accessibilityLabel = "Manager: \(name)"
     }
 
     private func populateStatsRow(_ stack: UIStackView, items: [(String, String)], accessibilityLabels: [String]) {

@@ -2,13 +2,33 @@ import UIKit
 
 /// A dedicated service to generate a high-quality, landscape scorecard graphic.
 /// Draws directly into a CGContext for maximum precision and to bypass UIKit off-screen rendering limitations.
-struct ScorecardExportOptions {
-    var showScoreboard: Bool = true
-    var showGameInfo: Bool = true
-    var showLineup: Bool = true
-    var showAtBatResults: Bool = true
-    var showPitchers: Bool = true
-    var showUmpires: Bool = true
+enum ScorecardExportMode: Int, CaseIterable {
+    case blank = 0
+    case summary = 1
+    case full = 2
+
+    var title: String {
+        switch self {
+        case .blank: return "Blank Scorecard"
+        case .summary: return "Game Summary"
+        case .full: return "Full Scorecard"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .blank: return "Structure and labels only — fill in by hand"
+        case .summary: return "Score, lineups, game info, and umpires"
+        case .full: return "Complete scorecard with play-by-play"
+        }
+    }
+
+    var showScoreboard: Bool { rawValue >= Self.summary.rawValue }
+    var showGameInfo: Bool { rawValue >= Self.summary.rawValue }
+    var showLineup: Bool { rawValue >= Self.summary.rawValue }
+    var showAtBatResults: Bool { rawValue >= Self.full.rawValue }
+    var showPitchers: Bool { rawValue >= Self.full.rawValue }
+    var showUmpires: Bool { rawValue >= Self.summary.rawValue }
 }
 
 final class ScorecardImageGenerator {
@@ -68,7 +88,7 @@ final class ScorecardImageGenerator {
         let totalHeight: CGFloat
     }
 
-    func generate(scorecard: ScorecardData, linescore: Linescore?, options: ScorecardExportOptions = ScorecardExportOptions()) async -> UIImage {
+    func generate(scorecard: ScorecardData, linescore: Linescore?, options: ScorecardExportMode = .full) async -> UIImage {
         let pdfData = await generatePDF(scorecard: scorecard, linescore: linescore, options: options)
         guard let provider = CGDataProvider(data: pdfData as CFData),
               let pdf = CGPDFDocument(provider),
@@ -91,7 +111,7 @@ final class ScorecardImageGenerator {
         }
     }
 
-    func generatePDF(scorecard: ScorecardData, linescore: Linescore?, options: ScorecardExportOptions = ScorecardExportOptions()) async -> Data {
+    func generatePDF(scorecard: ScorecardData, linescore: Linescore?, options: ScorecardExportMode = .full) async -> Data {
         let layout = computeLayout(scorecard: scorecard, linescore: linescore, options: options)
         let pageWidth: CGFloat = 792
         let pageHeight: CGFloat = 612
@@ -126,7 +146,7 @@ final class ScorecardImageGenerator {
         return w
     }
 
-    private func computeLayout(scorecard: ScorecardData, linescore: Linescore?, options: ScorecardExportOptions = ScorecardExportOptions()) -> LayoutInfo {
+    private func computeLayout(scorecard: ScorecardData, linescore: Linescore?, options: ScorecardExportMode = .full) -> LayoutInfo {
         let importantLabels = ["Venue", "Weather", "Att", "T", "First pitch"]
         var filteredInfo = scorecard.gameInfo.filter { item in
             importantLabels.contains(where: { item.label.contains($0) })
@@ -204,7 +224,7 @@ final class ScorecardImageGenerator {
         )
     }
 
-    private func drawAllContent(scorecard: ScorecardData, linescore: Linescore?, layout: LayoutInfo, imageWidth: CGFloat, options: ScorecardExportOptions = ScorecardExportOptions(), ctx: CGContext) {
+    private func drawAllContent(scorecard: ScorecardData, linescore: Linescore?, layout: LayoutInfo, imageWidth: CGFloat, options: ScorecardExportMode = .full, ctx: CGContext) {
         config.paperColor.setFill()
         ctx.fill(CGRect(x: 0, y: 0, width: imageWidth, height: layout.totalHeight))
 
