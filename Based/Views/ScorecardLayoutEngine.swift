@@ -17,8 +17,7 @@ class ScorecardLayoutEngine {
         var runningColumn = 0
         
         for i in 1...inningCount {
-            let inningObj = data.innings.first { $0.num == i }
-            let events = isHomeTeam ? (inningObj?.home ?? []) : (inningObj?.away ?? [])
+            let events = data.events(inningNum: i, isHomeBatting: isHomeTeam)
             
             // Count max at-bats for any single batter in this inning half
             var maxABs = 1

@@ -115,6 +115,22 @@ struct PlayerGameStats: Codable, Sendable {
 }
 
 extension ScorecardData {
+    func events(inningNum: Int, isHomeBatting: Bool, includeLiveCurrentAtBat: Bool = true) -> [AtBatEvent] {
+        let inningEvents = innings.first(where: { $0.num == inningNum }).map {
+            isHomeBatting ? $0.home : $0.away
+        } ?? []
+
+        guard includeLiveCurrentAtBat,
+              let liveCurrentAtBat,
+              liveCurrentAtBat.inning == inningNum,
+              liveCurrentAtBat.isTop != isHomeBatting,
+              !inningEvents.contains(where: { $0.atBatIndex == liveCurrentAtBat.atBatIndex && $0.atBatIndex != nil }) else {
+            return inningEvents
+        }
+
+        return inningEvents + [liveCurrentAtBat]
+    }
+
     func calculatePlayerStats(for batterId: Int, isHome: Bool) -> PlayerGameStats {
         var atBats = 0, hits = 0, runs = 0, rbi = 0, walks = 0, strikeouts = 0
         for inning in innings {

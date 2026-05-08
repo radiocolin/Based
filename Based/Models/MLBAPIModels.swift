@@ -205,6 +205,7 @@ struct BoxscoreTeam: Codable, Sendable {
 struct BoxscorePlayer: Codable, Sendable {
     let person: Player?
     let jerseyNumber: String?
+    let battingOrder: String?
     let position: Position?
     let stats: PlayerStats?
     let seasonStats: PlayerStats?

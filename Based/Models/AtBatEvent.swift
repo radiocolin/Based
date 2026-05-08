@@ -9,6 +9,7 @@ struct AtBatEvent: Codable, Sendable, Equatable {
     let pinchRunnerName: String?
     let pitcherId: Int
     let pitcherName: String
+    let previousPitcherName: String?
     let inning: Int
     let isTop: Bool
     let result: ScorecardResult
@@ -18,6 +19,7 @@ struct AtBatEvent: Codable, Sendable, Equatable {
     let outs: Int
     let rbi: Int
     let isRunnerOnly: Bool
+    let isPitchingChange: Bool
     let bases: BasesReached
     let pitches: [PitchEvent]?
 }

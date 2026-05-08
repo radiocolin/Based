@@ -529,29 +529,10 @@ final class ScorecardImageGenerator {
 
     private func drawAtBatEvents(in cellRect: CGRect, bId: Int, col: Int, isHome: Bool, data: ScorecardData, layout: ColumnLayout, ctx: CGContext) {
         if let (inningNum, subIndex) = layout.inningInfo(forColumn: col) {
-            let inningObj = data.innings.first { $0.num == inningNum }
-            let allEvents = (isHome ? inningObj?.home : inningObj?.away) ?? []
+            let allEvents = data.events(inningNum: inningNum, isHomeBatting: isHome)
             let batterEvents = allEvents.filter { $0.batterId == bId }
             if subIndex < batterEvents.count {
                 let event = batterEvents[subIndex]
-
-                var isPitchingChange = false
-                var batterOccurrence = 0
-                for (i, e) in allEvents.enumerated() {
-                    if e.batterId == bId {
-                        if batterOccurrence == subIndex {
-                            if i > 0 && e.pitcherId != allEvents[i - 1].pitcherId {
-                                isPitchingChange = true
-                            }
-                            break
-                        }
-                        batterOccurrence += 1
-                    }
-                }
-
-                if isPitchingChange {
-                    drawPitchingChangeIndicator(in: cellRect, ctx: ctx)
-                }
 
                 drawAtBatCell(
                     in: cellRect,
@@ -559,6 +540,10 @@ final class ScorecardImageGenerator {
                     accentColor: data.teamAccentColor(isHomeTeam: isHome),
                     ctx: ctx
                 )
+
+                if event.isPitchingChange {
+                    drawPitchingChangeIndicator(in: cellRect, ctx: ctx)
+                }
             }
         }
     }
@@ -825,6 +810,14 @@ final class ScorecardImageGenerator {
     }
 
     private func drawAtBatCell(in rect: CGRect, event: AtBatEvent, accentColor: UIColor, ctx: CGContext) {
+        if event.result.isLive {
+            ctx.saveGState()
+            ctx.setAlpha(0.3)
+            drawEmptyDiamond(in: rect, ctx: ctx)
+            ctx.restoreGState()
+            return
+        }
+
         let dRect = CGRect(
             x: rect.minX + 2,
             y: rect.minY + 4,
@@ -970,16 +963,58 @@ final class ScorecardImageGenerator {
         let res = event.result.displayText
         var font = config.resultFont
         let maxWidth = rect.width * 0.8
-        var size = (res as NSString).size(withAttributes: [.font: font])
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineHeightMultiple = 0.75
+        paragraphStyle.alignment = .center
+        paragraphStyle.lineBreakMode = .byClipping
+
+        func measuredSize(for font: UIFont) -> CGSize {
+            (res as NSString).boundingRect(
+                with: CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude),
+                options: [.usesLineFragmentOrigin, .usesFontLeading],
+                attributes: [.font: font, .paragraphStyle: paragraphStyle],
+                context: nil
+            ).integral.size
+        }
+
+        var size = measuredSize(for: font)
         if size.width > maxWidth {
             let scale = max(0.5, maxWidth / size.width)
             font = font.withSize(font.pointSize * scale)
-            size = (res as NSString).size(withAttributes: [.font: font])
+            size = measuredSize(for: font)
         }
-        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: diamondColor]
+
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: diamondColor,
+            .paragraphStyle: paragraphStyle
+        ]
+        let drawRect = CGRect(
+            x: rect.midX - size.width / 2,
+            y: rect.midY - size.height / 2,
+            width: size.width,
+            height: size.height
+        )
+
         if event.result.isCalledStrikeout {
-            ctx.saveGState(); ctx.translateBy(x: rect.midX, y: rect.midY); ctx.scaleBy(x: -1, y: 1); NSAttributedString(string: res, attributes: attrs).draw(at: CGPoint(x: -size.width/2, y: -size.height/2)); ctx.restoreGState()
-        } else { NSAttributedString(string: res, attributes: attrs).draw(at: CGPoint(x: rect.midX - size.width/2, y: rect.midY - size.height/2)) }
+            ctx.saveGState()
+            ctx.translateBy(x: rect.midX, y: rect.midY)
+            ctx.scaleBy(x: -1, y: 1)
+            NSString(string: res).draw(
+                with: CGRect(x: -size.width / 2, y: -size.height / 2, width: size.width, height: size.height),
+                options: [.usesLineFragmentOrigin, .usesFontLeading],
+                attributes: attrs,
+                context: nil
+            )
+            ctx.restoreGState()
+        } else {
+            NSString(string: res).draw(
+                with: drawRect,
+                options: [.usesLineFragmentOrigin, .usesFontLeading],
+                attributes: attrs,
+                context: nil
+            )
+        }
         let cAttrs: [NSAttributedString.Key: Any] = [.font: config.legibilityFont, .foregroundColor: diamondColor.withAlphaComponent(0.7)]
         if event.balls > 0 { NSAttributedString(string: "\(event.balls)B", attributes: cAttrs).draw(at: CGPoint(x: rect.minX + 2, y: rect.minY + 2)) }
         if event.strikes > 0 {
@@ -1140,8 +1175,7 @@ final class ScorecardImageGenerator {
         let inningCount = max(data.innings.count, 9)
         var layouts: [InningColumnLayout] = [], runningColumn = 0
         for i in 1...inningCount {
-            let inningObj = data.innings.first { $0.num == i }
-            let events = isHome ? (inningObj?.home ?? []) : (inningObj?.away ?? [])
+            let events = data.events(inningNum: i, isHomeBatting: isHome)
             var maxABs = 1
             for batter in lineup { maxABs = max(maxABs, events.filter { $0.batterId == batter.id }.count) }
             layouts.append(InningColumnLayout(inningNum: i, subColumnCount: maxABs, startColumn: runningColumn))

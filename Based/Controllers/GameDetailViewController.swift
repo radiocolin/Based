@@ -983,24 +983,19 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     private func previousPitcherName(for event: AtBatEvent) -> String? {
+        if let previousPitcherName = event.previousPitcherName {
+            return previousPitcherName
+        }
+
         guard let scorecard = viewModel.currentScorecard else { return nil }
-        let inningObj = scorecard.innings.first { $0.num == event.inning }
-        let eventsInInning = event.isTop ? (inningObj?.away ?? []) : (inningObj?.home ?? [])
+        let eventsInInning = scorecard.events(inningNum: event.inning, isHomeBatting: !event.isTop)
         
         if let index = eventsInInning.firstIndex(of: event) {
-            // Event is already in the scorecard innings
             guard index > 0,
                   eventsInInning[index].pitcherId != eventsInInning[index - 1].pitcherId else {
                 return nil
             }
             return eventsInInning[index - 1].pitcherName
-        } else if event.result.isLive || event.atBatIndex == scorecard.liveCurrentAtBat?.atBatIndex {
-            // Event is the live at-bat (not yet in innings)
-            guard let lastEvent = eventsInInning.last,
-                  event.pitcherId != lastEvent.pitcherId else {
-                return nil
-            }
-            return lastEvent.pitcherName
         }
         
         return nil

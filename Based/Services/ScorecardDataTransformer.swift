@@ -98,15 +98,38 @@ struct ScorecardDataTransformer {
     }
 
     private static func buildLineups(boxscore: BoxscoreResponse, allPlays: [Play]) -> Lineups {
-        let homeLineup = (boxscore.teams?.home?.batters ?? [])
-            .filter { id in (findPlayer(in: boxscore.teams?.home, id: id)?.position?.abbreviation != "P") }
-            .compactMap { createBatter(id: $0, team: boxscore.teams?.home, allPlays: allPlays) }
-
-        let awayLineup = (boxscore.teams?.away?.batters ?? [])
-            .filter { id in (findPlayer(in: boxscore.teams?.away, id: id)?.position?.abbreviation != "P") }
-            .compactMap { createBatter(id: $0, team: boxscore.teams?.away, allPlays: allPlays) }
+        let homeLineup = buildLineup(team: boxscore.teams?.home, allPlays: allPlays)
+        let awayLineup = buildLineup(team: boxscore.teams?.away, allPlays: allPlays)
 
         return Lineups(home: homeLineup, away: awayLineup)
+    }
+
+    private static func buildLineup(team: BoxscoreTeam?, allPlays: [Play]) -> [ScorecardBatter] {
+        guard let team else { return [] }
+
+        typealias LineupEntry = (batter: ScorecardBatter, battingSlot: Int, entryInning: Int, exitInning: Int, originalIndex: Int)
+        let batterIds = uniquePreservingOrder(team.batters ?? [])
+
+        let entries: [LineupEntry] = batterIds
+            .compactMap { id in
+                guard let batter = createBatter(id: id, team: team, allPlays: allPlays) else { return nil }
+                let player = findPlayer(in: team, id: id)
+                let battingSlot = battingOrderSlot(for: player, fallbackIds: team.battingOrder, playerId: id)
+                let isPitcherWithoutLineupSlot = player?.position?.abbreviation == "P" && battingSlot == Int.max
+                guard !isPitcherWithoutLineupSlot else { return nil }
+                let entryInning = batter.inningEntered ?? 0
+                let exitInning = batter.inningExited ?? Int.max
+                let originalIndex = batterIds.firstIndex(of: id) ?? Int.max
+                return (batter, battingSlot, entryInning, exitInning, originalIndex)
+            }
+        return entries
+            .sorted { lhs, rhs in
+                if lhs.battingSlot != rhs.battingSlot { return lhs.battingSlot < rhs.battingSlot }
+                if lhs.entryInning != rhs.entryInning { return lhs.entryInning < rhs.entryInning }
+                if lhs.exitInning != rhs.exitInning { return lhs.exitInning < rhs.exitInning }
+                return lhs.originalIndex < rhs.originalIndex
+            }
+            .map(\.batter)
     }
 
     private static func buildPitchers(boxscore: BoxscoreResponse) -> ScorecardPitchers {
@@ -146,22 +169,37 @@ struct ScorecardDataTransformer {
     ) -> [ScorecardInning] {
         var scorecardInnings: [ScorecardInning] = []
         let linescoreInnings = linescore?.innings ?? []
+        var awayLastPitcherId: Int?
+        var awayLastPitcherName: String?
+        var homeLastPitcherId: Int?
+        var homeLastPitcherName: String?
+
         for i in 1...maxInning {
             let inningPlays = allPlays.filter { $0.about?.inning == i }
             let atBatPlays = inningPlays.filter { shouldIncludePlayInScorecard($0, includeLive: true) }
 
-            let awayEvents = buildHalfInningEvents(
+            let awayResult = buildHalfInningEvents(
                 from: atBatPlays.filter { $0.about?.isTopInning == true },
                 allPlays: allPlays,
                 playerNameMap: playerNameMap,
-                playerNumberMap: playerNumberMap
+                playerNumberMap: playerNumberMap,
+                initialPitcherId: awayLastPitcherId,
+                initialPitcherName: awayLastPitcherName
             )
-            let homeEvents = buildHalfInningEvents(
+            awayLastPitcherId = awayResult.lastPitcherId
+            awayLastPitcherName = awayResult.lastPitcherName
+
+            let homeResult = buildHalfInningEvents(
                 from: atBatPlays.filter { $0.about?.isTopInning == false },
                 allPlays: allPlays,
                 playerNameMap: playerNameMap,
-                playerNumberMap: playerNumberMap
+                playerNumberMap: playerNumberMap,
+                initialPitcherId: homeLastPitcherId,
+                initialPitcherName: homeLastPitcherName
             )
+            homeLastPitcherId = homeResult.lastPitcherId
+            homeLastPitcherName = homeResult.lastPitcherName
+
             let awayScoringPlayerIds = scoringPlayerIds(from: inningPlays.filter { $0.about?.isTopInning == true })
             let homeScoringPlayerIds = scoringPlayerIds(from: inningPlays.filter { $0.about?.isTopInning == false })
 
@@ -171,8 +209,8 @@ struct ScorecardDataTransformer {
                 ScorecardInning(
                     num: i,
                     ordinal: "\(i)",
-                    home: homeEvents,
-                    away: awayEvents,
+                    home: homeResult.events,
+                    away: awayResult.events,
                     homeRuns: linescoreInning?.home?.runs,
                     awayRuns: linescoreInning?.away?.runs,
                     homeScoringPlayerIds: homeScoringPlayerIds,
@@ -188,16 +226,40 @@ struct ScorecardDataTransformer {
         playerNameMap: [Int: String],
         playerNumberMap: [Int: String]
     ) -> [AtBatEvent] {
-        let timeline = allPlays.filter { shouldIncludePlayInScorecard($0, includeLive: false) }.enumerated().map { (idx, play) in
-            transformPlayToEvent(
+        let filteredPlays = allPlays.filter { shouldIncludePlayInScorecard($0, includeLive: false) }
+        
+        var awayLastPitcherId: Int?
+        var awayLastPitcherName: String?
+        var homeLastPitcherId: Int?
+        var homeLastPitcherName: String?
+        
+        let timelineEvents = filteredPlays.map { play -> AtBatEvent in
+            let isTop = play.about?.isTopInning ?? true
+            let lastId = isTop ? awayLastPitcherId : homeLastPitcherId
+            let lastName = isTop ? awayLastPitcherName : homeLastPitcherName
+            
+            let event = transformPlayToEvent(
                 play,
                 allPlays: allPlays,
                 playIndex: allPlays.firstIndex(where: { $0.about?.atBatIndex == play.about?.atBatIndex }) ?? 0,
                 playerNameMap: playerNameMap,
-                playerNumberMap: playerNumberMap
+                playerNumberMap: playerNumberMap,
+                lastPitcherId: lastId,
+                lastPitcherName: lastName
             )
-        }.reversed()
-        return Array(timeline)
+            
+            if isTop {
+                awayLastPitcherId = event.pitcherId
+                awayLastPitcherName = event.pitcherName
+            } else {
+                homeLastPitcherId = event.pitcherId
+                homeLastPitcherName = event.pitcherName
+            }
+            
+            return event
+        }
+        
+        return Array(timelineEvents.reversed())
     }
 
     private static func buildLiveAtBat(
@@ -215,12 +277,19 @@ struct ScorecardDataTransformer {
             return nil
         }
         let currentIndex = allPlays.firstIndex(where: { $0.about?.atBatIndex == currentPlay.about?.atBatIndex }) ?? max(allPlays.count - 1, 0)
+        let currentIsTop = currentPlay.about?.isTopInning ?? true
+        let previousPlay = allPlays[..<currentIndex].reversed().first {
+            shouldIncludePlayInScorecard($0, includeLive: false) &&
+            ($0.about?.isTopInning ?? true) == currentIsTop
+        }
         return transformPlayToEvent(
             currentPlay,
             allPlays: allPlays,
             playIndex: currentIndex,
             playerNameMap: playerNameMap,
-            playerNumberMap: playerNumberMap
+            playerNumberMap: playerNumberMap,
+            lastPitcherId: previousPlay?.matchup?.pitcher?.id,
+            lastPitcherName: previousPlay?.matchup?.pitcher?.fullName
         )
     }
 
@@ -243,42 +312,52 @@ struct ScorecardDataTransformer {
         from plays: [Play],
         allPlays: [Play],
         playerNameMap: [Int: String],
-        playerNumberMap: [Int: String]
-    ) -> [AtBatEvent] {
+        playerNumberMap: [Int: String],
+        initialPitcherId: Int?,
+        initialPitcherName: String?
+    ) -> (events: [AtBatEvent], lastPitcherId: Int?, lastPitcherName: String?) {
         var events: [AtBatEvent] = []
         var placedRunnerIds = Set<Int>()
+        var currentLastPitcherId = initialPitcherId
+        var currentLastPitcherName = initialPitcherName
 
         for play in plays {
             let playIndex = allPlays.firstIndex(where: { $0.about?.atBatIndex == play.about?.atBatIndex }) ?? 0
 
             for runner in placedRunnersStartingInInning(in: play, playerNameMap: playerNameMap) {
                 if placedRunnerIds.insert(runner.id).inserted {
-                    events.append(
-                        transformPlacedRunnerToEvent(
-                            runnerId: runner.id,
-                            runnerName: runner.name,
-                            startingBase: runner.base,
-                            seedPlay: play,
-                            allPlays: allPlays,
-                            playIndex: playIndex,
-                            playerNameMap: playerNameMap,
-                            playerNumberMap: playerNumberMap
-                        )
+                    let event = transformPlacedRunnerToEvent(
+                        runnerId: runner.id,
+                        runnerName: runner.name,
+                        startingBase: runner.base,
+                        seedPlay: play,
+                        allPlays: allPlays,
+                        playIndex: playIndex,
+                        playerNameMap: playerNameMap,
+                        playerNumberMap: playerNumberMap,
+                        lastPitcherId: currentLastPitcherId,
+                        lastPitcherName: currentLastPitcherName
                     )
+                    events.append(event)
+                    currentLastPitcherId = event.pitcherId
+                    currentLastPitcherName = event.pitcherName
                 }
             }
 
-            events.append(
-                transformPlayToEvent(
-                    play,
-                    allPlays: allPlays,
-                    playIndex: playIndex,
-                    playerNameMap: playerNameMap,
-                    playerNumberMap: playerNumberMap
-                )
+            let event = transformPlayToEvent(
+                play,
+                allPlays: allPlays,
+                playIndex: playIndex,
+                playerNameMap: playerNameMap,
+                playerNumberMap: playerNumberMap,
+                lastPitcherId: currentLastPitcherId,
+                lastPitcherName: currentLastPitcherName
             )
+            events.append(event)
+            currentLastPitcherId = event.pitcherId
+            currentLastPitcherName = event.pitcherName
         }
-        return events
+        return (events, currentLastPitcherId, currentLastPitcherName)
     }
 
     private static func placedRunnersStartingInInning(in play: Play, playerNameMap: [Int: String]) -> [(id: Int, name: String, base: Int)] {
@@ -304,12 +383,16 @@ struct ScorecardDataTransformer {
         allPlays: [Play],
         playIndex: Int,
         playerNameMap: [Int: String],
-        playerNumberMap: [Int: String]
+        playerNumberMap: [Int: String],
+        lastPitcherId: Int?,
+        lastPitcherName: String?
     ) -> AtBatEvent {
         let inning = seedPlay.about?.inning ?? 1
         let isTop = seedPlay.about?.isTopInning ?? true
         let pitcherId = seedPlay.matchup?.pitcher?.id ?? 0
         let pitcherName = seedPlay.matchup?.pitcher?.fullName ?? "Unknown"
+        let isPitchingChange = lastPitcherId != nil && pitcherId != lastPitcherId
+        let previousPitcherName = isPitchingChange ? lastPitcherName : nil
 
         var state = RunnerBaseState()
         switch startingBase {
@@ -395,6 +478,7 @@ struct ScorecardDataTransformer {
             pinchRunnerName: state.pinchRunnerName,
             pitcherId: pitcherId,
             pitcherName: pitcherName,
+            previousPitcherName: previousPitcherName,
             inning: inning,
             isTop: isTop,
             result: .runnerOnly,
@@ -404,6 +488,7 @@ struct ScorecardDataTransformer {
             outs: 0,
             rbi: 0,
             isRunnerOnly: true,
+            isPitchingChange: isPitchingChange,
             bases: state.toBasesReached(includeLines: true),
             pitches: nil
         )
@@ -414,7 +499,9 @@ struct ScorecardDataTransformer {
         allPlays: [Play],
         playIndex: Int,
         playerNameMap: [Int: String],
-        playerNumberMap: [Int: String]
+        playerNumberMap: [Int: String],
+        lastPitcherId: Int?,
+        lastPitcherName: String?
     ) -> AtBatEvent {
         let pitches = (play.playEvents ?? []).filter { $0.isPitch == true }.enumerated().map { (index, event) in
             PitchEvent(
@@ -438,6 +525,8 @@ struct ScorecardDataTransformer {
         let pitcherName = play.matchup?.pitcher?.fullName ?? "Unknown"
         let inning = play.about?.inning ?? 1
         let isTop = play.about?.isTopInning ?? true
+        let isPitchingChange = lastPitcherId != nil && pitcherId != lastPitcherId
+        let previousPitcherName = isPitchingChange ? lastPitcherName : nil
 
         var state = RunnerBaseState()
         if let eventType = play.result?.eventType {
@@ -550,6 +639,7 @@ struct ScorecardDataTransformer {
             pinchRunnerName: state.pinchRunnerName,
             pitcherId: pitcherId,
             pitcherName: pitcherName,
+            previousPitcherName: previousPitcherName,
             inning: inning,
             isTop: isTop,
             result: scorecardNotation(for: play, batterId: batterId),
@@ -559,6 +649,7 @@ struct ScorecardDataTransformer {
             outs: play.count?.outs ?? 0,
             rbi: play.result?.rbi ?? 0,
             isRunnerOnly: false,
+            isPitchingChange: isPitchingChange,
             bases: state.toBasesReached(includeLines: false),
             pitches: pitches
         )
@@ -709,6 +800,21 @@ struct ScorecardDataTransformer {
     private static func findPlayer(in team: BoxscoreTeam?, id: Int) -> BoxscorePlayer? {
         guard let team = team, let players = team.players else { return nil }
         return players["ID\(id)"] ?? players["\(id)"]
+    }
+
+    private static func uniquePreservingOrder(_ values: [Int]) -> [Int] {
+        var seen = Set<Int>()
+        return values.filter { seen.insert($0).inserted }
+    }
+
+    private static func battingOrderSlot(for player: BoxscorePlayer?, fallbackIds: [Int]?, playerId: Int) -> Int {
+        if let raw = player?.battingOrder, raw.count >= 3, let value = Int(raw) {
+            return max(1, value / 100)
+        }
+        if let fallbackIndex = fallbackIds?.firstIndex(of: playerId) {
+            return fallbackIndex + 1
+        }
+        return Int.max
     }
 
     private static func createBatter(id: Int, team: BoxscoreTeam?, allPlays: [Play]) -> ScorecardBatter? {

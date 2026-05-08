@@ -163,7 +163,9 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         batterLabel.text = batterName
         batterLabel.font = AppFont.permanent(32, textStyle: .title1, compatibleWith: traitCollection)
         batterLabel.textColor = pencilColor
-        batterLabel.numberOfLines = 0
+        batterLabel.numberOfLines = 1
+        batterLabel.adjustsFontSizeToFitWidth = true
+        batterLabel.minimumScaleFactor = 0.5
         batterLabel.adjustsFontForContentSizeCategory = true
         batterLabel.isUserInteractionEnabled = true
         batterLabel.isAccessibilityElement = false
@@ -299,12 +301,10 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         } else {
             NSLayoutConstraint.activate(regularConstraints)
         }
-        
-        view.setNeedsLayout()
-        view.layoutIfNeeded()
-        updateAccessibilityOrder()
-    }
 
+        view.setNeedsLayout()
+        updateAccessibilityOrder()
+        }
     private func applyEventPresentation() {
         let presentation = AtBatPresentation(event: event, teamAccentColor: accentColor)
         descriptionLabel.text = presentation.displayDescription

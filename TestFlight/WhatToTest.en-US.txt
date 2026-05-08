@@ -1,32 +1,15 @@
-New Standings Tab & Aesthetic Refinements
+Standings, Team Pages, and Scorecard Polish
 
-Standings:
-- View MLB rankings by league/division with detailed stats (Rank, GB, L10, RD).
-- Full VoiceOver support for all team data and headers.
-
-Scout Notebook Aesthetic:
-- Organic Highlighter: Hand-drawn marker effect for winning teams.
-- Typography: Improved hierarchy using IBM Plex Sans Condensed for structure and Patrick Hand for pencil data.
-- Team Identity: Nicknames and records now use team brand colors.
-- Scorecard: Organic pencil lines for pitching changes and "replaces [Pitcher]" labels in at-bat details.
-
-Enhanced Features:
-- Team Roster: View active rosters grouped by position with player profile links.
-- Schedule: Improved vertical alignment and clear rescheduling (strikethrough/From) indicators.
-- Navigation: Tap team names or long-press for favorites with haptic feedback.
-
-Scorecard Export:
-- Share button now offers "Share Image" or "Save PDF" via popup menu.
-- Image export produces a high-resolution PNG (rendered through a vector PDF pipeline for crisp zooming).
-- PDF export generates a vectorized 8.5x11 landscape document suitable for printing.
-- Exported scorecards now include pitching change indicators matching the in-app display.
+Highlights:
+- New Standings tab with league/division rankings, detailed stats, and VoiceOver support.
+- Team pages now include active rosters, cleaner schedule alignment, reschedule indicators, and favorites shortcuts.
+- Scout Notebook styling refinements: improved typography, team-color accents, and hand-drawn winner/pitching-change marks.
+- Scorecards now handle between-inning pitching changes more reliably in the grid, exports, timeline, and at-bat detail sheets.
+- Substitutions in batting-order slots now render correctly, including rare pitcher/batter cases.
+- Scorecard exports produce crisp PNG/PDF output with pitching-change lines and centered result text matching the in-app layout more closely.
 
 What to test:
-- Verify standings rankings and stats accuracy.
-- Confirm organic look of the winner highlighter and pitching change lines.
-- Test the "Schedule/Roster" picker on team pages.
-- Check "replaces [Pitcher]" labels in At-Bat details after pitching changes.
-- Ensure team colors and alignment remain readable and consistent.
-- Verify VoiceOver announcements for standings and schedule details.
-- Export a scorecard as image and PDF; verify image is crisp when zoomed and PDF prints well at full page size.
-- Check that pitching change lines appear on exported scorecards where expected.
+- Verify standings rankings/stats and VoiceOver announcements.
+- Check roster and schedule behavior on team pages, including favorites and rescheduled games.
+- Confirm pitching change indicators and "replaces [Pitcher]" text in scorecards and at-bat details, especially around inning breaks.
+- Export a scorecard as image and PDF; verify pitching-change lines and result text alignment.

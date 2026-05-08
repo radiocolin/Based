@@ -146,9 +146,8 @@ class ScorecardViewDataSource: NSObject, UICollectionViewDataSource, UICollectio
                 return
             }
             
-            let inningObj = data.innings.first { $0.num == inningNum }
-            let events = isHomeTeam ? inningObj?.home : inningObj?.away
-            let batterEvents = events?.filter { $0.batterId == batter.id } ?? []
+            let events = data.events(inningNum: inningNum, isHomeBatting: isHomeTeam)
+            let batterEvents = events.filter { $0.batterId == batter.id }
             if subIndex < batterEvents.count {
                 let event = batterEvents[subIndex]
                 delegate?.didSelectAtBat(event, batter: batter, pitcherName: event.pitcherName)
@@ -290,28 +289,13 @@ class ScorecardViewDataSource: NSObject, UICollectionViewDataSource, UICollectio
             return cell
         }
 
-        let inningObj = data.innings.first { $0.num == inningNum }
-        let events = isHomeTeam ? inningObj?.home : inningObj?.away
-        let batterEvents = events?.filter { $0.batterId == batter.id } ?? []
+        let events = data.events(inningNum: inningNum, isHomeBatting: isHomeTeam)
+        let batterEvents = events.filter { $0.batterId == batter.id }
         let event: AtBatEvent? = subIndex < batterEvents.count ? batterEvents[subIndex] : nil
 
         cell.configure(with: event)
 
-        var isPitchingChange = false
-        if event != nil, let allEvents = events {
-            var batterOccurrence = 0
-            for (i, e) in allEvents.enumerated() {
-                if e.batterId == batter.id {
-                    if batterOccurrence == subIndex {
-                        if i > 0 && e.pitcherId != allEvents[i - 1].pitcherId {
-                            isPitchingChange = true
-                        }
-                        break
-                    }
-                    batterOccurrence += 1
-                }
-            }
-        }
+        let isPitchingChange = event?.isPitchingChange ?? false
         cell.showPitchingChange(isPitchingChange)
 
         let isBeforeEntry = inningNum < (batter.inningEntered ?? 1)

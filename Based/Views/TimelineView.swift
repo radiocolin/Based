@@ -24,14 +24,14 @@ class TimelineView: UIView {
     private static func buildItems(from groups: [InningGroup]) -> [[TimelineItem]] {
         groups.map { group in
             var sectionItems: [TimelineItem] = []
-            for (i, event) in group.events.enumerated() {
-                if i > 0 && event.pitcherId != group.events[i - 1].pitcherId {
+            for event in group.events {
+                sectionItems.append(.atBat(event))
+                if event.isPitchingChange, let prevName = event.previousPitcherName {
                     sectionItems.append(.pitchingChange(
                         newPitcher: event.pitcherName,
-                        oldPitcher: group.events[i - 1].pitcherName
+                        oldPitcher: prevName
                     ))
                 }
-                sectionItems.append(.atBat(event))
             }
             return sectionItems
         }
