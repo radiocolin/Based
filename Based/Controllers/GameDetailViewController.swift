@@ -39,7 +39,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private let placeholderLabel: UILabel = {
         let label = UILabel()
         label.text = "LINEUP NOT YET AVAILABLE"
-        label.font = UIFont(name: "PermanentMarker-Regular", size: 20) ?? .systemFont(ofSize: 20, weight: .bold)
+        label.font = UIFont(name: AppFont.permanentMarker, size: 20) ?? .systemFont(ofSize: 20, weight: .bold)
         label.textColor = AppColors.pencil.withAlphaComponent(0.4)
         label.textAlignment = .center
         label.numberOfLines = 0
@@ -54,27 +54,10 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private let advisoryLabel = UILabel()
     private let advisoryCloseBtn = UIButton(type: .system)
     
-    // Data
-    private var currentGames: [ScheduleGame] = []
-    private var currentSnapshot: LiveGameSnapshot?
-    private var currentLinescore: Linescore?
-    private var currentScorecard: ScorecardData?
-    private var currentGameData: GameData?
-    private var currentUmpires: [ScorecardUmpire] = []
-    private var currentGameInfo: [GameInfoItem] = []
-    private var currentPitchers: [ScorecardPitcher] = []
-    private weak var liveDetailVC: AtBatDetailViewController?
-    private var lastActiveAtBatKey: String?
-    private let gamePk: Int
-    private var isGameLive = false
-    private var isTimelineMode = UserDefaults.standard.bool(forKey: "preferTimelineMode") {
-        didSet {
-            let inset = isTimelineMode ? hiddenSegmentedTopInset : visibleSegmentedTopInset
-            teamSegmentedSafeTopConstraint?.constant = inset
-            teamSegmentedAdvisoryTopConstraint?.constant = inset
-        }
-    }
+    private let viewModel: GameDetailViewModel
+    private lazy var exportCoordinator = ScorecardExportCoordinator(viewController: self)
 
+    private weak var liveDetailVC: AtBatDetailViewController?
     private var teamSegmentedSafeTopConstraint: NSLayoutConstraint?
     private var teamSegmentedAdvisoryTopConstraint: NSLayoutConstraint?
     private var scrollBottomConstraint: NSLayoutConstraint?
@@ -91,28 +74,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private let visibleSegmentedTopInset: CGFloat = 8
     private let hiddenSegmentedTopInset: CGFloat = -48
 
-    private static let scheduleDateFormatterWithFractional: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
-
-    private static let scheduleDateFormatter: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
-
     init(gamePk: Int, games: [ScheduleGame]) {
-        self.gamePk = gamePk
-        self.currentGames = games
-        // Derive initial live state from schedule data so we don't have to wait for fetches
-        let game = games.first(where: { $0.gamePk == gamePk })
-        let state = game?.status.detailedState.lowercased() ?? ""
-        let code = game?.status.statusCode?.lowercased() ?? ""
-        let isFinal = state == "final" || state == "game over" || state == "completed early" || code == "f" || code == "o"
-        let isScheduled = state == "scheduled" || state == "pre-game" || state == "postponed" || code == "s" || code == "p"
-        self.isGameLive = !isFinal && !isScheduled && !state.isEmpty
+        self.viewModel = GameDetailViewModel(gamePk: gamePk, games: games)
         super.init(nibName: nil, bundle: nil)
     }
     
@@ -135,7 +98,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             self.setupNavigationBar()
             self.updateStickyHeaders()
             self.advisoryBanner.layer.borderColor = UIColor.red.withAlphaComponent(0.3).cgColor
-            if let scorecard = self.currentScorecard {
+            if let scorecard = self.viewModel.currentScorecard {
                 self.scorecardView.configure(with: scorecard)
             }
         }
@@ -148,7 +111,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         }
         
         // Apply saved view mode without animation
-        if isTimelineMode {
+        if viewModel.isTimelineMode {
             updateUIForMode()
             teamSegmentedControl.isHidden = true
             segmentedOverlay.isHidden = true
@@ -157,34 +120,36 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             timelineView.isHidden = false
         }
         
-        GameService.shared.delegate = self
-        let scheduledStartTime = currentGames
-            .first(where: { $0.gamePk == gamePk })
-            .flatMap { Self.scheduleStartDate(from: $0.gameDate) }
-        GameService.shared.startPolling(gamePk: gamePk, scheduledStartTime: scheduledStartTime)
+        setupViewModelCallbacks()
+        viewModel.startPolling()
     }
     
+    private func setupViewModelCallbacks() {
+        viewModel.onSnapshotUpdate = { [weak self] snapshot, wasLive in
+            self?.updateUI(with: snapshot, wasLive: wasLive)
+        }
+        viewModel.onScorecardUpdate = { [weak self] scorecard in
+            self?.updateScorecard(with: scorecard)
+        }
+        viewModel.onStatusUpdate = { status in
+            // Option to show status in UI
+        }
+    }
+
     @objc private func tintDidChange() {
         setupNavigationBar()
         updateStickyHeaders()
         segmentedOverlay.setNeedsLayout()
         updateTeamSegmentedControlTitles()
-        if let scorecard = currentScorecard {
+        if let scorecard = viewModel.currentScorecard {
             scorecardView.configure(with: scorecard)
         }
     }
 
-    private static func scheduleStartDate(from value: String) -> Date? {
-        if let date = scheduleDateFormatterWithFractional.date(from: value) {
-            return date
-        }
-        return scheduleDateFormatter.date(from: value)
-    }
-    
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         if isMovingFromParent || isBeingDismissed {
-            GameService.shared.stopPolling()
+            viewModel.stopPolling()
         }
     }
 
@@ -217,10 +182,10 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         let shareItem = UIBarButtonItem(image: shareImg, menu: shareMenu)
         shareItem.accessibilityLabel = "Share scorecard"
         
-        let timelineSymbol = isTimelineMode ? "square.grid.3x2" : "calendar.day.timeline.left"
+        let timelineSymbol = viewModel.isTimelineMode ? "square.grid.3x2" : "calendar.day.timeline.left"
         let timelineImg = UIImage.pencilStyledIcon(named: timelineSymbol, color: pencilColor, size: iconSize, offset: CGPoint(x: 1.5, y: 1.0))
         let timelineItem = UIBarButtonItem(image: timelineImg, style: .plain, target: self, action: #selector(toggleTimelineMode))
-        timelineItem.accessibilityLabel = isTimelineMode ? "Show scorecard" : "Show timeline"
+        timelineItem.accessibilityLabel = viewModel.isTimelineMode ? "Show scorecard" : "Show timeline"
         
         navigationItem.rightBarButtonItems = [shareItem, timelineItem]
         
@@ -245,12 +210,11 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     @objc private func toggleTimelineMode() {
-        isTimelineMode.toggle()
-        UserDefaults.standard.set(isTimelineMode, forKey: "preferTimelineMode")
+        viewModel.isTimelineMode.toggle()
         
         self.setupNavigationBar()
 
-        if isTimelineMode {
+        if viewModel.isTimelineMode {
             timelineView.isHidden = false
             timelineView.alpha = 0
         } else {
@@ -261,8 +225,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         }
 
         // Swap live panel placement
-        if isGameLive {
-            if isTimelineMode {
+        if viewModel.isGameLive {
+            if viewModel.isTimelineMode {
                 // Moving to timeline: hide bottom panel, show embedded
                 currentStateView.isHidden = true
                 timelineView.setLiveState(visible: true)
@@ -283,7 +247,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             self.updateUIForMode()
             self.view.layoutIfNeeded()
         } completion: { _ in
-            if self.isTimelineMode {
+            if self.viewModel.isTimelineMode {
                 self.teamSegmentedControl.isHidden = true
                 self.segmentedOverlay.isHidden = true
                 self.stickyHeaderContainer.isHidden = true
@@ -295,20 +259,20 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     private func updateUIForMode() {
-        teamSegmentedControl.alpha = isTimelineMode ? 0 : 1
-        segmentedOverlay.alpha = isTimelineMode ? 0 : 1
-        stickyHeaderContainer.alpha = isTimelineMode ? 0 : 1
-        mainScrollView.alpha = isTimelineMode ? 0 : 1
-        timelineView.alpha = isTimelineMode ? 1 : 0
+        teamSegmentedControl.alpha = viewModel.isTimelineMode ? 0 : 1
+        segmentedOverlay.alpha = viewModel.isTimelineMode ? 0 : 1
+        stickyHeaderContainer.alpha = viewModel.isTimelineMode ? 0 : 1
+        mainScrollView.alpha = viewModel.isTimelineMode ? 0 : 1
+        timelineView.alpha = viewModel.isTimelineMode ? 1 : 0
         
         // Adjust constraints to move headers
-        let inset = isTimelineMode ? hiddenSegmentedTopInset : visibleSegmentedTopInset
+        let inset = viewModel.isTimelineMode ? hiddenSegmentedTopInset : visibleSegmentedTopInset
         teamSegmentedSafeTopConstraint?.constant = inset
         teamSegmentedAdvisoryTopConstraint?.constant = inset
     }
 
     private func shareImage() {
-        guard let scorecard = currentScorecard else { return }
+        guard let scorecard = viewModel.currentScorecard else { return }
 
         let activityIndicator = UIActivityIndicatorView(style: .large)
         activityIndicator.center = view.center
@@ -319,7 +283,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
         Task {
             let generator = ScorecardImageGenerator()
-            let image = await generator.generate(scorecard: scorecard, linescore: self.currentLinescore)
+            let image = await generator.generate(scorecard: scorecard, linescore: self.viewModel.currentLinescore)
 
             await MainActor.run {
                 activityIndicator.stopAnimating()
@@ -341,7 +305,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     private func sharePDF() {
-        guard let scorecard = currentScorecard else { return }
+        guard let scorecard = viewModel.currentScorecard else { return }
 
         let activityIndicator = UIActivityIndicatorView(style: .large)
         activityIndicator.center = view.center
@@ -352,7 +316,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
         Task {
             let generator = ScorecardImageGenerator()
-            let pdfData = await generator.generatePDF(scorecard: scorecard, linescore: self.currentLinescore)
+            let pdfData = await generator.generatePDF(scorecard: scorecard, linescore: self.viewModel.currentLinescore)
 
             await MainActor.run {
                 activityIndicator.stopAnimating()
@@ -374,8 +338,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     private func showExportCustomizer() {
-        guard let scorecard = currentScorecard else { return }
-        let exportVC = ScorecardExportViewController(scorecard: scorecard, linescore: currentLinescore)
+        guard let scorecard = viewModel.currentScorecard else { return }
+        let exportVC = ScorecardExportViewController(scorecard: scorecard, linescore: viewModel.currentLinescore)
         let nav = UINavigationController(rootViewController: exportVC)
         present(nav, animated: true)
     }
@@ -387,27 +351,12 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     // MARK: - GameUpdateDelegate
     
     func didUpdateSnapshot(_ snapshot: LiveGameSnapshot) {
-        currentSnapshot = snapshot
-        currentLinescore = snapshot.linescore
-        currentGameData = snapshot.gameData
-
-        // Update live state before scorecard so all decisions see the correct value
-        let wasLive = isGameLive
-        isGameLive = snapshot.isGameLive
-
-        if let scorecard = snapshot.scorecard, scorecard != currentScorecard {
-            updateScorecard(with: scorecard)
-        }
-
-        if let currentAtBat = snapshot.currentAtBat {
-            updateLiveDetailSheet(with: currentAtBat)
-        }
-
-        updateUI(with: snapshot, wasLive: wasLive)
+        // Redundant with ViewModel callbacks, but keeping for protocol conformance if needed
+        // or we can remove GameUpdateDelegate from VC
     }
     
     func didUpdateGameStatus(_ status: String) {
-        // Option to show status in UI
+        // Redundant with ViewModel callbacks
     }
     
     private func setupUI() {
@@ -448,8 +397,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             advisoryCloseBtn.widthAnchor.constraint(equalToConstant: 30),
         ])
 
-        teamSegmentedSafeTopConstraint = teamSegmentedControl.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: isTimelineMode ? hiddenSegmentedTopInset : visibleSegmentedTopInset)
-        teamSegmentedAdvisoryTopConstraint = teamSegmentedControl.topAnchor.constraint(equalTo: advisoryBanner.bottomAnchor, constant: isTimelineMode ? hiddenSegmentedTopInset : visibleSegmentedTopInset)
+        teamSegmentedSafeTopConstraint = teamSegmentedControl.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: viewModel.isTimelineMode ? hiddenSegmentedTopInset : visibleSegmentedTopInset)
+        teamSegmentedAdvisoryTopConstraint = teamSegmentedControl.topAnchor.constraint(equalTo: advisoryBanner.bottomAnchor, constant: viewModel.isTimelineMode ? hiddenSegmentedTopInset : visibleSegmentedTopInset)
 
         NSLayoutConstraint.activate([
             teamSegmentedSafeTopConstraint!,
@@ -523,7 +472,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             currentStateView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             {
                 let c = currentStateView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
-                c.priority = UILayoutPriority(999)
+                c.priority = .init(999)
                 return c
             }(),
             currentStateView.heightAnchor.constraint(equalToConstant: 190)
@@ -550,7 +499,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         advisoryBanner.isHidden = true
         advisoryBanner.translatesAutoresizingMaskIntoConstraints = false
 
-        advisoryLabel.font = UIFont(name: "PatrickHand-Regular", size: 14)
+        advisoryLabel.font = UIFont(name: AppFont.patrickHand, size: 14)
         advisoryLabel.textColor = .red
         advisoryLabel.numberOfLines = 0
         advisoryLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -643,7 +592,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     private func setupSegmentedControlAppearance() {
-        let font = UIFont(name: "PatrickHand-Regular", size: 18) ?? .systemFont(ofSize: 18)
+        let font = UIFont(name: AppFont.patrickHand, size: 18) ?? .systemFont(ofSize: 18)
 
         teamSegmentedControl.selectedSegmentIndex = 0
         teamSegmentedControl.accessibilityLabel = "Batting team"
@@ -726,7 +675,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private func updateUI(with snapshot: LiveGameSnapshot, wasLive: Bool) {
         let linescore = snapshot.linescore
         let gameData = snapshot.gameData
-        let game = currentGames.first(where: { $0.gamePk == gamePk })
+        let game = viewModel.currentGames.first(where: { $0.gamePk == viewModel.gamePk })
         let awayName = game?.teams.away.team.name ?? "Away"
         let homeName = game?.teams.home.team.name ?? "Home"
 
@@ -746,8 +695,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         updatePlaceholderVisibility()
         
         // In timeline mode, use embedded live panel instead of bottom panel
-        let showBottomPanel = isGameLive && !isTimelineMode
-        let showEmbeddedLive = isGameLive && isTimelineMode
+        let showBottomPanel = viewModel.isGameLive && !viewModel.isTimelineMode
+        let showEmbeddedLive = viewModel.isGameLive && viewModel.isTimelineMode
         
         // Always ensure scroll view bottom matches live panel state
         let needsUpdate = currentStateView.isHidden == showBottomPanel
@@ -784,17 +733,16 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         scorecardView.setIsLive(hasCurrentAtBat)
         
         // Auto-sync on first live detection
-        if !wasLive && isGameLive && hasCurrentAtBat {
+        if !wasLive && viewModel.isGameLive && hasCurrentAtBat {
             syncWithActiveAtBat()
         }
     }
 
     private func updateScorecard(with scorecard: ScorecardData) {
-        let previousScorecard = self.currentScorecard
+        let previousScorecard = viewModel.currentScorecard
         let isFirstLoad = previousScorecard == nil
         let previousIsTop = previousScorecard?.isTopInning ?? true
         let wasViewingBattingTeam = !isFirstLoad && teamSegmentedControl.selectedSegmentIndex == (previousIsTop ? 0 : 1)
-        self.currentScorecard = scorecard
         
         updateTeamSegmentedControlTitles()
         
@@ -802,7 +750,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
         // For live games, default to the team at bat and follow half-inning changes.
         // For non-live games, leave the picker on away (index 0) — no auto-switching.
-        if isGameLive {
+        if viewModel.isGameLive {
             if isFirstLoad {
                 setDisplayedTeam(toBattingTeamForTopInning: isTop)
             } else if previousScorecard?.isTopInning != scorecard.isTopInning && wasViewingBattingTeam {
@@ -828,10 +776,10 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         let newKey = "\(inning)-\(currentIsTop)-\(batterId)"
         
         if isFirstLoad {
-            if isGameLive {
+            if viewModel.isGameLive {
                 syncWithActiveAtBat()
             }
-        } else if isGameLive && newKey != lastActiveAtBatKey && batterId != 0 {
+        } else if viewModel.isGameLive && newKey != viewModel.lastActiveAtBatKey && batterId != 0 {
             // Auto-scroll only if viewing the team at bat
             let viewingBattingTeam = (currentIsTop && teamSegmentedControl.selectedSegmentIndex == 0) ||
                                      (!currentIsTop && teamSegmentedControl.selectedSegmentIndex == 1)
@@ -840,7 +788,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             }
         }
         
-        lastActiveAtBatKey = newKey
+        viewModel.lastActiveAtBatKey = newKey
         
         // Update advisory banner
         if let advisory = scorecard.advisories.first, !dismissedAdvisories.contains(advisory) {
@@ -856,7 +804,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     private func updateTeamSegmentedControlTitles() {
-        guard let scorecard = currentScorecard else { return }
+        guard let scorecard = viewModel.currentScorecard else { return }
         
         let awayName = scorecard.teams.away.name ?? "Away"
         let homeName = scorecard.teams.home.name ?? "Home"
@@ -864,8 +812,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         let isTop = scorecard.isTopInning ?? true
         
         // Only show prominent at-bat indicator dot if the game is live
-        let showAwayDot = isGameLive && isTop
-        let showHomeDot = isGameLive && !isTop
+        let showAwayDot = viewModel.isGameLive && isTop
+        let showHomeDot = viewModel.isGameLive && !isTop
         
         let awayTitle = showAwayDot ? "● \(awayName)" : awayName
         let homeTitle = showHomeDot ? "● \(homeName)" : homeName
@@ -902,7 +850,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     @objc private func segmentTapped() {
-        guard isGameLive else { return }
+        guard viewModel.isGameLive else { return }
         if segmentJustChanged {
             segmentJustChanged = false
             return
@@ -912,7 +860,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     private func updatePlaceholderVisibility() {
-        guard let scorecard = currentScorecard else { 
+        guard let scorecard = viewModel.currentScorecard else { 
             showPlaceholder(true)
             return 
         }
@@ -940,7 +888,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     private func showLiveAtBatDetail() {
-        guard let liveEvent = currentSnapshot?.currentAtBat else { return }
+        guard let liveEvent = viewModel.currentSnapshot?.currentAtBat else { return }
         if liveDetailVC != nil { return }
         let batterName = liveEvent.batterName
         let pitcherName = liveEvent.pitcherName
@@ -979,22 +927,22 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     private func updateUmpireList() {
-        guard let scorecard = currentScorecard else { return }
+        guard let scorecard = viewModel.currentScorecard else { return }
         let umpires = scorecard.umpires
-        if umpires == currentUmpires { return }
-        self.currentUmpires = umpires
+        if umpires == viewModel.currentUmpires { return }
+        // Note: umpires update is handled in updateScorecard calling this
 
         umpireLabel.attributedText = GameFooterContent.makeUmpireText(umpires)
         umpireLabel.accessibilityLabel = GameFooterContent.makeUmpireAccessibilityLabel(umpires)
     }
 
     private func updatePitcherList() {
-        guard let scorecard = currentScorecard else { return }
+        guard let scorecard = viewModel.currentScorecard else { return }
         let isHome = teamSegmentedControl.selectedSegmentIndex == 1
         let pitchers = isHome ? scorecard.pitchers.home : scorecard.pitchers.away
         
-        if pitchers == currentPitchers { return }
-        self.currentPitchers = pitchers
+        if pitchers == viewModel.currentPitchers { return }
+        // Note: pitchers update is handled in updateScorecard calling this
         
         pitcherContainer.arrangedSubviews.forEach { $0.removeFromSuperview() }
 
@@ -1010,11 +958,11 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private var currentWeather: Weather?
     
     private func updateGameInfo() {
-        guard let scorecard = currentScorecard else { return }
+        guard let scorecard = viewModel.currentScorecard else { return }
         
-        let weather = currentLinescore?.weather ?? currentGameData?.weather
-        if scorecard.gameInfo == currentGameInfo && weather == currentWeather { return }
-        self.currentGameInfo = scorecard.gameInfo
+        let weather = viewModel.currentLinescore?.weather ?? viewModel.currentGameData?.weather
+        if scorecard.gameInfo == viewModel.currentGameInfo && weather == currentWeather { return }
+        // Note: gameInfo update is handled in updateScorecard calling this
         self.currentWeather = weather
         
         gameInfoLabel.attributedText = GameFooterContent.makeGameInfoText(
@@ -1024,18 +972,18 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     private func updateTimelineFooter() {
-        guard let scorecard = currentScorecard else { return }
+        guard let scorecard = viewModel.currentScorecard else { return }
         timelineView.configureFooter(
             pitchers: scorecard.pitchers,
             umpires: scorecard.umpires,
             gameInfo: scorecard.gameInfo,
-            weather: currentLinescore?.weather ?? currentGameData?.weather,
+            weather: viewModel.currentLinescore?.weather ?? viewModel.currentGameData?.weather,
             teams: scorecard.teams
         )
     }
 
     private func previousPitcherName(for event: AtBatEvent) -> String? {
-        guard let scorecard = currentScorecard else { return nil }
+        guard let scorecard = viewModel.currentScorecard else { return nil }
         let inningObj = scorecard.innings.first { $0.num == event.inning }
         let eventsInInning = event.isTop ? (inningObj?.away ?? []) : (inningObj?.home ?? [])
         
@@ -1113,7 +1061,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     private func syncWithActiveAtBat() {
-        guard isGameLive, let scorecard = currentScorecard else { return }
+        guard viewModel.isGameLive, let scorecard = viewModel.currentScorecard else { return }
         
         // Swap to the team at bat
         let isTop = scorecard.isTopInning ?? true
@@ -1134,7 +1082,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     private func scrollToActiveCell(scorecard: ScorecardData) {
-        guard isGameLive,
+        guard viewModel.isGameLive,
               let inningNum = scorecard.currentInning,
               let batterId = scorecard.currentBatterId,
               let isTop = scorecard.isTopInning else { return }
@@ -1217,7 +1165,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     private func scorecardBatter(for id: Int, fallbackName: String) -> ScorecardBatter {
-        if let scorecard = currentScorecard {
+        if let scorecard = viewModel.currentScorecard {
             if let batter = (scorecard.lineups.home + scorecard.lineups.away).first(where: { $0.id == id }) {
                 return batter
             }
@@ -1236,7 +1184,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     private func scorecardPitcher(for id: Int, fallbackName: String) -> ScorecardPitcher {
-        if let scorecard = currentScorecard {
+        if let scorecard = viewModel.currentScorecard {
             if let pitcher = (scorecard.pitchers.home + scorecard.pitchers.away).first(where: { $0.id == id }) {
                 return pitcher
             }
@@ -1245,18 +1193,18 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     private func teamAccentColor(isTopInning: Bool) -> UIColor? {
-        guard let scorecard = currentScorecard else { return nil }
+        guard let scorecard = viewModel.currentScorecard else { return nil }
         return scorecard.teamAccentColor(isTopInning: isTopInning)
     }
 
     @objc private func handlePitcherNameTap(_ gesture: UITapGestureRecognizer) {
         guard let view = gesture.view else { return }
-        guard let pitcher = currentPitchers.first(where: { $0.id == view.tag }) else { return }
+        guard let pitcher = viewModel.currentPitchers.first(where: { $0.id == view.tag }) else { return }
         presentPitcherDetail(for: pitcher)
     }
 
     private func calculatePlayerStats(for batter: ScorecardBatter) -> PlayerGameStats {
-        guard let scorecard = currentScorecard else { return PlayerGameStats(atBats: 0, hits: 0, runs: 0, rbi: 0, walks: 0, strikeouts: 0) }
+        guard let scorecard = viewModel.currentScorecard else { return PlayerGameStats(atBats: 0, hits: 0, runs: 0, rbi: 0, walks: 0, strikeouts: 0) }
         let isHome = teamSegmentedControl.selectedSegmentIndex == 1
         return scorecard.calculatePlayerStats(for: batter.id, isHome: isHome)
     }

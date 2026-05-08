@@ -175,7 +175,7 @@ class PitchTrackView: UIView {
             let numLayer = CATextLayer()
             numLayer.string = "\(pitch.pitchNumber)"
             numLayer.fontSize = displayStyle.numberFontSize
-            numLayer.font = UIFont(name: "PermanentMarker-Regular", size: displayStyle.numberFontSize)
+            numLayer.font = UIFont(name: AppFont.permanentMarker, size: displayStyle.numberFontSize)
             numLayer.alignmentMode = .center
             // PermanentMarker usually sits a bit low, so we offset upwards slightly.
             numLayer.frame = CGRect(

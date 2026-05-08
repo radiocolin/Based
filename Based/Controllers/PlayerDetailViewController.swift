@@ -362,6 +362,17 @@ class PlayerDetailViewController: UIViewController {
     }
 
     private func updateWithPlayerInfo(_ info: PlayerInfo) {
+        updateBioInfo(info)
+
+        switch subject {
+        case .batter:
+            updateBatterStats(info)
+        case .pitcher:
+            updatePitcherStats(info)
+        }
+    }
+
+    private func updateBioInfo(_ info: PlayerInfo) {
         var bioParts: [String] = []
 
         if let number = info.primaryNumber {
@@ -399,51 +410,52 @@ class PlayerDetailViewController: UIViewController {
             batSide: info.batSide?.code,
             throwSide: info.pitchHand?.code
         )
+    }
 
-        switch subject {
-        case .batter:
-            guard let split = info.stats?
-                .filter({ $0.type?.displayName == "season" })
-                .compactMap({ $0.splits?.first(where: { $0.stat?.avg != nil || $0.stat?.ops != nil || $0.stat?.rbi != nil }) })
-                .first,
-                  let stats = split.stat else {
-                showSeasonStatsError()
-                return
-            }
-            let season = split.season.map { "\($0) season" } ?? "Season"
-            setupSeasonStatsGrid(
-                items: [
-                    ("AVG", stats.avg ?? "---"),
-                    ("HR", "\(stats.homeRuns ?? 0)"),
-                    ("RBI", "\(stats.rbi ?? 0)"),
-                    ("SB", "\(stats.stolenBases ?? 0)"),
-                    ("OPS", stats.ops ?? "---")
-                ],
-                columns: 5,
-                title: season
-            )
-        case .pitcher:
-            guard let split = info.stats?
-                .filter({ $0.type?.displayName == "season" })
-                .compactMap({ $0.splits?.first(where: { $0.stat?.era != nil || $0.stat?.inningsPitched != nil || $0.stat?.wins != nil }) })
-                .first,
-                  let stats = split.stat else {
-                showSeasonStatsError()
-                return
-            }
-            let season = split.season.map { "\($0) season" } ?? "Season"
-            setupSeasonStatsGrid(
-                items: [
-                    ("ERA", stats.era ?? "---"),
-                    ("IP", stats.inningsPitched ?? "0.0"),
-                    ("W", "\(stats.wins ?? 0)"),
-                    ("L", "\(stats.losses ?? 0)"),
-                    ("K", "\(stats.strikeOuts ?? 0)")
-                ],
-                columns: 5,
-                title: season
-            )
+    private func updateBatterStats(_ info: PlayerInfo) {
+        guard let split = info.stats?
+            .filter({ $0.type?.displayName == "season" })
+            .compactMap({ $0.splits?.first(where: { $0.stat?.avg != nil || $0.stat?.ops != nil || $0.stat?.rbi != nil }) })
+            .first,
+              let stats = split.stat else {
+            showSeasonStatsError()
+            return
         }
+        let season = split.season.map { "\($0) season" } ?? "Season"
+        setupSeasonStatsGrid(
+            items: [
+                ("AVG", stats.avg ?? "---"),
+                ("HR", "\(stats.homeRuns ?? 0)"),
+                ("RBI", "\(stats.rbi ?? 0)"),
+                ("SB", "\(stats.stolenBases ?? 0)"),
+                ("OPS", stats.ops ?? "---")
+            ],
+            columns: 5,
+            title: season
+        )
+    }
+
+    private func updatePitcherStats(_ info: PlayerInfo) {
+        guard let split = info.stats?
+            .filter({ $0.type?.displayName == "season" })
+            .compactMap({ $0.splits?.first(where: { $0.stat?.era != nil || $0.stat?.inningsPitched != nil || $0.stat?.wins != nil }) })
+            .first,
+              let stats = split.stat else {
+            showSeasonStatsError()
+            return
+        }
+        let season = split.season.map { "\($0) season" } ?? "Season"
+        setupSeasonStatsGrid(
+            items: [
+                ("ERA", stats.era ?? "---"),
+                ("IP", stats.inningsPitched ?? "0.0"),
+                ("W", "\(stats.wins ?? 0)"),
+                ("L", "\(stats.losses ?? 0)"),
+                ("K", "\(stats.strikeOuts ?? 0)")
+            ],
+            columns: 5,
+            title: season
+        )
     }
 
     private func showSeasonStatsError() {

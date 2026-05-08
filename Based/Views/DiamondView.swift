@@ -370,7 +370,7 @@ class DiamondView: UIView {
     private func drawAnnotation(_ annotation: BaseAnnotation, points p: (home: CGPoint, first: CGPoint, second: CGPoint, third: CGPoint), color: UIColor) {
         let diamondSize = min(bounds.width, bounds.height) * 0.8
         let fontSize = max(8, min(16, diamondSize * 0.18))
-        let font = UIFont(name: "PatrickHand-Regular", size: fontSize) ?? .systemFont(ofSize: fontSize, weight: .medium)
+        let font = UIFont(name: AppFont.patrickHand, size: fontSize) ?? .systemFont(ofSize: fontSize, weight: .medium)
         let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color.withAlphaComponent(0.85)]
         let textSize = (annotation.label as NSString).size(withAttributes: attrs)
 

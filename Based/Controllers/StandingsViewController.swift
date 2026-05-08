@@ -612,6 +612,15 @@ private class StandingsTeamCell: UITableViewCell {
         let teamName = record.team.name ?? "TBD"
         let pc = pencilColor
 
+        configureBasicTeamInfo(record: record, rank: rank, teamName: teamName, pc: pc)
+
+        let detailStats = collectDetailStats(record: record, isWildcard: isWildcard)
+        configureDetailStats(detailStats, pc: pc)
+
+        configureAccessibilityInfo(record: record, teamName: teamName, rank: rank, detailStats: detailStats, isWildcard: isWildcard)
+    }
+
+    private func configureBasicTeamInfo(record: TeamRecord, rank: String, teamName: String, pc: UIColor) {
         rankLabel.text = rank
         rankLabel.textColor = pc.withAlphaComponent(0.4)
 
@@ -631,40 +640,41 @@ private class StandingsTeamCell: UITableViewCell {
             color: pc.withAlphaComponent(0.3),
             size: CGSize(width: 10, height: 10)
         )
+    }
 
-        var parts: [String] = []
+    private struct DetailStats {
         var l10Text: String?
         var rdText: String?
+        var streakCode: String?
+        var gamesBack: String?
+        var wildCardGamesBack: String?
+    }
+
+    private func collectDetailStats(record: TeamRecord, isWildcard: Bool) -> DetailStats {
+        var stats = DetailStats()
 
         if isWildcard {
-            if let wcgb = record.wildCardGamesBack {
-                parts.append("WCGB: \(wcgb)")
-            }
+            stats.wildCardGamesBack = record.wildCardGamesBack
         } else {
-            if let gb = record.gamesBack {
-                parts.append("GB: \(gb)")
-            }
+            stats.gamesBack = record.gamesBack
         }
 
         if let splits = record.records?.splitRecords,
            let l10 = splits.first(where: { $0.type == "lastTen" }),
            let w10 = l10.wins, let l10L = l10.losses {
-            let text = "\(w10)-\(l10L)"
-            l10Text = text
-            parts.append("L10: \(text)")
+            stats.l10Text = "\(w10)-\(l10L)"
         }
 
-        if let streak = record.streak?.streakCode {
-            parts.append(streak)
-        }
+        stats.streakCode = record.streak?.streakCode
 
         if let rd = record.runDifferential {
-            let text = rd >= 0 ? "+\(rd)" : "\(rd)"
-            rdText = text
-            parts.append("RD: \(text)")
+            stats.rdText = rd >= 0 ? "+\(rd)" : "\(rd)"
         }
 
-        // Attributed Detail Label (Labels in Condensed, Stats in Pencil)
+        return stats
+    }
+
+    private func configureDetailStats(_ stats: DetailStats, pc: UIColor) {
         let detailAttr = NSMutableAttributedString()
         let labelFont = AppFont.ibmPlexCondensed(12, textStyle: .caption1)
         let statFont = AppFont.patrick(14, textStyle: .caption1)
@@ -680,29 +690,28 @@ private class StandingsTeamCell: UITableViewCell {
             detailAttr.append(NSAttributedString(string: value, attributes: [.font: statFont, .foregroundColor: statColor]))
         }
 
-        if isWildcard {
-            if let wcgb = record.wildCardGamesBack { addStat("WCGB", value: wcgb) }
-        } else {
-            if let gb = record.gamesBack { addStat("GB", value: gb) }
-        }
-        if let l10 = l10Text { addStat("L10", value: l10) }
-        if let streak = record.streak?.streakCode { addStat("STRK", value: streak) }
-        if let rd = rdText { addStat("RD", value: rd) }
-        
+        if let wcgb = stats.wildCardGamesBack { addStat("WCGB", value: wcgb) }
+        if let gb = stats.gamesBack { addStat("GB", value: gb) }
+        if let l10 = stats.l10Text { addStat("L10", value: l10) }
+        if let streak = stats.streakCode { addStat("STRK", value: streak) }
+        if let rd = stats.rdText { addStat("RD", value: rd) }
+
         detailLabel.attributedText = detailAttr
         detailLabel.textColor = pc.withAlphaComponent(0.45)
         detailLabel.adjustsFontSizeToFitWidth = true
         detailLabel.minimumScaleFactor = 0.8
+    }
 
+    private func configureAccessibilityInfo(record: TeamRecord, teamName: String, rank: String, detailStats: DetailStats, isWildcard: Bool) {
         let gbSpoken: String?
         if isWildcard {
-            if let wcgb = record.wildCardGamesBack {
+            if let wcgb = detailStats.wildCardGamesBack {
                 gbSpoken = wcgb == "-" ? "Wildcard leader" : "\(wcgb) games back"
             } else {
                 gbSpoken = nil
             }
         } else {
-            if let gb = record.gamesBack {
+            if let gb = detailStats.gamesBack {
                 gbSpoken = gb == "-" ? "Division leader" : "\(gb) games back"
             } else {
                 gbSpoken = nil
@@ -714,12 +723,12 @@ private class StandingsTeamCell: UITableViewCell {
         accessibilityLabel = AccessibilitySupport.joined([
             "Ranked \(rank)",
             teamName,
-            "\(w) wins, \(l) losses",
+            "\(record.leagueRecord.wins) wins, \(record.leagueRecord.losses) losses",
             record.leagueRecord.pct.map { "Winning percentage \($0)" },
             gbSpoken,
-            l10Text.map { "Last 10: \($0)" },
-            record.streak?.streakCode.map { "Streak: \($0)" },
-            rdText.map { "Run differential: \($0)" },
+            detailStats.l10Text.map { "Last 10: \($0)" },
+            detailStats.streakCode.map { "Streak: \($0)" },
+            detailStats.rdText.map { "Run differential: \($0)" },
         ])
         accessibilityHint = "Shows team schedule"
     }

@@ -58,8 +58,8 @@ class ScorecardExportViewController: UIViewController {
         title = "Export Scorecard"
         navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .cancel, target: self, action: #selector(cancelTapped))
 
-        let titleFont = UIFont(name: "IBMPlexSansCond-Bold", size: 20) ?? .systemFont(ofSize: 20, weight: .bold)
-        let buttonFont = UIFont(name: "PatrickHand-Regular", size: 18) ?? .systemFont(ofSize: 18)
+        let titleFont = UIFont(name: AppFont.ibmPlexBold, size: 20) ?? .systemFont(ofSize: 20, weight: .bold)
+        let buttonFont = UIFont(name: AppFont.patrickHand, size: 18) ?? .systemFont(ofSize: 18)
         let pencilColor = AppColors.pencil
 
         let appearance = UINavigationBarAppearance()
@@ -143,13 +143,13 @@ class ScorecardExportViewController: UIViewController {
 
         let titleLabel = UILabel()
         titleLabel.text = mode.title
-        titleLabel.font = UIFont(name: "PatrickHand-Regular", size: 20) ?? .systemFont(ofSize: 20)
+        titleLabel.font = UIFont(name: AppFont.patrickHand, size: 20) ?? .systemFont(ofSize: 20)
         titleLabel.textColor = AppColors.pencil
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
         let subtitleLabel = UILabel()
         subtitleLabel.text = mode.subtitle
-        subtitleLabel.font = UIFont(name: "IBMPlexSansCond-Regular", size: 14) ?? .systemFont(ofSize: 14)
+        subtitleLabel.font = UIFont(name: AppFont.ibmPlexRegular, size: 14) ?? .systemFont(ofSize: 14)
         subtitleLabel.textColor = AppColors.pencil.withAlphaComponent(0.6)
         subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
 
@@ -223,7 +223,7 @@ class ScorecardExportViewController: UIViewController {
         config.baseBackgroundColor = AppColors.pencil.withAlphaComponent(0.12)
         config.baseForegroundColor = AppColors.pencil
 
-        let font = UIFont(name: "IBMPlexSansCond-Bold", size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
+        let font = UIFont(name: AppFont.ibmPlexBold, size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
         config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
             var out = incoming
             out.font = font

@@ -1,11 +1,11 @@
 import UIKit
 
-class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
+class TeamScheduleViewController: UIViewController {
 
     private let teamId: Int
     private let teamName: String
-    private var sections: [MonthSection] = []
-    private var nextGameIndexPath: IndexPath?
+    private let scheduleDataSource: ScheduleDataSource
+    private let rosterDataSource: RosterDataSource
     private var loadTask: Task<Void, Never>?
 
     private let statsContainer = UIView()
@@ -28,22 +28,28 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
 
     private var pencilColor: UIColor { AppColors.pencil }
 
-    private struct MonthSection {
-        let title: String
-        let games: [ScheduleGame]
-    }
-
-    private struct RosterSection {
-        let title: String
-        let players: [RosterEntry]
-    }
-
-    private var rosterSections: [RosterSection] = []
-
     init(teamId: Int, teamName: String) {
         self.teamId = teamId
         self.teamName = teamName
+        self.scheduleDataSource = ScheduleDataSource(teamId: teamId, teamName: teamName)
+        self.rosterDataSource = RosterDataSource()
         super.init(nibName: nil, bundle: nil)
+        
+        setupDataSourceCallbacks()
+    }
+
+    private func setupDataSourceCallbacks() {
+        scheduleDataSource.onGameSelected = { [weak self] game in
+            let detailVC = GameDetailViewController(gamePk: game.gamePk, games: [game])
+            detailVC.hidesBottomBarWhenPushed = true
+            self?.navigationController?.pushViewController(detailVC, animated: true)
+        }
+        
+        rosterDataSource.onPlayerSelected = { [weak self] player in
+            guard let playerId = player.person?.id, let fullName = player.person?.fullName else { return }
+            let playerVC = PlayerDetailViewController(playerId: playerId, fullName: fullName, position: player.position?.name ?? "")
+            self?.present(playerVC, animated: true)
+        }
     }
 
     required init?(coder: NSCoder) {
@@ -250,8 +256,8 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
     }
 
     private func setupTableView() {
-        tableView.dataSource = self
-        tableView.delegate = self
+        tableView.dataSource = scheduleDataSource
+        tableView.delegate = scheduleDataSource
         tableView.backgroundColor = AppColors.paper
         tableView.separatorStyle = .none
         tableView.rowHeight = UITableView.automaticDimension
@@ -269,8 +275,8 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
     }
 
     private func setupRosterTableView() {
-        rosterTableView.dataSource = self
-        rosterTableView.delegate = self
+        rosterTableView.dataSource = rosterDataSource
+        rosterTableView.delegate = rosterDataSource
         rosterTableView.backgroundColor = AppColors.paper
         rosterTableView.separatorStyle = .none
         rosterTableView.rowHeight = UITableView.automaticDimension
@@ -369,11 +375,9 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
                 let managerName = try? await managerFetch
                 guard !Task.isCancelled else { return }
 
-                let sorted = fetched.sorted { scheduleDate(from: $0.gameDate) < scheduleDate(from: $1.gameDate) }
-                self.sections = buildMonthSections(from: sorted)
-                self.nextGameIndexPath = findNextGameIndexPath()
+                self.scheduleDataSource.update(with: fetched)
                 self.loadingIndicator.stopAnimating()
-                self.populateStats(from: sorted)
+                self.populateStats(from: fetched)
                 self.populateManager(managerName)
                 self.statsContainer.isHidden = false
                 self.tableView.reloadData()
@@ -381,7 +385,7 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
             } catch {
                 guard !Task.isCancelled else { return }
                 self.loadingIndicator.stopAnimating()
-                if self.sections.isEmpty {
+                if self.scheduleDataSource.sections.isEmpty {
                     self.errorLabel.text = "Couldn't load schedule"
                     self.errorLabel.isHidden = false
                     self.retryButton.isHidden = false
@@ -396,7 +400,7 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
         statsContainer.isHidden = !isSchedule
         rosterTableView.isHidden = isSchedule
         
-        if !isSchedule && rosterSections.isEmpty {
+        if !isSchedule && rosterDataSource.rosterSections.isEmpty {
             loadRoster()
         }
     }
@@ -406,7 +410,7 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
         Task {
             do {
                 let entries = try await MLBAPIClient.shared.fetchTeamRoster(teamId: teamId)
-                self.rosterSections = buildRosterSections(from: entries)
+                self.rosterDataSource.update(with: entries)
                 self.loadingIndicator.stopAnimating()
                 self.rosterTableView.reloadData()
             } catch {
@@ -415,7 +419,7 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
         }
     }
 
-    private func buildRosterSections(from entries: [RosterEntry]) -> [RosterSection] {
+    private func buildRosterSections(from entries: [RosterEntry]) -> [RosterDataSource.RosterSection] {
         var pitchers: [RosterEntry] = []
         var catchers: [RosterEntry] = []
         var infielders: [RosterEntry] = []
@@ -431,12 +435,12 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
             else { dhs.append(entry) }
         }
         
-        var result: [RosterSection] = []
-        if !pitchers.isEmpty { result.append(RosterSection(title: "Pitchers", players: pitchers)) }
-        if !catchers.isEmpty { result.append(RosterSection(title: "Catchers", players: catchers)) }
-        if !infielders.isEmpty { result.append(RosterSection(title: "Infielders", players: infielders)) }
-        if !outfielders.isEmpty { result.append(RosterSection(title: "Outfielders", players: outfielders)) }
-        if !dhs.isEmpty { result.append(RosterSection(title: "Designated Hitters", players: dhs)) }
+        var result: [RosterDataSource.RosterSection] = []
+        if !pitchers.isEmpty { result.append(RosterDataSource.RosterSection(title: "Pitchers", players: pitchers)) }
+        if !catchers.isEmpty { result.append(RosterDataSource.RosterSection(title: "Catchers", players: catchers)) }
+        if !infielders.isEmpty { result.append(RosterDataSource.RosterSection(title: "Infielders", players: infielders)) }
+        if !outfielders.isEmpty { result.append(RosterDataSource.RosterSection(title: "Outfielders", players: outfielders)) }
+        if !dhs.isEmpty { result.append(RosterDataSource.RosterSection(title: "Designated Hitters", players: dhs)) }
         return result
     }
 
@@ -449,14 +453,14 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
     }
 
     private func scrollToNextGame(animated: Bool) {
-        guard let ip = nextGameIndexPath else { return }
+        guard let ip = scheduleDataSource.nextGameIndexPath else { return }
         let targetRow = max(0, ip.row - 2)
         let targetIP = IndexPath(row: targetRow, section: ip.section)
         tableView.scrollToRow(at: targetIP, at: .top, animated: animated)
     }
 
     func scrollViewShouldScrollToTop(_ scrollView: UIScrollView) -> Bool {
-        if nextGameIndexPath != nil {
+        if scheduleDataSource.nextGameIndexPath != nil {
             scrollToNextGame(animated: true)
             return false
         }
@@ -484,7 +488,7 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
     }
 
     private func calculateSeasonStats(from games: [ScheduleGame]) -> TeamSeasonStats {
-        let completed = games.filter { gamePhase($0) == .completed }
+        let completed = games.filter { scheduleDataSource.gamePhase($0) == .completed }
 
         var wins = 0, losses = 0, homeW = 0, homeL = 0, awayW = 0, awayL = 0
         var runsFor = 0, runsAgainst = 0
@@ -510,7 +514,7 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
                 if won { awayW += 1 } else { awayL += 1 }
             }
 
-            if abs(ts - os) == 1 {
+            if Swift.abs(Int(ts) - Int(os)) == 1 {
                 if won { oneRunW += 1 } else { oneRunL += 1 }
             }
 
@@ -688,80 +692,10 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
         segmentedOverlay.setNeedsLayout()
         statsContainer.viewWithTag(100)?.backgroundColor = pc.withAlphaComponent(0.1)
         // Just reload stats from sections data
-        let allGames = sections.flatMap { $0.games }
+        let allGames = scheduleDataSource.sections.flatMap { $0.games }
         if !allGames.isEmpty {
             populateStats(from: allGames)
         }
-    }
-
-    // MARK: - Month Grouping
-
-    private func buildMonthSections(from games: [ScheduleGame]) -> [MonthSection] {
-        let cal = Calendar.current
-        let monthFormatter = DateFormatter()
-        monthFormatter.dateFormat = "MMMM"
-
-        var sectionMap: [(key: Int, title: String, games: [ScheduleGame])] = []
-        for game in games {
-            let date = scheduleDate(from: game.gameDate)
-            let month = cal.component(.month, from: date)
-            if let last = sectionMap.last, last.key == month {
-                sectionMap[sectionMap.count - 1].games.append(game)
-            } else {
-                let title = monthFormatter.string(from: date)
-                sectionMap.append((key: month, title: title, games: [game]))
-            }
-        }
-        return sectionMap.map { MonthSection(title: $0.title, games: $0.games) }
-    }
-
-    // MARK: - Helpers
-
-    private func scheduleDate(from isoDate: String) -> Date {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: isoDate) { return date }
-        let fallback = ISO8601DateFormatter()
-        fallback.formatOptions = [.withInternetDateTime]
-        return fallback.date(from: isoDate) ?? .distantFuture
-    }
-
-    private func findNextGameIndexPath() -> IndexPath? {
-        for (s, section) in sections.enumerated() {
-            for (r, game) in section.games.enumerated() {
-                let phase = gamePhase(game)
-                if phase == .future || phase == .live {
-                    return IndexPath(row: r, section: s)
-                }
-            }
-        }
-        return nil
-    }
-
-    func gamePhase(_ game: ScheduleGame) -> GamePhase {
-        let state = game.status.detailedState.lowercased()
-        let code = game.status.statusCode?.lowercased() ?? ""
-
-        if state == "final" || state == "game over" || state == "completed early" || code == "f" || code == "o" {
-            return .completed
-        }
-        if state == "in progress" || state.hasPrefix("top ") || state.hasPrefix("bottom ") ||
-            state.hasPrefix("middle ") || state.hasPrefix("mid ") || state.hasPrefix("end ") {
-            return .live
-        }
-        if state.contains("delay") || state.contains("suspend") || state.contains("postpon") {
-            return .delayed
-        }
-        return .future
-    }
-
-    enum GamePhase {
-        case completed, live, delayed, future
-    }
-
-    private func abbreviation(for teamName: String) -> String {
-        let map: [String: String] = ["Arizona Diamondbacks": "ARI", "Atlanta Braves": "ATL", "Baltimore Orioles": "BAL", "Boston Red Sox": "BOS", "Chicago Cubs": "CHC", "Chicago White Sox": "CWS", "Cincinnati Reds": "CIN", "Cleveland Guardians": "CLE", "Colorado Rockies": "COL", "Detroit Tigers": "DET", "Houston Astros": "HOU", "Kansas City Royals": "KC", "Los Angeles Angels": "LAA", "Los Angeles Dodgers": "LAD", "Miami Marlins": "MIA", "Milwaukee Brewers": "MIL", "Minnesota Twins": "MIN", "New York Mets": "NYM", "New York Yankees": "NYY", "Oakland Athletics": "OAK", "Philadelphia Phillies": "PHI", "Pittsburgh Pirates": "PIT", "San Diego Padres": "SD", "San Francisco Giants": "SF", "Seattle Mariners": "SEA", "St. Louis Cardinals": "STL", "Tampa Bay Rays": "TB", "Texas Rangers": "TEX", "Toronto Blue Jays": "TOR", "Washington Nationals": "WSH"]
-        return map[teamName] ?? String(teamName.prefix(3)).uppercased()
     }
 
     private func nickname(for teamName: String) -> String {
@@ -774,463 +708,5 @@ class TeamScheduleViewController: UIViewController, UITableViewDataSource, UITab
             return last
         }
         return teamName
-    }
-
-    // MARK: - Table View
-
-    func numberOfSections(in tableView: UITableView) -> Int {
-        if tableView === rosterTableView {
-            return rosterSections.count
-        }
-        return sections.count
-    }
-
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        if tableView === rosterTableView {
-            return rosterSections[section].players.count
-        }
-        return sections[section].games.count
-    }
-
-    func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        if tableView === rosterTableView {
-            return rosterSections[section].title
-        }
-        return sections[section].title
-    }
-
-    func tableView(_ tableView: UITableView, willDisplayHeaderView view: UIView, forSection section: Int) {
-        guard let header = view as? UITableViewHeaderFooterView else { return }
-        header.textLabel?.font = AppFont.ibmPlexCondensedBold(16, textStyle: .headline, compatibleWith: traitCollection)
-        header.textLabel?.textColor = pencilColor.withAlphaComponent(0.6)
-        header.contentView.backgroundColor = AppColors.paper
-    }
-
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        if tableView === rosterTableView {
-            let cell = tableView.dequeueReusableCell(withIdentifier: RosterPlayerCell.reuseIdentifier, for: indexPath) as! RosterPlayerCell
-            let player = rosterSections[indexPath.section].players[indexPath.row]
-            cell.configure(with: player)
-            return cell
-        }
-
-        let cell = tableView.dequeueReusableCell(withIdentifier: TeamGameCell.reuseIdentifier, for: indexPath) as! TeamGameCell
-        let game = sections[indexPath.section].games[indexPath.row]
-        let isNext = indexPath == nextGameIndexPath
-
-        var isSeriesStart = indexPath.row == 0
-        if indexPath.row > 0 {
-            let prev = sections[indexPath.section].games[indexPath.row - 1]
-            let prevOpponent = prev.teams.home.team.id == teamId ? prev.teams.away.team.id : prev.teams.home.team.id
-            let curOpponent = game.teams.home.team.id == teamId ? game.teams.away.team.id : game.teams.home.team.id
-            isSeriesStart = prevOpponent != curOpponent
-        }
-
-        cell.configure(with: game, teamId: teamId, phase: gamePhase(game), isNextGame: isNext, isSeriesStart: isSeriesStart)
-        return cell
-    }
-
-    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        tableView.deselectRow(at: indexPath, animated: true)
-        
-        if tableView === rosterTableView {
-            let player = rosterSections[indexPath.section].players[indexPath.row]
-            guard let playerId = player.person?.id, let fullName = player.person?.fullName else { return }
-            let playerVC = PlayerDetailViewController(playerId: playerId, fullName: fullName, position: player.position?.name ?? "")
-            present(playerVC, animated: true)
-            return
-        }
-
-        let game = sections[indexPath.section].games[indexPath.row]
-        let detailVC = GameDetailViewController(gamePk: game.gamePk, games: [game])
-        detailVC.hidesBottomBarWhenPushed = true
-        navigationController?.pushViewController(detailVC, animated: true)
-    }
-}
-
-// MARK: - TeamGameCell
-
-private class TeamGameCell: UITableViewCell {
-    static let reuseIdentifier = "TeamGameCell"
-
-    private let opponentLabel = UILabel()
-    private let detailLabel = UILabel()
-    private let rightLabel = UILabel()
-    private let statusBadge = UILabel()
-    private let chevronView = UIImageView()
-    private let linesLayer = CAShapeLayer()
-    private let seriesDivider = UIView()
-    private var topConstraint: NSLayoutConstraint!
-
-    private var pencilColor: UIColor { AppColors.pencil }
-
-    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
-        super.init(style: style, reuseIdentifier: reuseIdentifier)
-        setupUI()
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    override func prepareForReuse() {
-        super.prepareForReuse()
-        backgroundColor = AppColors.paper
-        opponentLabel.alpha = 1.0
-        detailLabel.alpha = 1.0
-    }
-
-    private func setupUI() {
-        backgroundColor = AppColors.paper
-        contentView.layer.addSublayer(linesLayer)
-
-        opponentLabel.font = AppFont.ibmPlexCondensedBold(20, textStyle: .body)
-        opponentLabel.adjustsFontForContentSizeCategory = true
-        opponentLabel.numberOfLines = 0
-
-        detailLabel.adjustsFontForContentSizeCategory = true
-        detailLabel.numberOfLines = 0
-
-        rightLabel.font = AppFont.patrick(22, textStyle: .title3)
-        rightLabel.textAlignment = .right
-        rightLabel.adjustsFontForContentSizeCategory = true
-        rightLabel.numberOfLines = 0
-        rightLabel.setContentHuggingPriority(.required, for: .horizontal)
-        rightLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
-
-        statusBadge.font = AppFont.ibmPlexCondensed(12, textStyle: .caption1)
-        statusBadge.textAlignment = .center
-        statusBadge.adjustsFontForContentSizeCategory = true
-        statusBadge.setContentHuggingPriority(.required, for: .horizontal)
-        statusBadge.setContentCompressionResistancePriority(.required, for: .horizontal)
-
-        chevronView.image = UIImage.pencilStyledIcon(
-            named: "chevron.forward",
-            color: pencilColor.withAlphaComponent(0.5),
-            size: CGSize(width: 10, height: 10)
-        )
-        chevronView.contentMode = .center
-
-        seriesDivider.isHidden = true
-
-        for v: UIView in [seriesDivider, opponentLabel, detailLabel, rightLabel, statusBadge, chevronView] {
-            contentView.addSubview(v)
-            v.translatesAutoresizingMaskIntoConstraints = false
-        }
-
-        let pad: CGFloat = 16
-        let gutter: CGFloat = 40
-        topConstraint = opponentLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 10)
-        NSLayoutConstraint.activate([
-            seriesDivider.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 0),
-            seriesDivider.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: pad),
-            seriesDivider.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -pad),
-            seriesDivider.heightAnchor.constraint(equalToConstant: 1),
-
-            // Status badge in a fixed gutter on the left
-            statusBadge.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: pad),
-            statusBadge.trailingAnchor.constraint(equalTo: opponentLabel.leadingAnchor, constant: -4),
-            statusBadge.widthAnchor.constraint(equalToConstant: gutter),
-            statusBadge.centerYAnchor.constraint(equalTo: opponentLabel.centerYAnchor),
-
-            // Top line: opponent (now with fixed leading offset relative to contentView)
-            topConstraint,
-            opponentLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: pad + gutter + 4),
-            opponentLabel.trailingAnchor.constraint(lessThanOrEqualTo: rightLabel.leadingAnchor, constant: -8),
-            
-            // Right side: score/time
-            rightLabel.topAnchor.constraint(greaterThanOrEqualTo: opponentLabel.topAnchor),
-            rightLabel.bottomAnchor.constraint(lessThanOrEqualTo: detailLabel.bottomAnchor),
-            {
-                let c = rightLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor)
-                c.priority = .defaultHigh
-                return c
-            }(),
-            rightLabel.trailingAnchor.constraint(equalTo: chevronView.leadingAnchor, constant: -8),
-
-            // Chevron
-            chevronView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -pad),
-            chevronView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            chevronView.widthAnchor.constraint(equalToConstant: 10),
-
-            // Bottom line: detail
-            detailLabel.topAnchor.constraint(equalTo: opponentLabel.bottomAnchor, constant: 2),
-            detailLabel.leadingAnchor.constraint(equalTo: opponentLabel.leadingAnchor),
-            detailLabel.trailingAnchor.constraint(lessThanOrEqualTo: rightLabel.leadingAnchor, constant: -8),
-            detailLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -10),
-        ])
-    }
-
-    func configure(with game: ScheduleGame, teamId: Int, phase: TeamScheduleViewController.GamePhase, isNextGame: Bool, isSeriesStart: Bool) {
-        if isSeriesStart {
-            topConstraint.constant = 20
-            seriesDivider.isHidden = false
-            seriesDivider.backgroundColor = pencilColor.withAlphaComponent(0.1)
-        } else {
-            topConstraint.constant = 10
-            seriesDivider.isHidden = true
-        }
-
-        let isHome = game.teams.home.team.id == teamId
-        let opponent = isHome ? game.teams.away.team.name ?? "TBD" : game.teams.home.team.name ?? "TBD"
-        let prefix = isHome ? "vs" : "@"
-
-        let gameDate = parseDate(game.gameDate)
-
-        opponentLabel.text = "\(prefix) \(abbreviation(for: opponent))"
-        opponentLabel.textColor = TeamColorProvider.color(for: opponent)
-
-        let df = DateFormatter()
-        df.dateFormat = "EEE, MMM d"
-        let dateStr = df.string(from: gameDate)
-        let detailFont = AppFont.ibmPlexCondensed(15, textStyle: .subheadline)
-        let detail = NSMutableAttributedString(
-            string: dateStr,
-            attributes: [.font: detailFont, .foregroundColor: pencilColor.withAlphaComponent(0.6)]
-        )
-        if let venue = game.venue?.name {
-            detail.append(NSAttributedString(
-                string: " · \(venue)",
-                attributes: [.font: detailFont, .foregroundColor: pencilColor.withAlphaComponent(0.35)]
-            ))
-        }
-
-        if phase == .delayed {
-            detail.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: NSRange(location: 0, length: detail.length))
-        }
-
-        if phase == .delayed, let resDate = game.rescheduleDate {
-            let rd = parseDate(resDate)
-            let rdf = DateFormatter()
-            rdf.dateFormat = "MMM d"
-            detail.append(NSAttributedString(
-                string: " · Resched: \(rdf.string(from: rd))",
-                attributes: [.font: detailFont, .foregroundColor: UIColor.systemOrange.withAlphaComponent(0.8)]
-            ))
-        } else if let fromDate = game.rescheduledFromDate {
-            let rd = parseDate(fromDate)
-            let rdf = DateFormatter()
-            rdf.dateFormat = "MMM d"
-            detail.append(NSAttributedString(
-                string: " · From: \(rdf.string(from: rd))",
-                attributes: [.font: detailFont, .foregroundColor: pencilColor.withAlphaComponent(0.35)]
-            ))
-        }
-        detailLabel.attributedText = detail
-
-        backgroundColor = isNextGame ? AppColors.selected : AppColors.paper
-
-        let pc = pencilColor
-        let tf = DateFormatter()
-        tf.dateFormat = "h:mm a"
-
-        switch phase {
-        case .completed:
-            let teamScore: Int
-            let opponentScore: Int
-            if isHome {
-                teamScore = game.teams.home.score ?? 0
-                opponentScore = game.teams.away.score ?? 0
-            } else {
-                teamScore = game.teams.away.score ?? 0
-                opponentScore = game.teams.home.score ?? 0
-            }
-            let won = teamScore > opponentScore
-            let wl = won ? "W" : (teamScore < opponentScore ? "L" : "T")
-            var scoreText: String
-            if let currentInning = game.linescore?.currentInning,
-               currentInning > (game.linescore?.scheduledInnings ?? 9) {
-                scoreText = "\(wl)/\(currentInning) \(teamScore)-\(opponentScore)"
-            } else {
-                scoreText = "\(wl) \(teamScore)-\(opponentScore)"
-            }
-            rightLabel.text = scoreText
-            rightLabel.textColor = won ? .systemGreen : .systemRed
-            opponentLabel.alpha = 0.7
-            detailLabel.alpha = 0.7
-            statusBadge.text = ""
-
-        case .live:
-            let teamScore: Int
-            let opponentScore: Int
-            if isHome {
-                teamScore = game.teams.home.score ?? 0
-                opponentScore = game.teams.away.score ?? 0
-            } else {
-                teamScore = game.teams.away.score ?? 0
-                opponentScore = game.teams.home.score ?? 0
-            }
-            rightLabel.text = "\(teamScore)-\(opponentScore)"
-            rightLabel.textColor = pc
-            statusBadge.text = "LIVE"
-            statusBadge.textColor = .systemRed
-            opponentLabel.alpha = 1.0
-            detailLabel.alpha = 1.0
-
-        case .delayed:
-            let timeStr = tf.string(from: gameDate)
-            rightLabel.attributedText = NSAttributedString(
-                string: timeStr,
-                attributes: [
-                    .font: AppFont.patrick(22, textStyle: .title3),
-                    .foregroundColor: pc.withAlphaComponent(0.3),
-                    .strikethroughStyle: NSUnderlineStyle.single.rawValue
-                ]
-            )
-            statusBadge.text = "PPD"
-            statusBadge.textColor = pc.withAlphaComponent(0.5)
-            opponentLabel.alpha = 0.7
-            detailLabel.alpha = 0.7
-
-        case .future:
-            rightLabel.text = tf.string(from: gameDate)
-            rightLabel.textColor = pc.withAlphaComponent(0.5)
-            if isNextGame {
-                statusBadge.text = "NEXT"
-                statusBadge.textColor = .systemRed
-            } else {
-                statusBadge.text = ""
-            }
-            opponentLabel.alpha = 1.0
-            detailLabel.alpha = 1.0
-        }
-
-        isAccessibilityElement = true
-        accessibilityTraits = .button
-        let spokenOpponent = "\(prefix) \(opponent)"
-        var statusPrefix = ""
-        if statusBadge.text == "NEXT" { statusPrefix = "Next game," }
-        else if statusBadge.text == "PPD" { statusPrefix = "Postponed," }
-        else if statusBadge.text == "LIVE" { statusPrefix = "Live now," }
-        
-        var detailVO = detailLabel.attributedText?.string ?? ""
-        detailVO = detailVO.replacingOccurrences(of: " · ", with: ", ")
-        detailVO = detailVO.replacingOccurrences(of: "Resched:", with: "rescheduled to")
-        detailVO = detailVO.replacingOccurrences(of: "From:", with: "originally scheduled for")
-        
-        accessibilityLabel = AccessibilitySupport.joined([
-            statusPrefix,
-            spokenOpponent,
-            rightLabel.text,
-            detailVO
-        ])
-    }
-
-    private func parseDate(_ isoDate: String) -> Date {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: isoDate) { return date }
-        
-        let fallback = ISO8601DateFormatter()
-        fallback.formatOptions = [.withInternetDateTime]
-        if let date = fallback.date(from: isoDate) { return date }
-        
-        let simple = DateFormatter()
-        simple.dateFormat = "yyyy-MM-dd"
-        if let date = simple.date(from: isoDate) { return date }
-        
-        return .distantFuture
-    }
-
-    private func abbreviation(for teamName: String) -> String {
-        let map: [String: String] = ["Arizona Diamondbacks": "ARI", "Atlanta Braves": "ATL", "Baltimore Orioles": "BAL", "Boston Red Sox": "BOS", "Chicago Cubs": "CHC", "Chicago White Sox": "CWS", "Cincinnati Reds": "CIN", "Cleveland Guardians": "CLE", "Colorado Rockies": "COL", "Detroit Tigers": "DET", "Houston Astros": "HOU", "Kansas City Royals": "KC", "Los Angeles Angels": "LAA", "Los Angeles Dodgers": "LAD", "Miami Marlins": "MIA", "Milwaukee Brewers": "MIL", "Minnesota Twins": "MIN", "New York Mets": "NYM", "New York Yankees": "NYY", "Oakland Athletics": "OAK", "Philadelphia Phillies": "PHI", "Pittsburgh Pirates": "PIT", "San Diego Padres": "SD", "San Francisco Giants": "SF", "Seattle Mariners": "SEA", "St. Louis Cardinals": "STL", "Tampa Bay Rays": "TB", "Texas Rangers": "TEX", "Toronto Blue Jays": "TOR", "Washington Nationals": "WSH"]
-        return map[teamName] ?? String(teamName.prefix(3)).uppercased()
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        let b = contentView.bounds
-        let path = UIBezierPath()
-        path.append(UIBezierPath.pencilLine(from: CGPoint(x: 16, y: b.maxY), to: CGPoint(x: b.maxX - 16, y: b.maxY), jitter: 0.3))
-        linesLayer.path = path.cgPath
-        linesLayer.strokeColor = pencilColor.withAlphaComponent(0.15).cgColor
-        linesLayer.lineWidth = 0.5
-        linesLayer.fillColor = UIColor.clear.cgColor
-    }
-}
-
-// MARK: - RosterPlayerCell
-
-private class RosterPlayerCell: UITableViewCell {
-    static let reuseIdentifier = "RosterPlayerCell"
-
-    private let nameLabel = UILabel()
-    private let numberLabel = UILabel()
-    private let positionLabel = UILabel()
-    private let chevronView = UIImageView()
-    private let linesLayer = CAShapeLayer()
-
-    private var pencilColor: UIColor { AppColors.pencil }
-
-    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
-        super.init(style: style, reuseIdentifier: reuseIdentifier)
-        setupUI()
-    }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    private func setupUI() {
-        backgroundColor = AppColors.paper
-        contentView.layer.addSublayer(linesLayer)
-
-        numberLabel.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1)
-        numberLabel.textColor = pencilColor.withAlphaComponent(0.4)
-        numberLabel.textAlignment = .center
-
-        nameLabel.font = AppFont.ibmPlexCondensedBold(18, textStyle: .body)
-        nameLabel.textColor = pencilColor
-        nameLabel.adjustsFontForContentSizeCategory = true
-
-        positionLabel.font = AppFont.patrick(16, textStyle: .subheadline)
-        positionLabel.textColor = pencilColor.withAlphaComponent(0.5)
-
-        chevronView.image = UIImage.pencilStyledIcon(
-            named: "chevron.forward",
-            color: pencilColor.withAlphaComponent(0.3),
-            size: CGSize(width: 10, height: 10)
-        )
-        chevronView.contentMode = .center
-
-        for v: UIView in [numberLabel, nameLabel, positionLabel, chevronView] {
-            contentView.addSubview(v)
-            v.translatesAutoresizingMaskIntoConstraints = false
-        }
-
-        let pad: CGFloat = 16
-        NSLayoutConstraint.activate([
-            numberLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: pad),
-            numberLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            numberLabel.widthAnchor.constraint(equalToConstant: 24),
-
-            nameLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12),
-            nameLabel.leadingAnchor.constraint(equalTo: numberLabel.trailingAnchor, constant: 8),
-            nameLabel.trailingAnchor.constraint(lessThanOrEqualTo: positionLabel.leadingAnchor, constant: -8),
-
-            positionLabel.trailingAnchor.constraint(equalTo: chevronView.leadingAnchor, constant: -12),
-            positionLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-
-            chevronView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -pad),
-            chevronView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            chevronView.widthAnchor.constraint(equalToConstant: 10),
-
-            nameLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12),
-        ])
-    }
-
-    func configure(with entry: RosterEntry) {
-        nameLabel.text = entry.person?.fullName
-        numberLabel.text = entry.jerseyNumber ?? "--"
-        positionLabel.text = entry.position?.abbreviation
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        let b = contentView.bounds
-        let path = UIBezierPath()
-        path.append(UIBezierPath.pencilLine(from: CGPoint(x: 16, y: b.maxY), to: CGPoint(x: b.maxX - 16, y: b.maxY), jitter: 0.3))
-        linesLayer.path = path.cgPath
-        linesLayer.strokeColor = pencilColor.withAlphaComponent(0.1).cgColor
-        linesLayer.lineWidth = 0.5
-        linesLayer.fillColor = UIColor.clear.cgColor
     }
 }

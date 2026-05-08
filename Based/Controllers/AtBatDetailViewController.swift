@@ -120,6 +120,17 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         pitchTrackView.isAccessibilityElement = false
         atBatGraphicView.isAccessibilityElement = false
 
+        setupScrollView()
+        setupMatchupSection()
+        setupContentSection()
+        setupConstraints()
+        setupGestures()
+
+        updateLayoutForCurrentSettings()
+        containerView.layer.addSublayer(linesLayer)
+    }
+
+    private func setupScrollView() {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(scrollView)
 
@@ -138,8 +149,9 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
             containerView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
             containerView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor)
         ])
+    }
 
-        // --- Matchup ---
+    private func setupMatchupSection() {
         matchupStack.axis = .vertical
         matchupStack.alignment = .leading
         matchupStack.spacing = 2
@@ -154,16 +166,18 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         batterLabel.numberOfLines = 0
         batterLabel.adjustsFontForContentSizeCategory = true
         batterLabel.isUserInteractionEnabled = true
-        batterLabel.isAccessibilityElement = false // Container handles it
+        batterLabel.isAccessibilityElement = false
 
         applyPitcherHeader()
         subHeaderLabel.numberOfLines = 0
         subHeaderLabel.isUserInteractionEnabled = true
-        subHeaderLabel.isAccessibilityElement = false // Container handles it
+        subHeaderLabel.isAccessibilityElement = false
 
         matchupStack.addArrangedSubview(batterLabel)
         matchupStack.addArrangedSubview(subHeaderLabel)
+    }
 
+    private func setupContentSection() {
         descriptionLabel.font = AppFont.patrick(18, textStyle: .body, compatibleWith: traitCollection)
         descriptionLabel.textColor = pencilColor.withAlphaComponent(0.8)
         descriptionLabel.textAlignment = .left
@@ -173,7 +187,6 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         descriptionLabel.setContentCompressionResistancePriority(.required, for: .vertical)
         containerView.addSubview(descriptionLabel)
 
-        // --- Right Column / Stacked Graphics ---
         atBatGraphicView.translatesAutoresizingMaskIntoConstraints = false
         atBatGraphicView.configure(with: event, accentColor: accentColor)
         containerView.addSubview(atBatGraphicView)
@@ -184,7 +197,6 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         }
         containerView.addSubview(pitchTrackView)
 
-        // --- Pitch Sequence Table ---
         pitchesTableView.backgroundColor = .clear
         pitchesTableView.separatorStyle = .none
         pitchesTableView.dataSource = self
@@ -201,12 +213,13 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         pitchSequenceHeaderLabel.textColor = pencilColor
         pitchSequenceHeaderLabel.adjustsFontForContentSizeCategory = true
         pitchSequenceHeaderLabel.accessibilityTraits = .header
+    }
 
+    private func setupConstraints() {
         let sideColumnWidth: CGFloat = 160
         let horizontalSpacing: CGFloat = 20
         let verticalSpacing: CGFloat = 12
 
-        // Initialize reusable constraints
         atBatGraphicWidthConstraint = atBatGraphicView.widthAnchor.constraint(equalToConstant: sideColumnWidth)
         atBatGraphicHeightConstraint = atBatGraphicView.heightAnchor.constraint(equalToConstant: sideColumnWidth)
         pitchTrackWidthConstraint = pitchTrackView.widthAnchor.constraint(equalToConstant: sideColumnWidth)
@@ -214,7 +227,6 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         pitchesTableHeightConstraint = pitchesTableView.heightAnchor.constraint(equalToConstant: 0)
         pitchesTableHeightConstraint?.isActive = true
 
-        // Regular 2-Column Constraints
         let descriptionCenterY = descriptionLabel.centerYAnchor.constraint(equalTo: pitchTrackView.centerYAnchor)
         descriptionCenterY.priority = .defaultHigh
 
@@ -244,7 +256,6 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
             pitchesTableView.topAnchor.constraint(greaterThanOrEqualTo: pitchTrackView.bottomAnchor, constant: 12)
         ]
 
-        // Accessibility Single-Column Constraints
         accessibilityLayoutConstraints = [
             matchupStack.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 20),
             matchupStack.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
@@ -272,10 +283,9 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
             pitchesTableView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
             pitchesTableView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -20)
         ])
+    }
 
-        updateLayoutForCurrentSettings()
-        containerView.layer.addSublayer(linesLayer)
-
+    private func setupGestures() {
         let batterTap = UITapGestureRecognizer(target: self, action: #selector(handleBatterTap))
         matchupStack.addGestureRecognizer(batterTap)
     }

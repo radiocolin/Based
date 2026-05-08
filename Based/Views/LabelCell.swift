@@ -6,7 +6,7 @@ class LabelCell: UICollectionViewCell {
     let label: UILabel = {
         let label = UILabel()
         label.textAlignment = .center
-        label.font = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16)
+        label.font = UIFont(name: AppFont.patrickHand, size: 16) ?? .systemFont(ofSize: 16)
         label.textColor = AppColors.pencil
         label.adjustsFontSizeToFitWidth = true
         label.minimumScaleFactor = 0.5
@@ -48,7 +48,7 @@ class LabelCell: UICollectionViewCell {
         contentView.layer.borderWidth = 0.5
         label.text = nil
         label.attributedText = nil
-        label.font = UIFont(name: "PatrickHand-Regular", size: 16) ?? .systemFont(ofSize: 16)
+        label.font = UIFont(name: AppFont.patrickHand, size: 16) ?? .systemFont(ofSize: 16)
         label.textColor = AppColors.pencil
         label.textAlignment = .center
         accessibilityLabel = nil
