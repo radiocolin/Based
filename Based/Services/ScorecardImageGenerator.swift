@@ -147,12 +147,26 @@ final class ScorecardImageGenerator {
     }
 
     private func computeLayout(scorecard: ScorecardData, linescore: Linescore?, options: ScorecardExportMode = .full) -> LayoutInfo {
-        let importantLabels = ["Venue", "Weather", "Att", "T", "First pitch"]
-        var filteredInfo = scorecard.gameInfo.filter { item in
-            importantLabels.contains(where: { item.label.contains($0) })
-        }
+        let displayLabels = ["DATE", "VENUE", "WEATHER", "ATTENDANCE", "DURATION", "FIRST PITCH"]
+        var infoMap: [String: String] = [:]
+        
         if let date = scorecard.gameDate {
-            filteredInfo.insert(GameInfoItem(label: "Date", value: date), at: 0)
+            infoMap["DATE"] = date
+        }
+        
+        let mapping = ["Venue": "VENUE", "Weather": "WEATHER", "Att": "ATTENDANCE", "T": "DURATION", "First pitch": "FIRST PITCH"]
+        for item in scorecard.gameInfo {
+            let raw = item.label.replacingOccurrences(of: ":", with: "").trimmingCharacters(in: .whitespaces)
+            for (key, val) in mapping {
+                if raw.contains(key) {
+                    infoMap[val] = item.value
+                    break
+                }
+            }
+        }
+        
+        let filteredInfo = displayLabels.map { label in
+            GameInfoItem(label: label, value: infoMap[label] ?? "")
         }
 
         let awayLayout = computeColumnLayout(for: scorecard, isHome: false)
@@ -657,18 +671,12 @@ final class ScorecardImageGenerator {
         let labelFont = UIFont(name: AppFont.ibmPlexSemiBold, size: 14) ?? .systemFont(ofSize: 14, weight: .semibold)
         let labelAttrs: [NSAttributedString.Key: Any] = [.font: labelFont, .foregroundColor: config.pencilColor.withAlphaComponent(0.45)]
 
-        let cleanLabels: [(String, String)] = {
-            let labelMap = ["T": "Duration", "Att": "Attendance"]
-            return info.compactMap { item in
-                let raw = item.label.replacingOccurrences(of: ":", with: "").trimmingCharacters(in: .whitespaces)
-                let display = labelMap[raw] ?? raw
-                let value = (item.value ?? "").trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ".", with: "")
-                guard !value.isEmpty else { return nil }
-                return (display.uppercased(), value)
-            }
-        }()
+        let cleanLabels: [(String, String)] = info.map { item in
+            let value = (item.value ?? "").trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ".", with: "")
+            return (item.label.uppercased(), value)
+        }
 
-        guard !cleanLabels.isEmpty else { return }
+        if cleanLabels.isEmpty { return }
 
         let colCount = cleanLabels.count
         let colWidth = rect.width / CGFloat(colCount)
