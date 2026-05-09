@@ -10,10 +10,12 @@ import UIKit
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
-
-
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        #if DEBUG
+        // Set to true to force all tips to appear in the simulator
+        BasedTips.showAllTipsForTesting = false
+        #endif
+        BasedTips.configure()
         return true
     }
 

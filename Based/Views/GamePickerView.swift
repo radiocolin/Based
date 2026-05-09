@@ -325,6 +325,9 @@ class GameCardCell: UICollectionViewCell {
     override init(frame: CGRect) {
         super.init(frame: frame)
         setupUI()
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: GameCardCell, _) in
+            self.setNeedsLayout()
+        }
     }
 
     required init?(coder: NSCoder) {
@@ -568,10 +571,10 @@ class GameCardCell: UICollectionViewCell {
             
             highlighterLayer.path = highlightPath.cgPath
             highlighterLayer.fillColor = nil
-            highlighterLayer.strokeColor = UIColor.systemYellow.withAlphaComponent(0.15).cgColor
-            highlighterLayer.lineWidth = 12
+            highlighterLayer.strokeColor = AppColors.highlighter.cgColor
+            highlighterLayer.lineWidth = traitCollection.userInterfaceStyle == .dark ? 8 : 12
             highlighterLayer.lineCap = .round
-            highlighterLayer.compositingFilter = "multiplyBlendMode"
+            highlighterLayer.compositingFilter = traitCollection.userInterfaceStyle == .dark ? "plusL" : "multiplyBlendMode"
             highlighterLayer.isHidden = false
         } else {
             highlighterLayer.isHidden = true

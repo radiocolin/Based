@@ -1,4 +1,5 @@
 import UIKit
+import TipKit
 
 class TeamsViewController: UITableViewController {
 
@@ -11,6 +12,9 @@ class TeamsViewController: UITableViewController {
     private var otherTeams: [TeamEntry] = []
     private var pencilColor: UIColor { AppColors.pencil }
     private var isLoading = false
+
+    private let favoriteTeamTip = FavoriteTeamTip()
+    private var tipObservationTask: Task<Void, Never>?
 
     private static let allTeams: [TeamEntry] = [
         TeamEntry(id: 109, name: "Arizona Diamondbacks"),
@@ -68,6 +72,55 @@ class TeamsViewController: UITableViewController {
         super.viewWillAppear(animated)
         setupNavigationBar()
         reloadTeams()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        observeTips()
+    }
+
+    private func observeTips() {
+        guard tipObservationTask == nil else { return }
+        tipObservationTask = Task { @MainActor in
+            await observeTip(favoriteTeamTip) { [weak self] in
+                self?.tableView.visibleCells.first ?? self?.tableView
+            }
+        }
+    }
+
+    private func observeTip(_ tip: any Tip, sourceItemProvider: @escaping () -> UIPopoverPresentationControllerSourceItem?) async {
+        var presentationTask: Task<Void, Never>?
+        
+        for await shouldDisplay in tip.shouldDisplayUpdates {
+            presentationTask?.cancel()
+            if shouldDisplay {
+                presentationTask = Task { @MainActor in
+                    while true {
+                        if Task.isCancelled { return }
+                        if presentedViewController == nil, let sourceItem = sourceItemProvider() {
+                            let popover = TipUIPopoverViewController(tip, sourceItem: sourceItem)
+                            present(popover, animated: true)
+                            return
+                        }
+                        try? await Task.sleep(nanoseconds: 500_000_000)
+                    }
+                }
+            } else {
+                if presentedViewController is TipUIPopoverViewController {
+                    dismiss(animated: true)
+                }
+                break
+            }
+        }
+        presentationTask?.cancel()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        if isMovingFromParent {
+            tipObservationTask?.cancel()
+            tipObservationTask = nil
+        }
     }
 
     @objc private func favoritesChanged() {
@@ -197,6 +250,7 @@ class TeamsViewController: UITableViewController {
         let impact = UIImpactFeedbackGenerator(style: .medium)
         impact.prepare()
         impact.impactOccurred()
+        favoriteTeamTip.invalidate(reason: .actionPerformed)
     }
 
     private func teamEntry(for indexPath: IndexPath) -> TeamEntry {

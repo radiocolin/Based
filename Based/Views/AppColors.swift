@@ -96,6 +96,13 @@ enum AppColors {
             : UIColor(white: 0.9, alpha: 0.5)
     }
 
+    /// Highlighter color for winning team
+    static var highlighter: UIColor { UIColor { tc in
+        tc.userInterfaceStyle == .dark
+            ? UIColor(red: 0.9, green: 1.0, blue: 0.0, alpha: 0.04)
+            : UIColor.systemYellow.withAlphaComponent(0.15)
+    }}
+
     /// Base-running line stroke — tint-aware
     static var lineStroke: UIColor { UIColor { tc in
         let isDark = tc.userInterfaceStyle == .dark

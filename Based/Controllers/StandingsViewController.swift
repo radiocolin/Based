@@ -1,4 +1,5 @@
 import UIKit
+import TipKit
 
 class StandingsViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
 
@@ -32,6 +33,9 @@ class StandingsViewController: UIViewController, UITableViewDataSource, UITableV
     private var pencilColor: UIColor { AppColors.pencil }
     private static let divisionOrder = [201, 202, 200, 204, 205, 203]
 
+    private let standingsModeTip = StandingsModeTip()
+    private var tipObservationTask: Task<Void, Never>?
+
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Standings"
@@ -54,6 +58,43 @@ class StandingsViewController: UIViewController, UITableViewDataSource, UITableV
 
         setupNavigationBar()
         loadStandings()
+        observeTips()
+    }
+
+    private func observeTips() {
+        guard tipObservationTask == nil else { return }
+        tipObservationTask = Task { @MainActor in
+            await observeTip(standingsModeTip) { [weak self] in
+                self?.segmentedControl
+            }
+        }
+    }
+
+    private func observeTip(_ tip: any Tip, sourceItemProvider: @escaping () -> UIPopoverPresentationControllerSourceItem?) async {
+        var presentationTask: Task<Void, Never>?
+        
+        for await shouldDisplay in tip.shouldDisplayUpdates {
+            presentationTask?.cancel()
+            if shouldDisplay {
+                presentationTask = Task { @MainActor in
+                    while true {
+                        if Task.isCancelled { return }
+                        if presentedViewController == nil, let sourceItem = sourceItemProvider() {
+                            let popover = TipUIPopoverViewController(tip, sourceItem: sourceItem)
+                            present(popover, animated: true)
+                            return
+                        }
+                        try? await Task.sleep(nanoseconds: 500_000_000)
+                    }
+                }
+            } else {
+                if presentedViewController is TipUIPopoverViewController {
+                    dismiss(animated: true)
+                }
+                break
+            }
+        }
+        presentationTask?.cancel()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -70,6 +111,7 @@ class StandingsViewController: UIViewController, UITableViewDataSource, UITableV
 
     deinit {
         loadTask?.cancel()
+        tipObservationTask?.cancel()
     }
 
     // MARK: - UI Setup
@@ -348,6 +390,7 @@ class StandingsViewController: UIViewController, UITableViewDataSource, UITableV
     }
 
     @objc private func modeChanged() {
+        standingsModeTip.invalidate(reason: .actionPerformed)
         currentMode = StandingsMode(rawValue: segmentedControl.selectedSegmentIndex) ?? .regularSeason
         if let cached = cachedStandings[.regularSeason] {
             buildSections(with: cached)

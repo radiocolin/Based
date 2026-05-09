@@ -304,6 +304,11 @@ class ScorecardExportViewController: UIViewController {
                     popover.sourceView = self.buttonStack
                     popover.sourceRect = self.buttonStack.bounds
                 }
+                activityVC.completionWithItemsHandler = { _, completed, _, _ in
+                    if completed {
+                        ReviewPromptService.shared.requestReviewIfAppropriate(in: self.view.window?.windowScene)
+                    }
+                }
                 self.present(activityVC, animated: true)
             }
         }

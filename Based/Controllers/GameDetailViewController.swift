@@ -1,4 +1,5 @@
 import UIKit
+import TipKit
 
 class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpdateDelegate, TimelineViewDelegate {
     
@@ -65,6 +66,12 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private var dismissedAdvisories: Set<String> = []
     private var segmentJustChanged = false
 
+    // Tips
+    private let tapAtBatTip = TapAtBatTip()
+    private let teamScheduleTip = TeamScheduleTip()
+    private let shareScorecardTip = ShareScorecardTip()
+    private var tipTask: Task<Void, Never>?
+
     private var stickyNameWidthConstraint: NSLayoutConstraint?
 
     // Constants
@@ -122,6 +129,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         
         setupViewModelCallbacks()
         viewModel.startPolling()
+
+        Task { await TapAtBatTip.gameViewed.donate() }
     }
     
     private func setupViewModelCallbacks() {
@@ -146,10 +155,19 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         }
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+    }
+
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         if isMovingFromParent || isBeingDismissed {
             viewModel.stopPolling()
+            if viewModel.isGameLive {
+                ReviewPromptService.shared.requestReviewIfAppropriate(in: view.window?.windowScene)
+            }
+            tipTask?.cancel()
+            tipTask = nil
         }
     }
 
@@ -272,6 +290,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     private func shareImage() {
+        shareScorecardTip.invalidate(reason: .actionPerformed)
         guard let scorecard = viewModel.currentScorecard else { return }
 
         let activityIndicator = UIActivityIndicatorView(style: .large)
@@ -305,6 +324,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     private func sharePDF() {
+        shareScorecardTip.invalidate(reason: .actionPerformed)
         guard let scorecard = viewModel.currentScorecard else { return }
 
         let activityIndicator = UIActivityIndicatorView(style: .large)
@@ -338,6 +358,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     }
 
     private func showExportCustomizer() {
+        shareScorecardTip.invalidate(reason: .actionPerformed)
         guard let scorecard = viewModel.currentScorecard else { return }
         let exportVC = ScorecardExportViewController(scorecard: scorecard, linescore: viewModel.currentLinescore)
         let nav = UINavigationController(rootViewController: exportVC)
@@ -348,8 +369,57 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         BarAppearanceSupport.applyPlainBarButtonAppearance(appearance, font: font, color: color)
     }
     
+    // MARK: - Tips
+
+    private func observeTips() {
+        guard tipTask == nil else { return }
+        tipTask = Task { @MainActor in
+            // 1. Tap At Bat Tip
+            await observeTip(tapAtBatTip) { [weak self] in
+                self?.scorecardView.rightCollectionView?.visibleCells.first ?? self?.scorecardView
+            }
+
+            // 2. Team Schedule Tip
+            await observeTip(teamScheduleTip) { [weak self] in
+                self?.gameHeaderView
+            }
+
+            // 3. Share Scorecard Tip
+            await observeTip(shareScorecardTip) { [weak self] in
+                self?.navigationItem.rightBarButtonItems?.first ?? self?.view
+            }
+        }
+    }
+
+    private func observeTip(_ tip: any Tip, sourceItemProvider: @escaping () -> UIPopoverPresentationControllerSourceItem?) async {
+        var presentationTask: Task<Void, Never>?
+        
+        for await shouldDisplay in tip.shouldDisplayUpdates {
+            presentationTask?.cancel()
+            if shouldDisplay {
+                presentationTask = Task { @MainActor in
+                    while true {
+                        if Task.isCancelled { return }
+                        if presentedViewController == nil, let sourceItem = sourceItemProvider() {
+                            let popover = TipUIPopoverViewController(tip, sourceItem: sourceItem)
+                            present(popover, animated: true)
+                            return
+                        }
+                        try? await Task.sleep(nanoseconds: 500_000_000)
+                    }
+                }
+            } else {
+                if presentedViewController is TipUIPopoverViewController {
+                    dismiss(animated: true)
+                }
+                break
+            }
+        }
+        presentationTask?.cancel()
+    }
+
     // MARK: - GameUpdateDelegate
-    
+
     func didUpdateSnapshot(_ snapshot: LiveGameSnapshot) {
         // Redundant with ViewModel callbacks, but keeping for protocol conformance if needed
         // or we can remove GameUpdateDelegate from VC
@@ -567,6 +637,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         scorecardView.delegate = self
 
         gameHeaderView.onTeamTapped = { [weak self] teamId, teamName in
+            self?.teamScheduleTip.invalidate(reason: .actionPerformed)
+            ShareScorecardTip.teamScheduleSeen = true
             self?.navigationItem.backBarButtonItem = UIBarButtonItem(title: "Game", style: .plain, target: nil, action: nil)
             let scheduleVC = TeamScheduleViewController(teamId: teamId, teamName: teamName)
             self?.navigationController?.pushViewController(scheduleVC, animated: true)
@@ -736,6 +808,10 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         if !wasLive && viewModel.isGameLive && hasCurrentAtBat {
             syncWithActiveAtBat()
         }
+
+        if wasLive && isFinal {
+            ReviewPromptService.shared.requestReviewIfAppropriate(in: view.window?.windowScene)
+        }
     }
 
     private func updateScorecard(with scorecard: ScorecardData) {
@@ -800,6 +876,10 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             advisoryBanner.isHidden = true
             teamSegmentedAdvisoryTopConstraint?.isActive = false
             teamSegmentedSafeTopConstraint?.isActive = true
+        }
+
+        if isFirstLoad {
+            observeTips()
         }
     }
 
@@ -1032,6 +1112,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
     // MARK: - ScorecardViewDelegate
     func didSelectAtBat(_ event: AtBatEvent, batter: ScorecardBatter, pitcherName: String) {
+        tapAtBatTip.invalidate(reason: .actionPerformed)
+        TeamScheduleTip.tapAtBatSeen = true
         let vc = AtBatDetailViewController(
             event: event,
             batterName: batter.fullName,
