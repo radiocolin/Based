@@ -54,6 +54,7 @@ class GameHeaderView: UIView {
     private var awayTeamName: String?
     private var homeTeamName: String?
     var onTeamTapped: ((Int, String) -> Void)?
+    var homeNameLabel: UILabel { homeName }
 
     override init(frame: CGRect) {
         super.init(frame: frame)

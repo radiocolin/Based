@@ -374,48 +374,41 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private func observeTips() {
         guard tipTask == nil else { return }
         tipTask = Task { @MainActor in
-            // 1. Tap At Bat Tip
-            await observeTip(tapAtBatTip) { [weak self] in
-                self?.scorecardView.rightCollectionView?.visibleCells.first ?? self?.scorecardView
+            await showTipOnce(tapAtBatTip) { [weak self] in
+                guard let self else { return nil }
+                return self.scorecardView.rightCollectionView?.cellForItem(at: IndexPath(item: 0, section: 0))
+                    ?? self.scorecardView
             }
-
-            // 2. Team Schedule Tip
-            await observeTip(teamScheduleTip) { [weak self] in
-                self?.gameHeaderView
+            await showTipOnce(teamScheduleTip) { [weak self] in
+                self?.gameHeaderView.homeNameLabel
             }
-
-            // 3. Share Scorecard Tip
-            await observeTip(shareScorecardTip) { [weak self] in
-                self?.navigationItem.rightBarButtonItems?.first ?? self?.view
+            await showTipOnce(shareScorecardTip) { [weak self] in
+                self?.navigationItem.rightBarButtonItems?.first
             }
         }
     }
 
-    private func observeTip(_ tip: any Tip, sourceItemProvider: @escaping () -> UIPopoverPresentationControllerSourceItem?) async {
-        var presentationTask: Task<Void, Never>?
-        
+    private func showTipOnce(_ tip: any Tip, sourceItem: @escaping () -> (any UIPopoverPresentationControllerSourceItem)?) async {
+        var presented = false
         for await shouldDisplay in tip.shouldDisplayUpdates {
-            presentationTask?.cancel()
-            if shouldDisplay {
-                presentationTask = Task { @MainActor in
-                    while true {
-                        if Task.isCancelled { return }
-                        if presentedViewController == nil, let sourceItem = sourceItemProvider() {
-                            let popover = TipUIPopoverViewController(tip, sourceItem: sourceItem)
-                            present(popover, animated: true)
-                            return
-                        }
-                        try? await Task.sleep(nanoseconds: 500_000_000)
-                    }
+            if shouldDisplay && !presented {
+                while presentedViewController != nil {
+                    if Task.isCancelled { return }
+                    try? await Task.sleep(nanoseconds: 200_000_000)
                 }
-            } else {
-                if presentedViewController is TipUIPopoverViewController {
+                if Task.isCancelled { return }
+                guard let source = sourceItem() else { return }
+                let popover = TipUIPopoverViewController(tip, sourceItem: source)
+                present(popover, animated: true)
+                presented = true
+            } else if !shouldDisplay {
+                if presented, presentedViewController is TipUIPopoverViewController {
                     dismiss(animated: true)
                 }
-                break
+                if presented { break }
+                if case .invalidated = tip.status { break }
             }
         }
-        presentationTask?.cancel()
     }
 
     // MARK: - GameUpdateDelegate
@@ -878,9 +871,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             teamSegmentedSafeTopConstraint?.isActive = true
         }
 
-        if isFirstLoad {
-            observeTips()
-        }
+        observeTips()
     }
 
     private func updateTeamSegmentedControlTitles() {

@@ -15,6 +15,10 @@ struct TapAtBatTip: Tip {
     var image: Image? {
         Image(systemName: "hand.tap")
     }
+
+    var options: [any TipOption] {
+        MaxDisplayCount(3)
+    }
 }
 
 struct TeamScheduleTip: Tip {
@@ -36,6 +40,10 @@ struct TeamScheduleTip: Tip {
     var rules: [Rule] {
         #Rule(Self.$tapAtBatSeen) { $0 == true }
         #Rule(TapAtBatTip.gameViewed) { $0.donations.count >= 3 }
+    }
+
+    var options: [any TipOption] {
+        MaxDisplayCount(3)
     }
 }
 
@@ -59,6 +67,10 @@ struct ShareScorecardTip: Tip {
         #Rule(Self.$teamScheduleSeen) { $0 == true }
         #Rule(TapAtBatTip.gameViewed) { $0.donations.count >= 5 }
     }
+
+    var options: [any TipOption] {
+        MaxDisplayCount(3)
+    }
 }
 
 struct FavoriteTeamTip: Tip {
@@ -72,6 +84,10 @@ struct FavoriteTeamTip: Tip {
 
     var image: Image? {
         Image(systemName: "star")
+    }
+
+    var options: [any TipOption] {
+        MaxDisplayCount(3)
     }
 }
 
@@ -87,28 +103,24 @@ struct StandingsModeTip: Tip {
     var image: Image? {
         Image(systemName: "arrow.left.arrow.right")
     }
+
+    var options: [any TipOption] {
+        MaxDisplayCount(3)
+    }
 }
 
 enum BasedTips {
-    static var showAllTipsForTesting = true
+    static var showAllTipsForTesting = false
 
     static func configure() {
         do {
             if showAllTipsForTesting {
                 try Tips.resetDatastore()
+                Tips.showAllTipsForTesting()
             }
             try Tips.configure([
                 .displayFrequency(showAllTipsForTesting ? .immediate : .daily)
             ])
-            if showAllTipsForTesting {
-                TeamScheduleTip.tapAtBatSeen = true
-                ShareScorecardTip.teamScheduleSeen = true
-                Task {
-                    for _ in 0..<10 {
-                        await TapAtBatTip.gameViewed.donate()
-                    }
-                }
-            }
         } catch {
             print("TipKit configuration failed: \(error)")
         }

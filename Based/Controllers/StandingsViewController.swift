@@ -91,7 +91,7 @@ class StandingsViewController: UIViewController, UITableViewDataSource, UITableV
                 if presentedViewController is TipUIPopoverViewController {
                     dismiss(animated: true)
                 }
-                break
+                if case .invalidated = tip.status { break }
             }
         }
         presentationTask?.cancel()
