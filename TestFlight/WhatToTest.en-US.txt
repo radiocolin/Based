@@ -1,15 +1,3 @@
-Standings, Team Pages, and Scorecard Polish
-
-Highlights:
-- New Standings tab with league/division rankings, detailed stats, and VoiceOver support.
-- Team pages now include active rosters, cleaner schedule alignment, reschedule indicators, and favorites shortcuts.
-- Scout Notebook styling refinements: improved typography, team-color accents, and hand-drawn winner/pitching-change marks.
-- Scorecards now handle between-inning pitching changes more reliably in the grid, exports, timeline, and at-bat detail sheets.
-- Substitutions in batting-order slots now render correctly, including rare pitcher/batter cases.
-- Scorecard exports produce crisp PNG/PDF output with pitching-change lines and centered result text matching the in-app layout more closely.
-
-What to test:
-- Verify standings rankings/stats and VoiceOver announcements.
-- Check roster and schedule behavior on team pages, including favorites and rescheduled games.
-- Confirm pitching change indicators and "replaces [Pitcher]" text in scorecards and at-bat details, especially around inning breaks.
-- Export a scorecard as image and PDF; verify pitching-change lines and result text alignment.
+-Added App Store review prompts
+-Added TipKit
+-Added dark mode winner highlight
