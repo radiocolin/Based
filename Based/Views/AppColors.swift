@@ -99,7 +99,7 @@ enum AppColors {
     /// Highlighter color for winning team
     static var highlighter: UIColor { UIColor { tc in
         tc.userInterfaceStyle == .dark
-            ? UIColor(red: 0.9, green: 1.0, blue: 0.0, alpha: 0.04)
+            ? UIColor(red: 0.0, green: 0.9, blue: 1.0, alpha: 0.08)
             : UIColor.systemYellow.withAlphaComponent(0.15)
     }}
 

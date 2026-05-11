@@ -551,30 +551,28 @@ class GameCardCell: UICollectionViewCell {
             let scoreLabel = (label == awayLabel) ? awayScoreLabel : homeScoreLabel
             let highlightPath = UIBezierPath()
             let midY = label.frame.midY
-            
-            // Deterministic "randomness" based on gamePk
+
             let seed = CGFloat(gamePk % 100) / 100.0
-            let verticalShift = (seed - 0.5) * 4.0 // -2 to +2pt shift
-            let tilt = (seed - 0.5) * 3.0 // -1.5 to +1.5pt tilt
-            
+            let verticalShift = (seed - 0.5) * 4.0
+            let tilt = (seed - 0.5) * 3.0
+
             let start = CGPoint(x: label.frame.minX - 6, y: midY + verticalShift - tilt)
             let end = CGPoint(x: scoreLabel.frame.maxX + 2, y: midY + verticalShift + tilt)
-            
-            // Multiple overlapping wobbly strokes for a "hand-drawn marker" look
-            // We use a wider spread and more strokes to make it look less perfectly confined
+
             for i in -2...2 {
                 let yOffset = CGFloat(i) * 2.0
                 let s = CGPoint(x: start.x - CGFloat.random(in: 0...4), y: start.y + yOffset)
                 let e = CGPoint(x: end.x + CGFloat.random(in: -2...2), y: end.y + yOffset)
                 highlightPath.append(.pencilLine(from: s, to: e, jitter: 1.8))
             }
-            
+
             highlighterLayer.path = highlightPath.cgPath
             highlighterLayer.fillColor = nil
             highlighterLayer.strokeColor = AppColors.highlighter.cgColor
-            highlighterLayer.lineWidth = traitCollection.userInterfaceStyle == .dark ? 8 : 12
+            highlighterLayer.lineWidth = 12
             highlighterLayer.lineCap = .round
-            highlighterLayer.compositingFilter = traitCollection.userInterfaceStyle == .dark ? "plusL" : "multiplyBlendMode"
+            highlighterLayer.compositingFilter = traitCollection.userInterfaceStyle == .dark ? nil : "multiplyBlendMode"
+            highlighterLayer.shadowOpacity = 0
             highlighterLayer.isHidden = false
         } else {
             highlighterLayer.isHidden = true
