@@ -1,7 +1,9 @@
 -Added a new compact scorecard layout for following more of the game at once
 -Added a new binoculars view menu with Regular, Compact, and Timeline modes
 -Added inning context to the play detail view
+-Improved the Teams view to be less dense
 -Fixed multiple issues where you couldn't tap a pitcher's name to get their stats
+-Fixed an issue where the Athletics weren't assigned a team color
 
 Please test:
 -Switching between Regular, Compact, and Timeline from the new view menu

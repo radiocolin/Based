@@ -172,8 +172,8 @@ class ScorecardCell: UICollectionViewCell {
     private func updatePitchingChangePath() {
         let b = contentView.bounds
         let path = UIBezierPath.pencilLine(
-            from: CGPoint(x: -0.5, y: 0.5),
-            to: CGPoint(x: b.width + 0.5, y: 0.5),
+            from: CGPoint(x: -0.5, y: -1),
+            to: CGPoint(x: b.width + 0.5, y: -1),
             jitter: 0.4
         )
         pitchingChangeLayer.path = path.cgPath

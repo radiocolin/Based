@@ -23,6 +23,7 @@ struct TeamColorProvider {
         "New York Mets": UIColor(red: 0.04, green: 0.27, blue: 0.56, alpha: 1.0),
         "New York Yankees": UIColor(red: 0.12, green: 0.27, blue: 0.47, alpha: 1.0),
         "Oakland Athletics": UIColor(red: 0.0, green: 0.40, blue: 0.29, alpha: 1.0),
+        "Athletics": UIColor(red: 0.0, green: 0.40, blue: 0.29, alpha: 1.0),
         "Philadelphia Phillies": UIColor(red: 0.75, green: 0.03, blue: 0.15, alpha: 1.0),
         "Pittsburgh Pirates": UIColor(red: 0.99, green: 0.72, blue: 0.15, alpha: 1.0),
         "San Diego Padres": UIColor(red: 0.49, green: 0.34, blue: 0.22, alpha: 1.0),

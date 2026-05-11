@@ -12,6 +12,8 @@ class TeamsViewController: UITableViewController {
     private var otherTeams: [TeamEntry] = []
     private var pencilColor: UIColor { AppColors.pencil }
     private var isLoading = false
+    private var teamRecords: [Int: (record: LeagueRecord, division: String)] = [:]
+    private var standingsTask: Task<Void, Never>?
 
     private let favoriteTeamTip = FavoriteTeamTip()
     private var tipObservationTask: Task<Void, Never>?
@@ -36,7 +38,7 @@ class TeamsViewController: UITableViewController {
         TeamEntry(id: 142, name: "Minnesota Twins"),
         TeamEntry(id: 121, name: "New York Mets"),
         TeamEntry(id: 147, name: "New York Yankees"),
-        TeamEntry(id: 133, name: "Oakland Athletics"),
+        TeamEntry(id: 133, name: "Athletics"),
         TeamEntry(id: 143, name: "Philadelphia Phillies"),
         TeamEntry(id: 134, name: "Pittsburgh Pirates"),
         TeamEntry(id: 135, name: "San Diego Padres"),
@@ -66,6 +68,7 @@ class TeamsViewController: UITableViewController {
 
         reloadTeams()
         setupNavigationBar()
+        loadStandings()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -152,6 +155,28 @@ class TeamsViewController: UITableViewController {
         }
     }
 
+    private func loadStandings() {
+        standingsTask?.cancel()
+        standingsTask = Task {
+            let season = Calendar.current.component(.year, from: Date())
+            guard let records = try? await MLBAPIClient.shared.fetchStandings(season: season) else { return }
+            var map: [Int: (record: LeagueRecord, division: String)] = [:]
+            for standing in records {
+                let divName = standing.division.name?
+                    .replacingOccurrences(of: "American League ", with: "AL ")
+                    .replacingOccurrences(of: "National League ", with: "NL ") ?? ""
+                for team in standing.teamRecords {
+                    if let id = team.team.id {
+                        map[id] = (team.leagueRecord, divName)
+                    }
+                }
+            }
+            guard !Task.isCancelled else { return }
+            teamRecords = map
+            tableView.reloadData()
+        }
+    }
+
     private func reloadTeams() {
         let favoriteIds = FavoritesService.shared.getFavoriteTeamIds()
         let all = Self.allTeams
@@ -182,17 +207,54 @@ class TeamsViewController: UITableViewController {
         return otherTeams.count
     }
 
-    override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        if hasFavorites {
-            return section == 0 ? "Favorites" : "All Teams"
-        }
-        return nil
+    override func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
+        guard hasFavorites else { return nil }
+        let title = section == 0 ? "Favorites" : "All Teams"
+        let pc = pencilColor
+
+        let header = UIView()
+        header.backgroundColor = AppColors.paper
+
+        let nameLabel = UILabel()
+        nameLabel.text = title
+        nameLabel.font = AppFont.ibmPlexCondensed(22, textStyle: .title2, compatibleWith: traitCollection)
+        nameLabel.textColor = pc
+        nameLabel.isAccessibilityElement = false
+
+        let line = UIView()
+        line.backgroundColor = pc.withAlphaComponent(0.15)
+
+        header.addSubview(nameLabel)
+        header.addSubview(line)
+        nameLabel.translatesAutoresizingMaskIntoConstraints = false
+        line.translatesAutoresizingMaskIntoConstraints = false
+
+        NSLayoutConstraint.activate([
+            nameLabel.topAnchor.constraint(equalTo: header.topAnchor, constant: 16),
+            nameLabel.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 16),
+            nameLabel.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -16),
+
+            line.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 4),
+            line.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 16),
+            line.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -16),
+            line.heightAnchor.constraint(equalToConstant: 1),
+            line.bottomAnchor.constraint(equalTo: header.bottomAnchor, constant: -4)
+        ])
+
+        header.isAccessibilityElement = true
+        header.accessibilityLabel = title
+        header.accessibilityTraits = .header
+
+        return header
     }
 
-    override func tableView(_ tableView: UITableView, willDisplayHeaderView view: UIView, forSection section: Int) {
-        guard let header = view as? UITableViewHeaderFooterView else { return }
-        header.textLabel?.font = AppFont.ibmPlexCondensedBold(16, textStyle: .headline, compatibleWith: traitCollection)
-        header.textLabel?.textColor = pencilColor.withAlphaComponent(0.6)
+    override func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
+        guard hasFavorites else { return 0 }
+        return UITableView.automaticDimension
+    }
+
+    override func tableView(_ tableView: UITableView, estimatedHeightForHeaderInSection section: Int) -> CGFloat {
+        hasFavorites ? 36 : 0
     }
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -201,8 +263,28 @@ class TeamsViewController: UITableViewController {
 
         var config = cell.defaultContentConfiguration()
         config.text = team.name
-        config.textProperties.font = AppFont.ibmPlexCondensedBold(20, textStyle: .body, compatibleWith: traitCollection)
+        config.textProperties.font = AppFont.ibmPlexCondensedBold(18, textStyle: .body, compatibleWith: traitCollection)
         config.textProperties.color = TeamColorProvider.color(for: team.name)
+
+        if let info = teamRecords[team.id] {
+            let detailAttr = NSMutableAttributedString()
+            let recordText = "\(info.record.wins)-\(info.record.losses)"
+            let recordAttrs: [NSAttributedString.Key: Any] = [
+                .font: AppFont.patrick(15, textStyle: .subheadline, compatibleWith: traitCollection),
+                .foregroundColor: pencilColor
+            ]
+            detailAttr.append(NSAttributedString(string: recordText, attributes: recordAttrs))
+
+            let divAttrs: [NSAttributedString.Key: Any] = [
+                .font: AppFont.ibmPlexCondensed(12, textStyle: .caption1, compatibleWith: traitCollection),
+                .foregroundColor: pencilColor.withAlphaComponent(0.45)
+            ]
+            detailAttr.append(NSAttributedString(string: "  \(info.division)", attributes: divAttrs))
+
+            config.attributedText = nil
+            config.secondaryAttributedText = detailAttr
+        }
+
         cell.contentConfiguration = config
         cell.backgroundColor = AppColors.paper
         cell.accessoryType = .none
