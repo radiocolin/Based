@@ -222,7 +222,11 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         let modeItem = UIBarButtonItem(image: modeImg, menu: makeViewModeMenu(iconSize: iconSize, color: pencilColor))
         modeItem.accessibilityLabel = "Choose view mode"
 
-        navigationItem.rightBarButtonItems = [shareItem, modeItem]
+        let helpImg = UIImage.pencilStyledIcon(named: "questionmark.circle", color: pencilColor, size: iconSize, offset: CGPoint(x: 0, y: 0.4), scaleMultiplier: 0.92)
+        let helpItem = UIBarButtonItem(image: helpImg, style: .plain, target: self, action: #selector(showScorecardHelp))
+        helpItem.accessibilityLabel = "How to read this scorecard"
+
+        navigationItem.rightBarButtonItems = [shareItem, modeItem, helpItem]
         
         let appearance = UINavigationBarAppearance()
         appearance.configureWithOpaqueBackground()
@@ -242,6 +246,15 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     
     @objc private func backTapped() {
         navigationController?.popViewController(animated: true)
+    }
+
+    @objc private func showScorecardHelp() {
+        let vc = UINavigationController(rootViewController: ScorecardHelpViewController())
+        if let sheet = vc.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+        }
+        present(vc, animated: true)
     }
 
     private func makeViewModeMenu(iconSize: CGSize, color: UIColor) -> UIMenu {

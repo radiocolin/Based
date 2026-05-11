@@ -12,6 +12,7 @@ class ScorecardCell: UICollectionViewCell {
     private let pitchingChangeLayer = CAShapeLayer()
     private let inningChangeIndicatorLayer = CAShapeLayer()
     private var accentColor: UIColor = AppColors.pencil
+    private var animatesStateChanges = false
     
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -141,18 +142,38 @@ class ScorecardCell: UICollectionViewCell {
         
         diamondView.alpha = 1.0
         let presentation = AtBatPresentation(event: event, teamAccentColor: accentColor)
-        resultLabel.textColor = presentation.primaryColor
-        ballsLabel.textColor = presentation.primaryColor
-        strikesLabel.textColor = presentation.primaryColor
-        outsLabel.textColor = presentation.primaryColor
-        resultLabel.attributedText = presentation.resultAttributedString(
-            font: resultLabel.font ?? .systemFont(ofSize: 18)
-        )
-        resultLabel.transform = presentation.resultTransform
-        
-        ballsLabel.text = presentation.ballsText
-        strikesLabel.text = presentation.strikesText
-        outsLabel.text = presentation.outsText
+        if animatesStateChanges {
+            UIView.transition(with: resultLabel, duration: 0.18, options: [.transitionCrossDissolve, .allowUserInteraction]) {
+                self.resultLabel.textColor = presentation.primaryColor
+                self.resultLabel.attributedText = presentation.resultAttributedString(
+                    font: self.resultLabel.font ?? .systemFont(ofSize: 18)
+                )
+                self.resultLabel.transform = presentation.resultTransform
+            }
+            let labelUpdates: [(UILabel, String)] = [
+                (ballsLabel, presentation.ballsText),
+                (strikesLabel, presentation.strikesText),
+                (outsLabel, presentation.outsText)
+            ]
+            labelUpdates.forEach { label, text in
+                UIView.transition(with: label, duration: 0.18, options: [.transitionCrossDissolve, .allowUserInteraction]) {
+                    label.text = text
+                    label.textColor = presentation.primaryColor
+                }
+            }
+        } else {
+            resultLabel.textColor = presentation.primaryColor
+            ballsLabel.textColor = presentation.primaryColor
+            strikesLabel.textColor = presentation.primaryColor
+            outsLabel.textColor = presentation.primaryColor
+            resultLabel.attributedText = presentation.resultAttributedString(
+                font: resultLabel.font ?? .systemFont(ofSize: 18)
+            )
+            resultLabel.transform = presentation.resultTransform
+            ballsLabel.text = presentation.ballsText
+            strikesLabel.text = presentation.strikesText
+            outsLabel.text = presentation.outsText
+        }
         
         diamondView.configure(
             with: event.bases,
@@ -205,6 +226,11 @@ class ScorecardCell: UICollectionViewCell {
 
     func setAccentColor(_ color: UIColor) {
         accentColor = color
+    }
+
+    func setTransitionAnimationEnabled(_ enabled: Bool, duration: CFTimeInterval = 0.32) {
+        animatesStateChanges = enabled
+        diamondView.setTransitionAnimation(enabled: enabled, duration: duration)
     }
     
     override func prepareForReuse() {

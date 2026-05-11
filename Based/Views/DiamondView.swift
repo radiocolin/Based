@@ -12,6 +12,12 @@ class DiamondView: UIView {
     private let fillLayer = CAShapeLayer()
     private let fillTextureLayer = CAShapeLayer()
     private let fillMaskLayer = CAShapeLayer()
+    private let progressLayer = CAShapeLayer()
+    private let annotationLayer = CALayer()
+    private let firstBaseLayer = CAShapeLayer()
+    private let secondBaseLayer = CAShapeLayer()
+    private let thirdBaseLayer = CAShapeLayer()
+    private let homeBaseLayer = CAShapeLayer()
     
     private var pencilColor: UIColor { AppColors.pencil }
     
@@ -77,6 +83,8 @@ class DiamondView: UIView {
     
     private var lastBounds: CGRect = .zero
     private var needsBaseRedraw = true
+    private var animatesStateChanges = false
+    private var transitionDuration: CFTimeInterval = 0.32
     
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -98,6 +106,11 @@ class DiamondView: UIView {
         layer.addSublayer(fillLayer)
         layer.addSublayer(fillTextureLayer)
         layer.addSublayer(basesLayer)
+        [firstBaseLayer, secondBaseLayer, thirdBaseLayer, homeBaseLayer].forEach {
+            basesLayer.addSublayer($0)
+        }
+        basesLayer.addSublayer(progressLayer)
+        basesLayer.addSublayer(annotationLayer)
         
         mainDiamondLayer.fillColor = AppColors.diamondFill.cgColor
         mainDiamondLayer.strokeColor = UIColor.clear.cgColor
@@ -110,6 +123,10 @@ class DiamondView: UIView {
         fillTextureLayer.lineCap = .round
         fillTextureLayer.lineJoin = .round
         fillTextureLayer.mask = fillMaskLayer
+
+        progressLayer.fillColor = nil
+        progressLayer.lineCap = .round
+        progressLayer.lineJoin = .round
     }
     
     override func layoutSubviews() {
@@ -189,14 +206,23 @@ class DiamondView: UIView {
         self.accentColorOverride = accentColor
         setNeedsLayout()
     }
+
+    func setTransitionAnimation(enabled: Bool, duration: CFTimeInterval = 0.32) {
+        animatesStateChanges = enabled
+        transitionDuration = duration
+    }
     
     private func updateActiveBases() {
         guard let p = diamondPoints, let bases = bases else { return }
         
         CATransaction.begin()
-        CATransaction.setDisableActions(true)
+        CATransaction.setDisableActions(!animatesStateChanges)
+        if animatesStateChanges {
+            CATransaction.setAnimationDuration(transitionDuration)
+            CATransaction.setAnimationTimingFunction(CAMediaTimingFunction(name: .easeInEaseOut))
+        }
         
-        basesLayer.sublayers?.forEach { $0.removeFromSuperlayer() }
+        annotationLayer.sublayers?.forEach { $0.removeFromSuperlayer() }
         fillLayer.fillColor = UIColor.clear.cgColor
         fillTextureLayer.opacity = 0
         fillTextureLayer.strokeColor = UIColor.clear.cgColor
@@ -244,7 +270,7 @@ class DiamondView: UIView {
 
         // Draw Base Indicators (The Boxes) - Consistent in both styles
         // Inset them so they sit inside the diamond lines
-        func drawBaseBox(at vertex: CGPoint, occupied: Bool, base: Int) {
+        func baseBoxPath(at vertex: CGPoint, base: Int) -> UIBezierPath {
             let half = baseSize / 2
             let bPath = UIBezierPath()
             
@@ -278,40 +304,24 @@ class DiamondView: UIView {
                 bPath.addLine(to: CGPoint(x: center.x - half, y: center.y))
                 bPath.close()
             }
-            
-            let bLayer = CAShapeLayer()
-            bLayer.path = bPath.cgPath
-            bLayer.lineWidth = baseStrokeWidth
-            bLayer.strokeColor = accentColor.withAlphaComponent(0.4).cgColor
-            
-            if occupied {
-                bLayer.fillColor = accentColor.cgColor
-            } else {
-                bLayer.fillColor = AppColors.baseEmpty.cgColor
-            }
-            basesLayer.addSublayer(bLayer)
+            return bPath
         }
-        
-        drawBaseBox(at: p.first, occupied: bases.first, base: 1)
-        drawBaseBox(at: p.second, occupied: bases.second, base: 2)
-        drawBaseBox(at: p.third, occupied: bases.third, base: 3)
-        drawBaseBox(at: p.home, occupied: bases.home, base: 0)
-        
-        // Draw caught-stealing out indicators (half-line + perpendicular between bases)
-        if style == .scorecard, let annotations = bases.annotations {
-            for annotation in annotations where annotation.kind == .caughtStealing {
-                let (fromPt, toPt) = basePath(to: annotation.base, points: p)
-                addSegment(from: fromPt, to: toPt, wasOut: true)
-            }
+
+        func applyBaseLayer(_ layer: CAShapeLayer, path: UIBezierPath, occupied: Bool) {
+            layer.path = path.cgPath
+            layer.lineWidth = baseStrokeWidth
+            layer.strokeColor = accentColor.withAlphaComponent(0.4).cgColor
+            layer.fillColor = occupied ? accentColor.cgColor : AppColors.baseEmpty.cgColor
         }
-        
-        let lineLayer = CAShapeLayer()
-        lineLayer.path = path.cgPath
-        lineLayer.strokeColor = accentColor.withAlphaComponent(0.8).cgColor
-        lineLayer.lineWidth = progressLineWidth
-        lineLayer.lineCap = .round
-        lineLayer.lineJoin = .round
-        basesLayer.addSublayer(lineLayer)
+
+        applyBaseLayer(firstBaseLayer, path: baseBoxPath(at: p.first, base: 1), occupied: bases.first)
+        applyBaseLayer(secondBaseLayer, path: baseBoxPath(at: p.second, base: 2), occupied: bases.second)
+        applyBaseLayer(thirdBaseLayer, path: baseBoxPath(at: p.third, base: 3), occupied: bases.third)
+        applyBaseLayer(homeBaseLayer, path: baseBoxPath(at: p.home, base: 0), occupied: bases.home)
+
+        progressLayer.path = path.cgPath
+        progressLayer.strokeColor = accentColor.withAlphaComponent(0.8).cgColor
+        progressLayer.lineWidth = progressLineWidth
         
         // Draw text annotations (errors, stolen bases, caught stealing)
         if style == .scorecard, let annotations = bases.annotations {
@@ -425,7 +435,16 @@ class DiamondView: UIView {
         textLayer.frame = CGRect(x: x, y: y, width: textSize.width + 2, height: textSize.height)
         textLayer.contentsScale = traitCollection.displayScale
         textLayer.isWrapped = false
-        basesLayer.addSublayer(textLayer)
+        if animatesStateChanges {
+            textLayer.opacity = 0
+            let fade = CABasicAnimation(keyPath: "opacity")
+            fade.fromValue = 0
+            fade.toValue = 1
+            fade.duration = transitionDuration * 0.7
+            textLayer.add(fade, forKey: "fade")
+            textLayer.opacity = 1
+        }
+        annotationLayer.addSublayer(textLayer)
     }
     
     /// Returns the vertex point for a given base number (1=1B, 2=2B, 3=3B, 4=home).

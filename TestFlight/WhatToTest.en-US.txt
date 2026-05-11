@@ -1,5 +1,6 @@
 -Added a new compact scorecard layout for following more of the game at once
 -Added a new binoculars view menu with Regular, Compact, and Timeline modes
+-Added a scorecard help sheet from game detail for explaining scorecard notation and app conventions
 -Added inning context to the play detail view
 -Improved the Teams view to be less dense
 -Fixed multiple issues where you couldn't tap a pitcher's name to get their stats
@@ -7,5 +8,6 @@
 
 Please test:
 -Switching between Regular, Compact, and Timeline from the new view menu
+-Opening the new scorecard help sheet from game detail and checking the examples/conventions
 -Compact scorecard alignment on games with substitutions and multiple trips through the order
 -Play detail sheets for correct Top/Bottom inning context
