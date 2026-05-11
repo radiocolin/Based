@@ -12,7 +12,7 @@ class GameDetailViewModel: GameUpdateDelegate {
     private(set) var currentGameData: GameData?
     private(set) var currentUmpires: [ScorecardUmpire] = []
     private(set) var currentGameInfo: [GameInfoItem] = []
-    private(set) var currentPitchers: [ScorecardPitcher] = []
+    var currentPitchers: [ScorecardPitcher] = []
     private(set) var isGameLive = false
     
     var isTimelineMode: Bool = UserDefaults.standard.bool(forKey: "preferTimelineMode") {
@@ -100,7 +100,7 @@ class GameDetailViewModel: GameUpdateDelegate {
     private func updateInternalState(with scorecard: ScorecardData) {
         currentUmpires = scorecard.umpires
         currentGameInfo = scorecard.gameInfo
-        // currentPitchers depends on which team is being viewed, handled in VC for now or passed as needed
+        currentPitchers = []
     }
     
     func pitchers(forIsHome home: Bool) -> [ScorecardPitcher] {

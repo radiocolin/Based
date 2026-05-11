@@ -158,8 +158,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         matchupStack.alignment = .leading
         matchupStack.spacing = 2
         matchupStack.translatesAutoresizingMaskIntoConstraints = false
-        matchupStack.isAccessibilityElement = true
-        matchupStack.accessibilityTraits = .header
+        matchupStack.isAccessibilityElement = false
         containerView.addSubview(matchupStack)
 
         batterLabel.text = batterName
@@ -170,16 +169,21 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         batterLabel.minimumScaleFactor = 0.5
         batterLabel.adjustsFontForContentSizeCategory = true
         batterLabel.isUserInteractionEnabled = true
-        batterLabel.isAccessibilityElement = false
+        batterLabel.isAccessibilityElement = true
+        batterLabel.accessibilityTraits = [.header, .button]
+        batterLabel.accessibilityHint = "Double tap for batter details."
 
         inningLabel.numberOfLines = 1
-        inningLabel.isAccessibilityElement = false
+        inningLabel.isAccessibilityElement = true
+        inningLabel.accessibilityTraits = .header
 
         applyInningHeader()
         applyPitcherHeader()
         subHeaderLabel.numberOfLines = 0
         subHeaderLabel.isUserInteractionEnabled = true
-        subHeaderLabel.isAccessibilityElement = false
+        subHeaderLabel.isAccessibilityElement = true
+        subHeaderLabel.accessibilityTraits = .button
+        subHeaderLabel.accessibilityHint = "Double tap for pitcher details."
 
         matchupStack.addArrangedSubview(inningLabel)
         matchupStack.addArrangedSubview(batterLabel)
@@ -296,7 +300,10 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
 
     private func setupGestures() {
         let batterTap = UITapGestureRecognizer(target: self, action: #selector(handleBatterTap))
-        matchupStack.addGestureRecognizer(batterTap)
+        batterLabel.addGestureRecognizer(batterTap)
+
+        let pitcherTap = UITapGestureRecognizer(target: self, action: #selector(handlePitcherTap))
+        subHeaderLabel.addGestureRecognizer(pitcherTap)
     }
 
     private func updateLayoutForCurrentSettings() {
@@ -317,8 +324,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         descriptionLabel.text = presentation.displayDescription
         descriptionLabel.accessibilityLabel = "Play description, \(presentation.displayDescription)"
         
-        matchupStack.accessibilityLabel = "\(batterName), \(AccessibilitySupport.inningHalf(event: event)), versus \(pitcherName.capitalized)"
-        matchupStack.accessibilityHint = "Double tap for player details."
+        batterLabel.accessibilityLabel = batterName
     }
 
     private func applyInningHeader() {
@@ -410,7 +416,9 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
 
     private func updateAccessibilityOrder() {
         view.accessibilityElements = [
-            matchupStack as Any,
+            inningLabel as Any,
+            batterLabel as Any,
+            subHeaderLabel as Any,
             descriptionLabel as Any,
             pitchesTableView as Any
         ]

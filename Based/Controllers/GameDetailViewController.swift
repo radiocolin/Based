@@ -1114,8 +1114,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         let pitchers = isHome ? scorecard.pitchers.home : scorecard.pitchers.away
         
         if pitchers == viewModel.currentPitchers { return }
-        // Note: pitchers update is handled in updateScorecard calling this
-        
+        viewModel.currentPitchers = pitchers
+
         pitcherContainer.arrangedSubviews.forEach { $0.removeFromSuperview() }
 
         if let pitcherSection = GameFooterContent.makePitcherSection(
