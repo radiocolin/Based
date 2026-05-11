@@ -6,7 +6,9 @@ class ScorecardViewDataSource: NSObject, UICollectionViewDataSource, UICollectio
     var scorecardData: ScorecardData?
     var isHomeTeam = false
     var isLive = false
+    var isCompact = false
     var columnLayout: ColumnLayout
+    var compactColumns: [CompactColumn] = []
     var nameWidth: CGFloat = 90
     
     private let layoutEngine: ScorecardLayoutEngine
@@ -58,6 +60,13 @@ class ScorecardViewDataSource: NSObject, UICollectionViewDataSource, UICollectio
             return configureStatCell(collectionView, indexPath: indexPath, data: data, lineup: lineup, statType: statType, rowIndex: rowIndex, totalRows: totalRows, isTotalsRow: isTotalsRow, rowBackgroundColor: rowBackgroundColor)
         }
 
+        if isCompact {
+            if isTotalsRow {
+                return configureCompactTotalsCell(collectionView, indexPath: indexPath, data: data, col: col)
+            }
+            return configureCompactCell(collectionView, indexPath: indexPath, data: data, lineup: lineup, batter: lineup[rowIndex], col: col, rowIndex: rowIndex, totalRows: totalRows, rowBackgroundColor: rowBackgroundColor)
+        }
+
         if isTotalsRow {
             return configureTotalsInningCell(collectionView, indexPath: indexPath, data: data, col: col)
         }
@@ -81,6 +90,11 @@ class ScorecardViewDataSource: NSObject, UICollectionViewDataSource, UICollectio
             let lineup = isHomeTeam ? data.lineups.home : data.lineups.away
             let isTotalsRow = rowIndex == lineup.count
             
+            if isCompact {
+                let width = columnLayout.statInfo(forColumn: col) != nil ? statWidth : inningWidth
+                return CGSize(width: width, height: rowHeight)
+            }
+
             if isTotalsRow {
                 if let (inningNum, subIndex) = columnLayout.inningInfo(forColumn: col) {
                     if let inningLayout = columnLayout.layout(forInning: inningNum), inningLayout.subColumnCount > 1 {
@@ -133,19 +147,26 @@ class ScorecardViewDataSource: NSObject, UICollectionViewDataSource, UICollectio
         
         if collectionView == leftCollectionView {
             delegate?.didSelectPlayer(batter)
+        } else if isCompact {
+            let col = indexPath.item % totalCols
+            guard columnLayout.inningInfo(forColumn: col) != nil else { return }
+            let paIndex = col
+            let allPAs = compactPAsByColumn(for: batter, data: data, lineup: lineup)
+            guard let event = allPAs[paIndex] else { return }
+            delegate?.didSelectAtBat(event, batter: batter, pitcherName: event.pitcherName)
         } else {
             let col = indexPath.item % totalCols
             guard let (inningNum, subIndex) = columnLayout.inningInfo(forColumn: col) else { return }
-            
+
             let isCurrentInning = data.currentInning == inningNum
             let isCurrentHalf = data.isTopInning == !isHomeTeam
             let isCurrentBatter = data.currentBatterId == batter.id
-            
+
             if isLive && isCurrentInning && isCurrentHalf && isCurrentBatter {
                 delegate?.didSelectActiveAtBat()
                 return
             }
-            
+
             let events = data.events(inningNum: inningNum, isHomeBatting: isHomeTeam)
             let batterEvents = events.filter { $0.batterId == batter.id }
             if subIndex < batterEvents.count {
@@ -344,6 +365,147 @@ class ScorecardViewDataSource: NSObject, UICollectionViewDataSource, UICollectio
             )
         }
 
+        return cell
+    }
+
+    // MARK: - Compact Mode Helpers
+
+    private func compactPAsByColumn(for batter: ScorecardBatter, data: ScorecardData, lineup: [ScorecardBatter]) -> [Int: AtBatEvent] {
+        guard let slot = batter.battingOrderSlot else { return [:] }
+        let eventsBySlot = layoutEngine.compactPlateAppearancesBySlot(data: data, lineup: lineup, isHomeTeam: isHomeTeam)
+        return (eventsBySlot[slot] ?? [:]).filter { $0.value.batterId == batter.id }
+    }
+
+    private func firstCompactColumn(for batter: ScorecardBatter, data: ScorecardData, lineup: [ScorecardBatter]) -> Int? {
+        let columns = compactPAsByColumn(for: batter, data: data, lineup: lineup).keys.sorted()
+        return columns.first
+    }
+
+    private func compactEvent(for rowIndex: Int, paIndex: Int, lineup: [ScorecardBatter], data: ScorecardData) -> AtBatEvent? {
+        guard lineup.indices.contains(rowIndex) else { return nil }
+        return compactPAsByColumn(for: lineup[rowIndex], data: data, lineup: lineup)[paIndex]
+    }
+
+    private func compactColumnRowOrder(for paIndex: Int, lineupCount: Int) -> [Int] {
+        guard lineupCount > 0 else { return [] }
+        let startIndex = paIndex < compactColumns.count ? compactColumns[paIndex].leadoffLineupIndex : 0
+        guard (0..<lineupCount).contains(startIndex) else { return Array(0..<lineupCount) }
+        return Array(startIndex..<lineupCount) + Array(0..<startIndex)
+    }
+
+    private func compactInningChangeIndicator(rowIndex: Int, paIndex: Int, lineup: [ScorecardBatter], data: ScorecardData) -> Bool {
+        guard rowIndex > 0 else { return false }
+        guard let currentEvent = compactEvent(for: rowIndex, paIndex: paIndex, lineup: lineup, data: data) else { return false }
+
+        var previousEvent: AtBatEvent?
+        for column in 0...paIndex {
+            let rowOrder = compactColumnRowOrder(for: column, lineupCount: lineup.count)
+            for orderedRowIndex in rowOrder {
+                let event = compactEvent(for: orderedRowIndex, paIndex: column, lineup: lineup, data: data)
+                if column == paIndex && orderedRowIndex == rowIndex {
+                    return previousEvent?.inning != currentEvent.inning
+                }
+                if let event {
+                    previousEvent = event
+                }
+            }
+        }
+
+        return false
+    }
+
+    private func configureCompactCell(_ collectionView: UICollectionView, indexPath: IndexPath, data: ScorecardData, lineup: [ScorecardBatter], batter: ScorecardBatter, col: Int, rowIndex: Int, totalRows: Int, rowBackgroundColor: UIColor) -> UICollectionViewCell {
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: ScorecardCell.reuseIdentifier, for: indexPath) as! ScorecardCell
+        cell.setAccentColor(data.teamAccentColor(isHomeTeam: isHomeTeam))
+
+        guard columnLayout.inningInfo(forColumn: col) != nil else {
+            cell.configure(with: nil)
+            cell.setInactive(false)
+            cell.showInningChangeIndicator(false)
+            return cell
+        }
+
+        let paIndex = col
+        let allPAs = compactPAsByColumn(for: batter, data: data, lineup: lineup)
+        let event = allPAs[paIndex]
+
+        cell.configure(with: event)
+
+        let isPitchingChange = event?.isPitchingChange ?? false
+        cell.showPitchingChange(isPitchingChange)
+
+        let firstCompactColumn = firstCompactColumn(for: batter, data: data, lineup: lineup)
+        let isInactive = event == nil && firstCompactColumn.map { paIndex < $0 } == true
+
+        if isInactive {
+            cell.backgroundColor = AppColors.inactive
+            cell.setInactive(true)
+        } else {
+            cell.backgroundColor = rowBackgroundColor
+            cell.setInactive(false)
+        }
+
+        let showsInningChange = compactInningChangeIndicator(
+            rowIndex: rowIndex,
+            paIndex: paIndex,
+            lineup: lineup,
+            data: data
+        )
+        cell.showInningChangeIndicator(showsInningChange, color: data.teamAccentColor(isHomeTeam: isHomeTeam))
+
+        cell.contentView.layer.borderWidth = 0.5
+        cell.contentView.layer.borderColor = AppColors.grid.cgColor
+        cell.isAccessibilityElement = true
+
+        if let event = event {
+            let compactCol = paIndex < compactColumns.count ? compactColumns[paIndex] : nil
+            let inningRange = compactCol.map { "\($0.inningStart)-\($0.inningEnd)" } ?? ""
+            cell.accessibilityLabel = "\(batter.abbreviation), plate appearance \(paIndex + 1), innings \(inningRange): \(event.result.displayText)"
+            cell.accessibilityHint = "Double tap for at-bat details."
+            cell.accessibilityTraits = .button
+        } else {
+            cell.accessibilityLabel = "\(batter.abbreviation), plate appearance \(paIndex + 1): no at-bat"
+            cell.accessibilityTraits = .staticText
+        }
+
+        return cell
+    }
+
+    private func configureCompactTotalsCell(_ collectionView: UICollectionView, indexPath: IndexPath, data: ScorecardData, col: Int) -> UICollectionViewCell {
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: LabelCell.reuseIdentifier, for: indexPath) as! LabelCell
+        cell.label.font = UIFont(name: AppFont.permanentMarker, size: 18) ?? .systemFont(ofSize: 18, weight: .bold)
+        cell.label.textColor = AppColors.pencil
+
+        guard columnLayout.inningInfo(forColumn: col) != nil else {
+            cell.label.text = ""
+            cell.contentView.layer.borderWidth = 0.5
+            cell.backgroundColor = AppColors.header
+            return cell
+        }
+
+        let paIndex = col
+        guard paIndex < compactColumns.count else {
+            cell.label.text = ""
+            cell.contentView.layer.borderWidth = 0.5
+            cell.backgroundColor = AppColors.header
+            return cell
+        }
+
+        let compact = compactColumns[paIndex]
+        var runs = 0
+        for inning in compact.inningStart...compact.inningEnd {
+            let inningObj = data.innings.first { $0.num == inning }
+            if let r = isHomeTeam ? inningObj?.homeRuns : inningObj?.awayRuns {
+                runs += r
+            }
+        }
+        cell.label.text = runs > 0 ? "\(runs)" : ""
+        cell.label.textColor = runs > 0 ? data.teamAccentColor(isHomeTeam: isHomeTeam) : AppColors.pencil
+        cell.contentView.layer.borderWidth = 0.5
+        cell.backgroundColor = AppColors.header
+        cell.accessibilityLabel = "Innings \(compact.inningStart)-\(compact.inningEnd): \(runs) runs"
+        cell.isAccessibilityElement = true
+        cell.accessibilityTraits = .staticText
         return cell
     }
 }

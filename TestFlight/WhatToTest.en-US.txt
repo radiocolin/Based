@@ -1,3 +1,8 @@
--Added App Store review prompts
--Added TipKit
--Added dark mode winner highlight
+-Added a new compact scorecard layout for following more of the game at once
+-Added a new binoculars view menu with Regular, Compact, and Timeline modes
+-Added inning context to the play detail view
+
+Please test:
+-Switching between Regular, Compact, and Timeline from the new view menu
+-Compact scorecard alignment on games with substitutions and multiple trips through the order
+-Play detail sheets for correct Top/Bottom inning context

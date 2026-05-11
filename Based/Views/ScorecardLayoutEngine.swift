@@ -54,6 +54,96 @@ class ScorecardLayoutEngine {
         return ceil(maxWidth + 20)
     }
     
+    func computeCompactColumnLayout(data: ScorecardData?, isHomeTeam: Bool) -> CompactColumnLayout {
+        guard let data = data else {
+            let innings = (1...3).map { InningColumnLayout(inningNum: $0, subColumnCount: 1, startColumn: $0 - 1) }
+            return CompactColumnLayout(columns: [], columnLayout: ColumnLayout(innings: innings))
+        }
+
+        let lineup = isHomeTeam ? data.lineups.home : data.lineups.away
+        let inningCount = max(data.innings.count, 9)
+
+        var allEvents: [(event: AtBatEvent, inning: Int)] = []
+        for i in 1...inningCount {
+            let events = data.events(inningNum: i, isHomeBatting: isHomeTeam)
+            for event in events {
+                allEvents.append((event, i))
+            }
+        }
+
+        var paIndexBySlot: [Int: Int] = [:]
+        for batter in lineup {
+            guard let slot = batter.battingOrderSlot else { continue }
+            paIndexBySlot[slot] = 0
+        }
+
+        let compactEventsBySlot = compactPlateAppearancesBySlot(data: data, lineup: lineup, isHomeTeam: isHomeTeam)
+        let maxPAs = compactEventsBySlot.values.map(\.count).max() ?? 1
+        let columnCount = max(maxPAs, 1)
+
+        var columnInnings: [[Int]] = Array(repeating: [], count: columnCount)
+        var columnLeadoffs: [Int?] = Array(repeating: nil, count: columnCount)
+        let batterIndexByID = Dictionary(uniqueKeysWithValues: lineup.enumerated().map { ($1.id, $0) })
+        let slotByBatterID = Dictionary(uniqueKeysWithValues: lineup.compactMap { batter in
+            batter.battingOrderSlot.map { (batter.id, $0) }
+        })
+
+        for (event, inning) in allEvents {
+            let batterId = event.batterId
+            guard
+                let batterIdx = batterIndexByID[batterId],
+                let slot = slotByBatterID[batterId]
+            else { continue }
+            let pa = paIndexBySlot[slot] ?? 0
+            guard pa < columnCount else { continue }
+
+            if columnLeadoffs[pa] == nil {
+                columnLeadoffs[pa] = batterIdx
+            }
+            if !columnInnings[pa].contains(inning) {
+                columnInnings[pa].append(inning)
+            }
+            paIndexBySlot[slot] = pa + 1
+        }
+
+        var compactColumns: [CompactColumn] = []
+        var layouts: [InningColumnLayout] = []
+        for i in 0..<columnCount {
+            let sorted = columnInnings[i].sorted()
+            let start = sorted.first ?? (i + 1)
+            let end = sorted.last ?? (i + 1)
+            compactColumns.append(CompactColumn(index: i, inningStart: start, inningEnd: end, leadoffLineupIndex: columnLeadoffs[i] ?? 0))
+            layouts.append(InningColumnLayout(inningNum: i + 1, subColumnCount: 1, startColumn: i))
+        }
+
+        return CompactColumnLayout(columns: compactColumns, columnLayout: ColumnLayout(innings: layouts))
+    }
+
+    func compactPlateAppearancesBySlot(data: ScorecardData, lineup: [ScorecardBatter], isHomeTeam: Bool) -> [Int: [Int: AtBatEvent]] {
+        let inningCount = max(data.innings.count, 9)
+        let slotByBatterID = Dictionary(uniqueKeysWithValues: lineup.compactMap { batter in
+            batter.battingOrderSlot.map { (batter.id, $0) }
+        })
+        var paIndexBySlot: [Int: Int] = [:]
+        for batter in lineup {
+            guard let slot = batter.battingOrderSlot else { continue }
+            paIndexBySlot[slot] = 0
+        }
+
+        var eventsBySlot: [Int: [Int: AtBatEvent]] = [:]
+        for inning in 1...inningCount {
+            let events = data.events(inningNum: inning, isHomeBatting: isHomeTeam)
+            for event in events {
+                let batterId = event.batterId
+                guard let slot = slotByBatterID[batterId] else { continue }
+                let paIndex = paIndexBySlot[slot] ?? 0
+                eventsBySlot[slot, default: [:]][paIndex] = event
+                paIndexBySlot[slot] = paIndex + 1
+            }
+        }
+        return eventsBySlot
+    }
+
     func mergedWidth(columnLayout: ColumnLayout, fromInning startInning: Int, toInning endInning: Int) -> CGFloat {
         guard startInning <= endInning else { return 0 }
         var totalWidth: CGFloat = 0

@@ -825,7 +825,17 @@ struct ScorecardDataTransformer {
         var abbreviation = components.last ?? ""
         let suffixes = ["Jr", "Sr", "II", "III", "IV", "Jr.", "Sr."]
         if suffixes.contains(abbreviation) && components.count >= 2 { abbreviation = "\(components[components.count - 2]) \(abbreviation)" }
-        return ScorecardBatter(id: id, fullName: name, abbreviation: abbreviation, position: player.position?.abbreviation ?? "", jerseyNumber: player.jerseyNumber, inningEntered: part.entered, inningExited: part.exited)
+        let battingSlot = battingOrderSlot(for: player, fallbackIds: team?.battingOrder, playerId: id)
+        return ScorecardBatter(
+            id: id,
+            fullName: name,
+            abbreviation: abbreviation,
+            position: player.position?.abbreviation ?? "",
+            jerseyNumber: player.jerseyNumber,
+            battingOrderSlot: battingSlot == Int.max ? nil : battingSlot,
+            inningEntered: part.entered,
+            inningExited: part.exited
+        )
     }
 
     private static func createPitcher(id: Int, team: BoxscoreTeam?) -> ScorecardPitcher? {

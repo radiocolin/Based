@@ -13,6 +13,7 @@ struct ScorecardBatter: Codable, Identifiable, Sendable, Equatable {
     let abbreviation: String
     let position: String
     let jerseyNumber: String?
+    let battingOrderSlot: Int?
     let inningEntered: Int?
     let inningExited: Int?
 }

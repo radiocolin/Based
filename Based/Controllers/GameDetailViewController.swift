@@ -2,6 +2,11 @@ import UIKit
 import TipKit
 
 class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpdateDelegate, TimelineViewDelegate {
+    private enum ViewMode {
+        case regular
+        case compact
+        case timeline
+    }
     
     // UI Components
     private let teamSegmentedControl = UISegmentedControl(items: ["Away", "Home"])
@@ -100,6 +105,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         navigationController?.interactivePopGestureRecognizer?.delegate = self
         
         NotificationCenter.default.addObserver(self, selector: #selector(tintDidChange), name: TintService.tintDidChangeNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(compactSettingDidChange), name: Notification.Name("CompactScorecardDidChange"), object: nil)
+        scorecardView.setCompact(UserDefaults.standard.bool(forKey: "based_compact_scorecard"))
         
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: GameDetailViewController, _) in
             self.setupNavigationBar()
@@ -155,6 +162,16 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         }
     }
 
+    @objc private func compactSettingDidChange() {
+        let compact = UserDefaults.standard.bool(forKey: "based_compact_scorecard")
+        scorecardView.setCompact(compact)
+        updateStickyHeaders()
+        if let scorecard = viewModel.currentScorecard {
+            scorecardView.configure(with: scorecard)
+        }
+        setupNavigationBar()
+    }
+
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
     }
@@ -186,26 +203,26 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         
         let iconSize = BarAppearanceSupport.iconSize(for: traitCollection, base: 32, maximum: 32)
         let shareImg = UIImage.pencilStyledIcon(named: "square.and.arrow.up", color: pencilColor, size: iconSize, offset: CGPoint(x: -0.5, y: 0), scaleMultiplier: 0.9)
+        let menuIconSize = CGSize(width: 22, height: 22)
         let shareMenu = UIMenu(title: "", children: [
-            UIAction(title: "Share Image", image: UIImage(systemName: "photo")) { [weak self] _ in
+            UIAction(title: "Share Image", image: UIImage.pencilStyledIcon(named: "photo", color: pencilColor, size: menuIconSize, offset: CGPoint(x: 0, y: 0.6), scaleMultiplier: 0.92)) { [weak self] _ in
                 self?.shareImage()
             },
-            UIAction(title: "Save PDF", image: UIImage(systemName: "doc.richtext")) { [weak self] _ in
+            UIAction(title: "Save PDF", image: UIImage.pencilStyledIcon(named: "richtext.page", color: pencilColor, size: menuIconSize, offset: CGPoint(x: 0, y: 0.4), scaleMultiplier: 0.92)) { [weak self] _ in
                 self?.sharePDF()
             },
-            UIAction(title: "Customize…", image: UIImage(systemName: "slider.horizontal.3")) { [weak self] _ in
+            UIAction(title: "Customize…", image: UIImage.pencilStyledIcon(named: "slider.horizontal.3", color: pencilColor, size: menuIconSize, offset: CGPoint(x: 0, y: 0.3), scaleMultiplier: 0.92)) { [weak self] _ in
                 self?.showExportCustomizer()
             }
         ])
         let shareItem = UIBarButtonItem(image: shareImg, menu: shareMenu)
         shareItem.accessibilityLabel = "Share scorecard"
-        
-        let timelineSymbol = viewModel.isTimelineMode ? "square.grid.3x2" : "calendar.day.timeline.left"
-        let timelineImg = UIImage.pencilStyledIcon(named: timelineSymbol, color: pencilColor, size: iconSize, offset: CGPoint(x: 1.5, y: 1.0))
-        let timelineItem = UIBarButtonItem(image: timelineImg, style: .plain, target: self, action: #selector(toggleTimelineMode))
-        timelineItem.accessibilityLabel = viewModel.isTimelineMode ? "Show scorecard" : "Show timeline"
-        
-        navigationItem.rightBarButtonItems = [shareItem, timelineItem]
+
+        let modeImg = UIImage.pencilStyledIcon(named: "binoculars", color: pencilColor, size: iconSize, offset: CGPoint(x: 0, y: 0.5), scaleMultiplier: 0.95)
+        let modeItem = UIBarButtonItem(image: modeImg, menu: makeViewModeMenu(iconSize: iconSize, color: pencilColor))
+        modeItem.accessibilityLabel = "Choose view mode"
+
+        navigationItem.rightBarButtonItems = [shareItem, modeItem]
         
         let appearance = UINavigationBarAppearance()
         appearance.configureWithOpaqueBackground()
@@ -227,9 +244,69 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         navigationController?.popViewController(animated: true)
     }
 
-    @objc private func toggleTimelineMode() {
-        viewModel.isTimelineMode.toggle()
-        
+    private func makeViewModeMenu(iconSize: CGSize, color: UIColor) -> UIMenu {
+        let regularImage = UIImage.pencilStyledIcon(named: "square.grid.3x2", color: color, size: iconSize, offset: CGPoint(x: 1.0, y: 0.8), scaleMultiplier: 0.92)
+        let compactImage = UIImage.pencilStyledIcon(named: "square.grid.2x2", color: color, size: iconSize, offset: CGPoint(x: 0, y: 0.8), scaleMultiplier: 0.7)
+        let timelineImage = UIImage.pencilStyledIcon(named: "calendar.day.timeline.left", color: color, size: iconSize, offset: CGPoint(x: 1.0, y: 0.8), scaleMultiplier: 0.92)
+
+        return UIMenu(title: "", children: [
+            UIAction(title: "Regular", image: regularImage, state: currentViewMode == .regular ? .on : .off) { [weak self] _ in
+                self?.setViewMode(.regular)
+            },
+            UIAction(title: "Compact", image: compactImage, state: currentViewMode == .compact ? .on : .off) { [weak self] _ in
+                self?.setViewMode(.compact)
+            },
+            UIAction(title: "Timeline", image: timelineImage, state: currentViewMode == .timeline ? .on : .off) { [weak self] _ in
+                self?.setViewMode(.timeline)
+            }
+        ])
+    }
+
+    private var currentViewMode: ViewMode {
+        if viewModel.isTimelineMode { return .timeline }
+        return UserDefaults.standard.bool(forKey: "based_compact_scorecard") ? .compact : .regular
+    }
+
+    private func setViewMode(_ mode: ViewMode) {
+        switch mode {
+        case .regular:
+            UserDefaults.standard.set(false, forKey: "based_compact_scorecard")
+            scorecardView.setCompact(false)
+            if viewModel.isTimelineMode {
+                setTimelineMode(false)
+            } else {
+                refreshScorecardPresentation()
+                setupNavigationBar()
+            }
+        case .compact:
+            UserDefaults.standard.set(true, forKey: "based_compact_scorecard")
+            scorecardView.setCompact(true)
+            if viewModel.isTimelineMode {
+                setTimelineMode(false)
+            } else {
+                refreshScorecardPresentation()
+                setupNavigationBar()
+            }
+        case .timeline:
+            if !viewModel.isTimelineMode {
+                setTimelineMode(true)
+            } else {
+                setupNavigationBar()
+            }
+        }
+    }
+
+    private func refreshScorecardPresentation() {
+        updateStickyHeaders()
+        if let scorecard = viewModel.currentScorecard {
+            scorecardView.configure(with: scorecard)
+        }
+    }
+
+    private func setTimelineMode(_ isTimelineMode: Bool) {
+        guard viewModel.isTimelineMode != isTimelineMode else { return }
+        viewModel.isTimelineMode = isTimelineMode
+
         self.setupNavigationBar()
 
         if viewModel.isTimelineMode {
@@ -688,24 +765,50 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         rightHeaderStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         rightHeaderStack.distribution = .fill
         let layout = scorecardView.currentColumnLayout
-        for inningLayout in layout.innings {
-            let label = UILabel()
-            label.translatesAutoresizingMaskIntoConstraints = false
-            label.text = "\(inningLayout.inningNum)"
-            label.textAlignment = .center
-            label.font = AppFont.ibmPlexCondensed(16, textStyle: .caption1)
-            label.textColor = AppColors.pencil
-            label.backgroundColor = AppColors.header
-            label.isAccessibilityElement = false
-            label.layer.borderWidth = 0.5
-            label.layer.borderColor = AppColors.grid.cgColor
-            
-            let width = inningWidth * CGFloat(inningLayout.subColumnCount)
-            let widthConstraint = label.widthAnchor.constraint(equalToConstant: width)
-            widthConstraint.priority = .init(999)
-            widthConstraint.isActive = true
-            
-            rightHeaderStack.addArrangedSubview(label)
+
+        if scorecardView.currentIsCompact {
+            for compact in scorecardView.currentCompactColumns {
+                let label = UILabel()
+                label.translatesAutoresizingMaskIntoConstraints = false
+                if compact.inningStart == compact.inningEnd {
+                    label.text = "\(compact.inningStart)"
+                } else {
+                    label.text = "\(compact.inningStart)-\(compact.inningEnd)"
+                }
+                label.textAlignment = .center
+                label.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1)
+                label.textColor = AppColors.pencil
+                label.backgroundColor = AppColors.header
+                label.isAccessibilityElement = false
+                label.layer.borderWidth = 0.5
+                label.layer.borderColor = AppColors.grid.cgColor
+
+                let widthConstraint = label.widthAnchor.constraint(equalToConstant: inningWidth)
+                widthConstraint.priority = .init(999)
+                widthConstraint.isActive = true
+
+                rightHeaderStack.addArrangedSubview(label)
+            }
+        } else {
+            for inningLayout in layout.innings {
+                let label = UILabel()
+                label.translatesAutoresizingMaskIntoConstraints = false
+                label.text = "\(inningLayout.inningNum)"
+                label.textAlignment = .center
+                label.font = AppFont.ibmPlexCondensed(16, textStyle: .caption1)
+                label.textColor = AppColors.pencil
+                label.backgroundColor = AppColors.header
+                label.isAccessibilityElement = false
+                label.layer.borderWidth = 0.5
+                label.layer.borderColor = AppColors.grid.cgColor
+
+                let width = inningWidth * CGFloat(inningLayout.subColumnCount)
+                let widthConstraint = label.widthAnchor.constraint(equalToConstant: width)
+                widthConstraint.priority = .init(999)
+                widthConstraint.isActive = true
+
+                rightHeaderStack.addArrangedSubview(label)
+            }
         }
         for stat in layout.statColumns {
             let label = UILabel()
@@ -718,11 +821,11 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             label.isAccessibilityElement = false
             label.layer.borderWidth = 0.5
             label.layer.borderColor = AppColors.grid.cgColor
-            
+
             let widthConstraint = label.widthAnchor.constraint(equalToConstant: statWidth)
             widthConstraint.priority = .init(999)
             widthConstraint.isActive = true
-            
+
             rightHeaderStack.addArrangedSubview(label)
         }
     }
@@ -1244,6 +1347,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             abbreviation: abbreviation,
             position: "",
             jerseyNumber: nil,
+            battingOrderSlot: nil,
             inningEntered: nil,
             inningExited: nil
         )

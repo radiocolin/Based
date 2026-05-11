@@ -104,6 +104,20 @@ struct ColumnLayout: Codable, Sendable {
     }
 }
 
+// MARK: - Compact Layout (order-based columns)
+
+struct CompactColumn: Codable, Sendable {
+    let index: Int
+    let inningStart: Int
+    let inningEnd: Int
+    let leadoffLineupIndex: Int
+}
+
+struct CompactColumnLayout: Codable, Sendable {
+    let columns: [CompactColumn]
+    let columnLayout: ColumnLayout
+}
+
 // MARK: - Player Game Stats Model
 struct PlayerGameStats: Codable, Sendable {
     let atBats: Int

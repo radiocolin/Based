@@ -28,7 +28,7 @@ class SettingsViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "SettingsCell")
+        tableView.register(SubtitleCell.self, forCellReuseIdentifier: "SettingsCell")
         tableView.register(SubtitleCell.self, forCellReuseIdentifier: "SubtitleCell")
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "FooterCell")
         setupUI()
@@ -280,7 +280,7 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         switch section {
-        case 0: return 2 // Appearance + Tint Color
+        case 0: return 3 // Appearance + Tint Color + Compact Scorecard
         case 1: return favoriteTeamIds.count + 1 // Favorites + Add row
         case 2: return 2 // Wheelie, Away Message
         case 3: return 1 // Attribution
@@ -510,6 +510,24 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
                 cell.accessibilityLabel = "Appearance"
                 cell.accessibilityValue = currentTheme.displayName
                 cell.accessibilityHint = "Double tap to choose the app appearance."
+            } else if indexPath.row == 2 {
+                cell.textLabel?.text = "Compact Scorecard"
+                cell.detailTextLabel?.text = "Only start a new column when the batting order returns to the start."
+
+                let toggle = UISwitch()
+                toggle.isOn = UserDefaults.standard.bool(forKey: "based_compact_scorecard")
+                toggle.onTintColor = AppColors.pencil
+                toggle.addAction(UIAction { _ in
+                    UserDefaults.standard.set(toggle.isOn, forKey: "based_compact_scorecard")
+                    NotificationCenter.default.post(name: Notification.Name("CompactScorecardDidChange"), object: nil)
+                }, for: .valueChanged)
+                cell.accessoryView = toggle
+                cell.editingAccessoryView = toggle
+                cell.selectionStyle = .none
+
+                cell.accessibilityLabel = "Compact scorecard"
+                cell.accessibilityValue = toggle.isOn ? "On" : "Off"
+                cell.accessibilityHint = "Only start a new column when the batting order returns to the start."
             } else {
                 let currentTint = TintService.shared.tintColor
                 var currentTeamName: String?
@@ -669,6 +687,8 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
             presentAppearanceSelector()
         } else if indexPath.section == 0 && indexPath.row == 1 {
             presentTintSelector()
+        } else if indexPath.section == 0 && indexPath.row == 2 {
+            return
         } else if indexPath.section == 1 && indexPath.row < favoriteTeamIds.count {
             presentFavoriteTeamOptions(teamId: favoriteTeamIds[indexPath.row])
         } else if indexPath.section == 1 && indexPath.row == favoriteTeamIds.count
@@ -847,4 +867,3 @@ private final class SubtitleCell: UITableViewCell {
         fatalError("init(coder:) has not been implemented")
     }
 }
-

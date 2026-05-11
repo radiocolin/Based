@@ -10,6 +10,7 @@ class ScorecardCell: UICollectionViewCell {
     private let strikesLabel = UILabel()
     private let outsLabel = UILabel()
     private let pitchingChangeLayer = CAShapeLayer()
+    private let inningChangeIndicatorLayer = CAShapeLayer()
     private var accentColor: UIColor = AppColors.pencil
     
     override init(frame: CGRect) {
@@ -64,6 +65,13 @@ class ScorecardCell: UICollectionViewCell {
         pitchingChangeLayer.fillColor = nil
         pitchingChangeLayer.isHidden = true
         contentView.layer.addSublayer(pitchingChangeLayer)
+
+        inningChangeIndicatorLayer.lineWidth = 2.5
+        inningChangeIndicatorLayer.lineCap = .round
+        inningChangeIndicatorLayer.lineDashPattern = [5, 4]
+        inningChangeIndicatorLayer.fillColor = nil
+        inningChangeIndicatorLayer.isHidden = true
+        contentView.layer.addSublayer(inningChangeIndicatorLayer)
 
         // Constraints — inset the diamond slightly so corner labels have breathing room
         let top = diamondView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4)
@@ -171,6 +179,22 @@ class ScorecardCell: UICollectionViewCell {
         pitchingChangeLayer.path = path.cgPath
     }
 
+    func showInningChangeIndicator(_ show: Bool, color: UIColor = AppColors.pencil) {
+        inningChangeIndicatorLayer.isHidden = !show
+        if show {
+            inningChangeIndicatorLayer.strokeColor = color.cgColor
+            updateInningChangeIndicatorPath()
+        }
+    }
+
+    private func updateInningChangeIndicatorPath() {
+        let b = contentView.bounds
+        let path = UIBezierPath()
+        path.move(to: CGPoint(x: 2, y: 2))
+        path.addLine(to: CGPoint(x: b.width - 2, y: 2))
+        inningChangeIndicatorLayer.path = path.cgPath
+    }
+
     func setInactive(_ inactive: Bool) {
         diamondView.isHidden = inactive
         resultLabel.isHidden = inactive
@@ -198,6 +222,7 @@ class ScorecardCell: UICollectionViewCell {
         diamondView.configure(with: BasesReached(first: false, second: false, third: false, home: false, lineToFirst: nil, lineToSecond: nil, lineToThird: nil, lineToHome: nil, outAtFirst: false, outAtSecond: false, outAtThird: false, outAtHome: false, annotations: nil), style: .scorecard, isRun: false)
         diamondView.alpha = 1.0
         pitchingChangeLayer.isHidden = true
+        inningChangeIndicatorLayer.isHidden = true
         contentView.layer.borderWidth = 0.5
         contentView.layer.borderColor = AppColors.grid.cgColor
         accessibilityLabel = nil
@@ -214,6 +239,9 @@ class ScorecardCell: UICollectionViewCell {
         pitchingChangeLayer.strokeColor = AppColors.pencil.cgColor
         if !pitchingChangeLayer.isHidden {
             updatePitchingChangePath()
+        }
+        if !inningChangeIndicatorLayer.isHidden {
+            updateInningChangeIndicatorPath()
         }
     }
 

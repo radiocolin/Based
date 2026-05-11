@@ -50,6 +50,8 @@ class ScorecardView: UIView {
     private var isHomeTeam = false
     private var areHeadersVisible = true
     private var isLive = false
+    private var isCompact = false
+    private var compactColumns: [CompactColumn] = []
     
     // Constants
     private var nameWidth: CGFloat = 90
@@ -218,24 +220,49 @@ class ScorecardView: UIView {
         lastColumnLayout = columnLayout
         
         rightHeaderStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        for inningLayout in columnLayout.innings {
-            let label = UILabel()
-            label.translatesAutoresizingMaskIntoConstraints = false
-            label.text = "\(inningLayout.inningNum)"
-            label.textAlignment = .center
-            label.font = AppFont.ibmPlexCondensed(16, textStyle: .caption1)
-            label.textColor = AppColors.pencil
-            label.backgroundColor = AppColors.header
-            label.isAccessibilityElement = false
-            label.layer.borderWidth = 0.5
-            label.layer.borderColor = AppColors.grid.cgColor
-            
-            let width = inningWidth * CGFloat(inningLayout.subColumnCount)
-            let widthConstraint = label.widthAnchor.constraint(equalToConstant: width)
-            widthConstraint.priority = .init(999)
-            widthConstraint.isActive = true
-            
-            rightHeaderStack.addArrangedSubview(label)
+        if isCompact {
+            for compact in compactColumns {
+                let label = UILabel()
+                label.translatesAutoresizingMaskIntoConstraints = false
+                if compact.inningStart == compact.inningEnd {
+                    label.text = "\(compact.inningStart)"
+                } else {
+                    label.text = "\(compact.inningStart)-\(compact.inningEnd)"
+                }
+                label.textAlignment = .center
+                label.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1)
+                label.textColor = AppColors.pencil
+                label.backgroundColor = AppColors.header
+                label.isAccessibilityElement = false
+                label.layer.borderWidth = 0.5
+                label.layer.borderColor = AppColors.grid.cgColor
+
+                let widthConstraint = label.widthAnchor.constraint(equalToConstant: inningWidth)
+                widthConstraint.priority = .init(999)
+                widthConstraint.isActive = true
+
+                rightHeaderStack.addArrangedSubview(label)
+            }
+        } else {
+            for inningLayout in columnLayout.innings {
+                let label = UILabel()
+                label.translatesAutoresizingMaskIntoConstraints = false
+                label.text = "\(inningLayout.inningNum)"
+                label.textAlignment = .center
+                label.font = AppFont.ibmPlexCondensed(16, textStyle: .caption1)
+                label.textColor = AppColors.pencil
+                label.backgroundColor = AppColors.header
+                label.isAccessibilityElement = false
+                label.layer.borderWidth = 0.5
+                label.layer.borderColor = AppColors.grid.cgColor
+
+                let width = inningWidth * CGFloat(inningLayout.subColumnCount)
+                let widthConstraint = label.widthAnchor.constraint(equalToConstant: width)
+                widthConstraint.priority = .init(999)
+                widthConstraint.isActive = true
+
+                rightHeaderStack.addArrangedSubview(label)
+            }
         }
         for stat in columnLayout.statColumns {
             let label = UILabel()
@@ -267,8 +294,7 @@ class ScorecardView: UIView {
         
         self.scorecardData = data
         dataSource.scorecardData = data
-        let newColumnLayout = layoutEngine.computeColumnLayout(data: data, isHomeTeam: isHomeTeam)
-        dataSource.columnLayout = newColumnLayout
+        applyColumnLayout(for: data)
         
         updateNameColumnWidth()
         updateHeaderLabels()
@@ -296,8 +322,7 @@ class ScorecardView: UIView {
     func setTeam(isHome: Bool) {
         self.isHomeTeam = isHome
         dataSource.isHomeTeam = isHome
-        let newColumnLayout = layoutEngine.computeColumnLayout(data: scorecardData, isHomeTeam: isHomeTeam)
-        dataSource.columnLayout = newColumnLayout
+        applyColumnLayout(for: scorecardData)
         
         updateNameColumnWidth()
         updateHeaderLabels()
@@ -332,6 +357,33 @@ class ScorecardView: UIView {
         invalidateIntrinsicContentSize()
     }
     
+    func setCompact(_ compact: Bool) {
+        guard compact != isCompact else { return }
+        isCompact = compact
+        dataSource.isCompact = compact
+        applyColumnLayout(for: scorecardData)
+        updateNameColumnWidth()
+        updateHeaderLabels()
+        updateContentWidth()
+        leftCollectionView.reloadData()
+        rightCollectionView.reloadData()
+        invalidateIntrinsicContentSize()
+    }
+
+    private func applyColumnLayout(for data: ScorecardData?) {
+        if isCompact {
+            let compact = layoutEngine.computeCompactColumnLayout(data: data, isHomeTeam: isHomeTeam)
+            dataSource.columnLayout = compact.columnLayout
+            dataSource.compactColumns = compact.columns
+            compactColumns = compact.columns
+        } else {
+            let newColumnLayout = layoutEngine.computeColumnLayout(data: data, isHomeTeam: isHomeTeam)
+            dataSource.columnLayout = newColumnLayout
+            dataSource.compactColumns = []
+            compactColumns = []
+        }
+    }
+
     func setIsLive(_ live: Bool) {
         let changed = self.isLive != live
         self.isLive = live
@@ -375,6 +427,8 @@ class ScorecardView: UIView {
     var horizontalVisibleWidth: CGFloat { rightScrollView.bounds.width }
 
     var currentColumnLayout: ColumnLayout { dataSource.columnLayout }
+    var currentCompactColumns: [CompactColumn] { compactColumns }
+    var currentIsCompact: Bool { isCompact }
     var currentNameWidth: CGFloat { nameWidth }
 
     private func isViewingCurrentBattingTeam(_ data: ScorecardData) -> Bool {

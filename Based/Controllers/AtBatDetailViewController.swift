@@ -14,6 +14,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
     private let containerView = UIView()
     private let matchupStack = UIStackView()
     private let batterLabel = UILabel()
+    private let inningLabel = UILabel()
     private let subHeaderLabel = UILabel()
 
     private let atBatGraphicView = AtBatGraphicView()
@@ -70,6 +71,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
             self.accentColor = accentColor
         }
         batterLabel.text = self.batterName
+        applyInningHeader()
         applyPitcherHeader()
         applyEventPresentation()
 
@@ -170,11 +172,16 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         batterLabel.isUserInteractionEnabled = true
         batterLabel.isAccessibilityElement = false
 
+        inningLabel.numberOfLines = 1
+        inningLabel.isAccessibilityElement = false
+
+        applyInningHeader()
         applyPitcherHeader()
         subHeaderLabel.numberOfLines = 0
         subHeaderLabel.isUserInteractionEnabled = true
         subHeaderLabel.isAccessibilityElement = false
 
+        matchupStack.addArrangedSubview(inningLabel)
         matchupStack.addArrangedSubview(batterLabel)
         matchupStack.addArrangedSubview(subHeaderLabel)
     }
@@ -310,8 +317,13 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         descriptionLabel.text = presentation.displayDescription
         descriptionLabel.accessibilityLabel = "Play description, \(presentation.displayDescription)"
         
-        matchupStack.accessibilityLabel = "\(batterName) versus \(pitcherName.capitalized)"
+        matchupStack.accessibilityLabel = "\(batterName), \(AccessibilitySupport.inningHalf(event: event)), versus \(pitcherName.capitalized)"
         matchupStack.accessibilityHint = "Double tap for player details."
+    }
+
+    private func applyInningHeader() {
+        inningLabel.text = "\(event.isTop ? "TOP" : "BOTTOM") \(AccessibilitySupport.ordinal(event.inning).uppercased())"
+        inningLabel.accessibilityLabel = "\(event.isTop ? "Top" : "Bottom") of the \(AccessibilitySupport.ordinal(event.inning))"
     }
 
     private func applyPitcherHeader() {
@@ -406,6 +418,8 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
 
     private func applyTypography() {
         batterLabel.font = AppFont.permanent(32, textStyle: .title1, compatibleWith: traitCollection)
+        inningLabel.font = AppFont.ibmPlexCondensed(15, textStyle: .headline, compatibleWith: traitCollection)
+        inningLabel.textColor = pencilColor.withAlphaComponent(0.75)
         descriptionLabel.font = AppFont.patrick(18, textStyle: .body, compatibleWith: traitCollection)
         pitchSequenceHeaderLabel.font = AppFont.ibmPlexCondensed(16, textStyle: .headline, compatibleWith: traitCollection)
         
@@ -415,6 +429,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         pitchTrackWidthConstraint?.constant = sideColumnWidth
         pitchTrackHeightConstraint?.constant = 180
         
+        applyInningHeader()
         applyPitcherHeader()
         updatePitchesTableHeight()
     }

@@ -50,7 +50,7 @@ class PlayerDetailViewController: UIViewController {
     }
 
     init(playerId: Int, fullName: String, position: String) {
-        let batter = ScorecardBatter(id: playerId, fullName: fullName, abbreviation: "", position: position, jerseyNumber: nil, inningEntered: nil, inningExited: nil)
+        let batter = ScorecardBatter(id: playerId, fullName: fullName, abbreviation: "", position: position, jerseyNumber: nil, battingOrderSlot: nil, inningEntered: nil, inningExited: nil)
         self.subject = .batter(batter, nil)
         super.init(nibName: nil, bundle: nil)
     }
