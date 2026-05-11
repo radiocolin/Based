@@ -78,6 +78,7 @@ final class ScorecardHelpViewController: UIViewController {
         contentStack.addArrangedSubview(makeIntroCard())
         contentStack.addArrangedSubview(makeExampleCard())
         contentStack.addArrangedSubview(makeRosterCard())
+        contentStack.addArrangedSubview(makeGlossaryCard())
     }
 
     private func makeIntroCard() -> UIView {
@@ -100,6 +101,12 @@ final class ScorecardHelpViewController: UIViewController {
     private func makeRosterCard() -> UIView {
         let card = LegendCardView(title: "Names and Grid Conventions")
         card.addCustomView(ScorecardRosterLegendView())
+        return card
+    }
+
+    private func makeGlossaryCard() -> UIView {
+        let card = LegendCardView(title: "Glossary")
+        card.addCustomView(ScorecardGlossaryView())
         return card
     }
 
@@ -320,6 +327,51 @@ private final class ScorecardPlayPageView: UIView {
         codeLabel.transform = example.flipsCodeLabel ? CGAffineTransform(scaleX: -1, y: 1) : .identity
         highlightLabel.text = example.highlight
     }
+}
+
+private struct GlossaryEntry {
+    let term: String
+    let meaning: String
+}
+
+private enum ScorecardGlossaryEntries {
+    static let all: [GlossaryEntry] = [
+		// MARK: - Reaching Base
+		.init(term: "1B", meaning: "Single"),
+		.init(term: "2B", meaning: "Double"),
+		.init(term: "3B", meaning: "Triple"),
+		.init(term: "HR", meaning: "Home run"),
+		.init(term: "BB", meaning: "Walk"),
+		.init(term: "IBB", meaning: "Intentional walk"),
+		.init(term: "HBP", meaning: "Hit by pitch"),
+		.init(term: "E", meaning: "Reached on error"),
+
+		// MARK: - Standard Outs
+		.init(term: "K", meaning: "Strikeout swinging"),
+		.init(term: "Ʞ", meaning: "Strikeout looking"),
+		.init(term: "F#", meaning: "Flyout to a position number, like F8"),
+		.init(term: "P#", meaning: "Popout to a position number, like P2"),
+		.init(term: "L#", meaning: "Lineout to a position number, like L6"),
+		.init(term: "x-y", meaning: "Groundout sequence, like 6-3 or 4-3"),
+		.init(term: "SAC", meaning: "Sacrifice"),
+
+		// MARK: - Multi-Out & Force Plays
+		.init(term: "FC", meaning: "Fielder's choice"),
+		.init(term: "FO", meaning: "Force out; usually paired with a sequence on the next line"),
+		.init(term: "FO\n6-4", meaning: "Force out with the fielding sequence on the second line"),
+		.init(term: "GIDP", meaning: "Grounded into double play; usually paired with a sequence above it"),
+		.init(term: "6-4-3\nGIDP", meaning: "Double play with the sequence on the first line"),
+		.init(term: "TP", meaning: "Triple play"),
+
+		// MARK: - Baserunning & Pitcher Actions
+		.init(term: "SB", meaning: "Stolen base"),
+		.init(term: "CS", meaning: "Caught stealing"),
+		.init(term: "PO", meaning: "Pickoff"),
+		.init(term: "BK", meaning: "Balk"),
+		.init(term: "WP", meaning: "Wild pitch"),
+		.init(term: "PB", meaning: "Passed ball"),
+		.init(term: "Z", meaning: "Zombie runner; extra innings only")
+    ]
 }
 
 private enum ScorecardExamples {
@@ -738,6 +790,127 @@ private final class ScorecardRosterLegendView: UIView {
         label.textColor = AppColors.pencil.withAlphaComponent(0.82)
         label.numberOfLines = 0
         return label
+    }
+}
+
+private final class ScorecardGlossaryView: UIView {
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        translatesAutoresizingMaskIntoConstraints = false
+
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.spacing = 0
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+
+        let note = UILabel()
+        note.text = "These are the marks you will see used in this app."
+        note.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1)
+        note.textColor = AppColors.pencil.withAlphaComponent(0.82)
+        note.numberOfLines = 0
+        stack.addArrangedSubview(note)
+
+        let spacer = UIView()
+        spacer.translatesAutoresizingMaskIntoConstraints = false
+        spacer.heightAnchor.constraint(equalToConstant: 10).isActive = true
+        stack.addArrangedSubview(spacer)
+
+        let table = UIView()
+        table.translatesAutoresizingMaskIntoConstraints = false
+        table.layer.borderWidth = 0.5
+        table.layer.borderColor = AppColors.grid.cgColor
+        stack.addArrangedSubview(table)
+
+        let rowsStack = UIStackView()
+        rowsStack.axis = .vertical
+        rowsStack.spacing = 0
+        rowsStack.translatesAutoresizingMaskIntoConstraints = false
+        table.addSubview(rowsStack)
+
+        let header = makeGlossaryRow(term: "Term", meaning: "Meaning", isHeader: true)
+        rowsStack.addArrangedSubview(header)
+
+        ScorecardGlossaryEntries.all.enumerated().forEach { index, entry in
+            rowsStack.addArrangedSubview(makeGlossaryRow(term: entry.term, meaning: entry.meaning, isHeader: false))
+            if index < ScorecardGlossaryEntries.all.count - 1 {
+                rowsStack.addArrangedSubview(makeGlossaryDivider())
+            }
+        }
+
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: topAnchor),
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor),
+
+            rowsStack.topAnchor.constraint(equalTo: table.topAnchor),
+            rowsStack.leadingAnchor.constraint(equalTo: table.leadingAnchor),
+            rowsStack.trailingAnchor.constraint(equalTo: table.trailingAnchor),
+            rowsStack.bottomAnchor.constraint(equalTo: table.bottomAnchor)
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    private func makeGlossaryRow(term: String, meaning: String, isHeader: Bool) -> UIView {
+        let row = UIView()
+        row.translatesAutoresizingMaskIntoConstraints = false
+
+        let termLabel = UILabel()
+        termLabel.translatesAutoresizingMaskIntoConstraints = false
+        termLabel.text = term
+        termLabel.numberOfLines = 0
+        termLabel.textColor = AppColors.pencil
+        termLabel.font = isHeader
+            ? AppFont.ibmPlexCondensedBold(14, textStyle: .caption1)
+            : UIFont.monospacedSystemFont(ofSize: 13, weight: .medium)
+
+        let meaningLabel = UILabel()
+        meaningLabel.translatesAutoresizingMaskIntoConstraints = false
+        meaningLabel.text = meaning
+        meaningLabel.numberOfLines = 0
+        meaningLabel.textColor = AppColors.pencil.withAlphaComponent(0.86)
+        meaningLabel.font = isHeader
+            ? AppFont.ibmPlexCondensedBold(14, textStyle: .caption1)
+            : AppFont.ibmPlexCondensed(14, textStyle: .caption1)
+
+        let divider = UIView()
+        divider.translatesAutoresizingMaskIntoConstraints = false
+        divider.backgroundColor = AppColors.grid
+
+        row.addSubview(termLabel)
+        row.addSubview(meaningLabel)
+        row.addSubview(divider)
+
+        NSLayoutConstraint.activate([
+            termLabel.topAnchor.constraint(equalTo: row.topAnchor, constant: 8),
+            termLabel.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 10),
+            termLabel.bottomAnchor.constraint(equalTo: row.bottomAnchor, constant: -8),
+            termLabel.widthAnchor.constraint(equalToConstant: 92),
+
+            divider.topAnchor.constraint(equalTo: row.topAnchor),
+            divider.bottomAnchor.constraint(equalTo: row.bottomAnchor),
+            divider.leadingAnchor.constraint(equalTo: termLabel.trailingAnchor, constant: 10),
+            divider.widthAnchor.constraint(equalToConstant: 0.5),
+
+            meaningLabel.topAnchor.constraint(equalTo: row.topAnchor, constant: 8),
+            meaningLabel.leadingAnchor.constraint(equalTo: divider.trailingAnchor, constant: 10),
+            meaningLabel.trailingAnchor.constraint(equalTo: row.trailingAnchor, constant: -10),
+            meaningLabel.bottomAnchor.constraint(equalTo: row.bottomAnchor, constant: -8)
+        ])
+
+        return row
+    }
+
+    private func makeGlossaryDivider() -> UIView {
+        let divider = UIView()
+        divider.translatesAutoresizingMaskIntoConstraints = false
+        divider.backgroundColor = AppColors.grid
+        divider.heightAnchor.constraint(equalToConstant: 0.5).isActive = true
+        return divider
     }
 }
 
