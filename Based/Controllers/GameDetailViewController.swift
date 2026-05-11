@@ -1000,8 +1000,6 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private func updateUmpireList() {
         guard let scorecard = viewModel.currentScorecard else { return }
         let umpires = scorecard.umpires
-        if umpires == viewModel.currentUmpires { return }
-        // Note: umpires update is handled in updateScorecard calling this
 
         umpireLabel.attributedText = GameFooterContent.makeUmpireText(umpires)
         umpireLabel.accessibilityLabel = GameFooterContent.makeUmpireAccessibilityLabel(umpires)
