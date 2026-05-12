@@ -1,5 +1,12 @@
 import UIKit
 
+private extension UILabel {
+    func enableDynamicType(lines: Int = 0) {
+        adjustsFontForContentSizeCategory = true
+        numberOfLines = lines
+    }
+}
+
 final class ScorecardHelpViewController: UIViewController {
     private let scrollView = UIScrollView()
     private let contentView = UIView()
@@ -15,14 +22,9 @@ final class ScorecardHelpViewController: UIViewController {
 
     private func setupNavBar() {
         title = "How to Read a Scorecard"
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
-            barButtonSystemItem: .done,
-            target: self,
-            action: #selector(doneTapped)
-        )
 
-        let titleFont = AppFont.ibmPlexCondensedBold(20, textStyle: .headline)
-        let buttonFont = AppFont.patrick(18, textStyle: .body)
+        let titleFont = AppFont.permanent(24, textStyle: .title2, compatibleWith: traitCollection)
+        let buttonFont = BarAppearanceSupport.buttonFont(for: traitCollection)
         let appearance = UINavigationBarAppearance()
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = AppColors.paper
@@ -109,10 +111,6 @@ final class ScorecardHelpViewController: UIViewController {
         card.addCustomView(ScorecardGlossaryView())
         return card
     }
-
-    @objc private func doneTapped() {
-        dismiss(animated: true)
-    }
 }
 
 private final class LegendCardView: UIView {
@@ -121,6 +119,7 @@ private final class LegendCardView: UIView {
     init(title: String) {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
+        isAccessibilityElement = false
 
         stack.axis = .vertical
         stack.spacing = 12
@@ -129,9 +128,10 @@ private final class LegendCardView: UIView {
 
         let titleLabel = UILabel()
         titleLabel.text = title
-        titleLabel.font = AppFont.ibmPlexCondensedBold(20, textStyle: .headline)
+        titleLabel.font = AppFont.ibmPlexCondensed(22, textStyle: .title2)
         titleLabel.textColor = AppColors.pencil
-        titleLabel.numberOfLines = 0
+        titleLabel.enableDynamicType()
+        titleLabel.accessibilityTraits.insert(.header)
         stack.addArrangedSubview(titleLabel)
 
         NSLayoutConstraint.activate([
@@ -165,7 +165,7 @@ private final class LegendCardView: UIView {
         label.text = text
         label.font = AppFont.ibmPlexCondensed(16, textStyle: .body)
         label.textColor = AppColors.pencil.withAlphaComponent(0.88)
-        label.numberOfLines = 0
+        label.enableDynamicType()
         return label
     }
 }
@@ -196,6 +196,9 @@ private final class ScorecardPlayPagerView: UIView, UIScrollViewDelegate {
     override init(frame: CGRect) {
         super.init(frame: frame)
         translatesAutoresizingMaskIntoConstraints = false
+        isAccessibilityElement = false
+        isAccessibilityElement = false
+        isAccessibilityElement = false
 
         let stack = UIStackView()
         stack.axis = .vertical
@@ -228,6 +231,7 @@ private final class ScorecardPlayPagerView: UIView, UIScrollViewDelegate {
         pageControl.currentPageIndicatorTintColor = AppColors.pencil
         pageControl.pageIndicatorTintColor = AppColors.grid
         pageControl.isUserInteractionEnabled = false
+        pageControl.isAccessibilityElement = true
         stack.addArrangedSubview(pageControl)
 
         NSLayoutConstraint.activate([
@@ -248,6 +252,7 @@ private final class ScorecardPlayPagerView: UIView, UIScrollViewDelegate {
             page.translatesAutoresizingMaskIntoConstraints = false
             page.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor).isActive = true
         }
+        pageControl.accessibilityLabel = "Example 1 of \(examples.count)"
     }
 
     required init?(coder: NSCoder) {
@@ -258,6 +263,7 @@ private final class ScorecardPlayPagerView: UIView, UIScrollViewDelegate {
         let width = max(scrollView.bounds.width, 1)
         let page = Int(round(scrollView.contentOffset.x / width))
         pageControl.currentPage = max(0, min(examples.count - 1, page))
+        pageControl.accessibilityLabel = "Example \(pageControl.currentPage + 1) of \(examples.count)"
     }
 }
 
@@ -271,28 +277,31 @@ private final class ScorecardPlayPageView: UIView {
         super.init(frame: frame)
         translatesAutoresizingMaskIntoConstraints = false
         backgroundColor = .clear
+        isAccessibilityElement = false
 
         scorecardGraphic.translatesAutoresizingMaskIntoConstraints = false
         scorecardGraphic.layer.borderWidth = 0.5
         scorecardGraphic.layer.borderColor = AppColors.grid.cgColor
+        scorecardGraphic.isAccessibilityElement = true
 
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        titleLabel.font = AppFont.patrick(24, textStyle: .title3)
+        titleLabel.font = AppFont.patrick(24, textStyle: .title2)
         titleLabel.textColor = AppColors.pencil
         titleLabel.textAlignment = .center
-        titleLabel.numberOfLines = 0
+        titleLabel.enableDynamicType()
+        titleLabel.accessibilityTraits.insert(.header)
 
         codeLabel.translatesAutoresizingMaskIntoConstraints = false
-        codeLabel.font = AppFont.ibmPlexCondensedBold(15, textStyle: .headline)
+        codeLabel.font = AppFont.ibmPlexCondensedBold(13, textStyle: .caption1)
         codeLabel.textColor = AppColors.pencil.withAlphaComponent(0.72)
         codeLabel.textAlignment = .center
-        codeLabel.numberOfLines = 0
+        codeLabel.enableDynamicType()
 
         highlightLabel.translatesAutoresizingMaskIntoConstraints = false
-        highlightLabel.font = AppFont.ibmPlexCondensed(16, textStyle: .body)
+        highlightLabel.font = AppFont.ibmPlexCondensed(15, textStyle: .subheadline)
         highlightLabel.textColor = AppColors.pencil.withAlphaComponent(0.86)
         highlightLabel.textAlignment = .center
-        highlightLabel.numberOfLines = 3
+        highlightLabel.enableDynamicType()
 
         [scorecardGraphic, titleLabel, codeLabel, highlightLabel].forEach { addSubview($0) }
 
@@ -322,10 +331,16 @@ private final class ScorecardPlayPageView: UIView {
 
     func configure(with example: ScorecardExample) {
         scorecardGraphic.configure(with: example.event)
-        titleLabel.text = example.title
+        scorecardGraphic.accessibilityLabel = AccessibilitySupport.joined([
+            example.title,
+            AccessibilitySupport.eventDescription(example.event)
+        ])
+        titleLabel.text = example.title.uppercased()
         codeLabel.text = example.code
         codeLabel.transform = example.flipsCodeLabel ? CGAffineTransform(scaleX: -1, y: 1) : .identity
+        codeLabel.accessibilityLabel = example.code == "K" && example.flipsCodeLabel ? "Mirrored K" : example.code
         highlightLabel.text = example.highlight
+        accessibilityElements = [scorecardGraphic, titleLabel, codeLabel, highlightLabel]
     }
 }
 
@@ -353,7 +368,8 @@ private enum ScorecardGlossaryEntries {
 		.init(term: "P#", meaning: "Popout to a position number, like P2"),
 		.init(term: "L#", meaning: "Lineout to a position number, like L6"),
 		.init(term: "x-y", meaning: "Groundout sequence, like 6-3 or 4-3"),
-		.init(term: "SAC", meaning: "Sacrifice"),
+		.init(term: "SAC", meaning: "Sacrifice bunt"),
+		.init(term: "SAC\nF8", meaning: "Sacrifice fly to a position number"),
 
 		// MARK: - Multi-Out & Force Plays
 		.init(term: "FC", meaning: "Fielder's choice"),
@@ -370,7 +386,9 @@ private enum ScorecardGlossaryEntries {
 		.init(term: "BK", meaning: "Balk"),
 		.init(term: "WP", meaning: "Wild pitch"),
 		.init(term: "PB", meaning: "Passed ball"),
-		.init(term: "Z", meaning: "Zombie runner; extra innings only")
+		.init(term: "LIVE", meaning: "Live/current at-bat state"),
+		.init(term: "Z", meaning: "Runner-only event"),
+		.init(term: "blank", meaning: "Empty scorecard box")
     ]
 }
 
@@ -547,6 +565,11 @@ private final class ScorecardRosterLegendView: UIView {
     private func makeNameCellVisual(name: String, detail: String) -> UIView {
         let row = UIView()
         row.translatesAutoresizingMaskIntoConstraints = false
+        row.isAccessibilityElement = true
+        row.accessibilityLabel = AccessibilitySupport.joined([
+            name,
+            detail.replacingOccurrences(of: "#", with: "number ")
+        ])
 
         let topLine = UIView()
         topLine.translatesAutoresizingMaskIntoConstraints = false
@@ -564,11 +587,13 @@ private final class ScorecardRosterLegendView: UIView {
         nameLabel.text = name
         nameLabel.font = UIFont(name: AppFont.permanentMarker, size: 16) ?? .systemFont(ofSize: 16)
         nameLabel.textColor = AppColors.pencil
+        nameLabel.enableDynamicType()
 
         let detailLabel = UILabel()
         detailLabel.text = detail
         detailLabel.font = UIFont(name: AppFont.patrickHand, size: 14) ?? .systemFont(ofSize: 14)
         detailLabel.textColor = AppColors.pencil.withAlphaComponent(0.5)
+        detailLabel.enableDynamicType()
 
         [topLine, bottomLine, scoreboxDivider, nameLabel, detailLabel].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
@@ -576,7 +601,7 @@ private final class ScorecardRosterLegendView: UIView {
         }
 
         NSLayoutConstraint.activate([
-            row.heightAnchor.constraint(equalToConstant: 62),
+            row.heightAnchor.constraint(greaterThanOrEqualToConstant: 62),
             topLine.topAnchor.constraint(equalTo: row.topAnchor),
             topLine.leadingAnchor.constraint(equalTo: row.leadingAnchor),
             topLine.trailingAnchor.constraint(equalTo: row.trailingAnchor),
@@ -614,6 +639,7 @@ private final class ScorecardRosterLegendView: UIView {
             label.font = AppFont.ibmPlexCondensedBold(16, textStyle: .caption1)
             label.textColor = AppColors.pencil
             label.textAlignment = .center
+            label.enableDynamicType(lines: 1)
             label.backgroundColor = AppColors.paper
             label.layer.borderWidth = 0.5
             label.layer.borderColor = AppColors.grid.cgColor
@@ -626,6 +652,8 @@ private final class ScorecardRosterLegendView: UIView {
         wrap.translatesAutoresizingMaskIntoConstraints = false
         wrap.layer.cornerRadius = 12
         wrap.clipsToBounds = true
+        wrap.isAccessibilityElement = true
+        wrap.accessibilityLabel = "Inning headers. One, two, three, four, and five, with inning five widened."
         wrap.addSubview(stack)
 
         NSLayoutConstraint.activate([
@@ -651,12 +679,14 @@ private final class ScorecardRosterLegendView: UIView {
     private func makeCompactColumnsVisual() -> UIView {
         let wrap = UIView()
         wrap.translatesAutoresizingMaskIntoConstraints = false
+        wrap.isAccessibilityElement = false
 
         let caption = UILabel()
         caption.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1)
         caption.textColor = AppColors.pencil.withAlphaComponent(0.72)
         caption.textAlignment = .left
         caption.translatesAutoresizingMaskIntoConstraints = false
+        caption.enableDynamicType()
         wrap.addSubview(caption)
 
         let header = UIStackView()
@@ -679,6 +709,7 @@ private final class ScorecardRosterLegendView: UIView {
             label.font = AppFont.ibmPlexCondensedBold(15, textStyle: .caption1)
             label.textColor = AppColors.pencil
             label.textAlignment = .center
+            label.enableDynamicType(lines: 1)
             label.backgroundColor = AppColors.paper
             label.layer.borderWidth = 0.5
             label.layer.borderColor = AppColors.grid.cgColor
@@ -692,9 +723,10 @@ private final class ScorecardRosterLegendView: UIView {
         bodySpecs.forEach { text in
             let label = UILabel()
             label.text = text
-            label.font = AppFont.patrick(16, textStyle: .body)
+            label.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1)
             label.textColor = AppColors.pencil.withAlphaComponent(0.88)
             label.textAlignment = .center
+            label.enableDynamicType(lines: 1)
             label.backgroundColor = AppColors.header.withAlphaComponent(0.2)
             label.layer.borderWidth = 0.5
             label.layer.borderColor = AppColors.grid.cgColor
@@ -716,6 +748,12 @@ private final class ScorecardRosterLegendView: UIView {
             body.trailingAnchor.constraint(equalTo: wrap.trailingAnchor),
             body.bottomAnchor.constraint(equalTo: wrap.bottomAnchor)
         ])
+
+        header.isAccessibilityElement = true
+        header.accessibilityLabel = "Compact column headers: one through three, three through six, and seven through eight."
+        body.isAccessibilityElement = true
+        body.accessibilityLabel = "Trips through the order: first trip, second trip, third trip."
+        wrap.accessibilityElements = [header, body]
 
         if let firstHeader = headerLabels.first, let firstBody = bodyLabels.first {
             headerLabels.dropFirst().forEach { $0.widthAnchor.constraint(equalTo: firstHeader.widthAnchor).isActive = true }
@@ -761,17 +799,20 @@ private final class ScorecardRosterLegendView: UIView {
         label.text = detail
         label.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1)
         label.textColor = AppColors.pencil.withAlphaComponent(0.82)
-        label.numberOfLines = 0
+        label.enableDynamicType()
         row.addArrangedSubview(label)
+        row.accessibilityElements = [cell, label]
 
         return row
     }
 
     private func makeSectionTitle(_ text: String) -> UILabel {
         let label = UILabel()
-        label.text = text
-        label.font = AppFont.patrick(18, textStyle: .body)
-        label.textColor = AppColors.pencil
+        label.text = text.uppercased()
+        label.font = AppFont.ibmPlexCondensedBold(16, textStyle: .headline)
+        label.textColor = AppColors.pencil.withAlphaComponent(0.68)
+        label.enableDynamicType(lines: 1)
+        label.accessibilityTraits.insert(.header)
         return label
     }
 
@@ -788,7 +829,7 @@ private final class ScorecardRosterLegendView: UIView {
         label.text = text
         label.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1)
         label.textColor = AppColors.pencil.withAlphaComponent(0.82)
-        label.numberOfLines = 0
+        label.enableDynamicType()
         return label
     }
 }
@@ -808,7 +849,7 @@ private final class ScorecardGlossaryView: UIView {
         note.text = "These are the marks you will see used in this app."
         note.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1)
         note.textColor = AppColors.pencil.withAlphaComponent(0.82)
-        note.numberOfLines = 0
+        note.enableDynamicType()
         stack.addArrangedSubview(note)
 
         let spacer = UIView()
@@ -858,20 +899,45 @@ private final class ScorecardGlossaryView: UIView {
     private func makeGlossaryRow(term: String, meaning: String, isHeader: Bool) -> UIView {
         let row = UIView()
         row.translatesAutoresizingMaskIntoConstraints = false
+        row.isAccessibilityElement = true
+
+        let termContainer = UIView()
+        termContainer.translatesAutoresizingMaskIntoConstraints = false
+        termContainer.isAccessibilityElement = false
 
         let termLabel = UILabel()
         termLabel.translatesAutoresizingMaskIntoConstraints = false
         termLabel.text = term
-        termLabel.numberOfLines = 0
+        termLabel.enableDynamicType()
         termLabel.textColor = AppColors.pencil
         termLabel.font = isHeader
             ? AppFont.ibmPlexCondensedBold(14, textStyle: .caption1)
-            : UIFont.monospacedSystemFont(ofSize: 13, weight: .medium)
+            : UIFont(name: AppFont.permanentMarker, size: 13) ?? .systemFont(ofSize: 13, weight: .bold)
+        termContainer.addSubview(termLabel)
+
+        if term == "Ʞ" {
+            termLabel.text = "K"
+            termLabel.transform = CGAffineTransform(scaleX: -1, y: 1)
+            NSLayoutConstraint.activate([
+                termLabel.topAnchor.constraint(equalTo: termContainer.topAnchor),
+                termLabel.leadingAnchor.constraint(equalTo: termContainer.leadingAnchor),
+                termLabel.trailingAnchor.constraint(lessThanOrEqualTo: termContainer.trailingAnchor),
+                termLabel.bottomAnchor.constraint(equalTo: termContainer.bottomAnchor)
+            ])
+        } else {
+            termLabel.transform = .identity
+            NSLayoutConstraint.activate([
+                termLabel.topAnchor.constraint(equalTo: termContainer.topAnchor),
+                termLabel.leadingAnchor.constraint(equalTo: termContainer.leadingAnchor),
+                termLabel.trailingAnchor.constraint(equalTo: termContainer.trailingAnchor),
+                termLabel.bottomAnchor.constraint(equalTo: termContainer.bottomAnchor)
+            ])
+        }
 
         let meaningLabel = UILabel()
         meaningLabel.translatesAutoresizingMaskIntoConstraints = false
         meaningLabel.text = meaning
-        meaningLabel.numberOfLines = 0
+        meaningLabel.enableDynamicType()
         meaningLabel.textColor = AppColors.pencil.withAlphaComponent(0.86)
         meaningLabel.font = isHeader
             ? AppFont.ibmPlexCondensedBold(14, textStyle: .caption1)
@@ -881,19 +947,19 @@ private final class ScorecardGlossaryView: UIView {
         divider.translatesAutoresizingMaskIntoConstraints = false
         divider.backgroundColor = AppColors.grid
 
-        row.addSubview(termLabel)
+        row.addSubview(termContainer)
         row.addSubview(meaningLabel)
         row.addSubview(divider)
 
         NSLayoutConstraint.activate([
-            termLabel.topAnchor.constraint(equalTo: row.topAnchor, constant: 8),
-            termLabel.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 10),
-            termLabel.bottomAnchor.constraint(equalTo: row.bottomAnchor, constant: -8),
-            termLabel.widthAnchor.constraint(equalToConstant: 92),
+            termContainer.topAnchor.constraint(equalTo: row.topAnchor, constant: 8),
+            termContainer.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 10),
+            termContainer.bottomAnchor.constraint(equalTo: row.bottomAnchor, constant: -8),
+            termContainer.widthAnchor.constraint(equalToConstant: 92),
 
             divider.topAnchor.constraint(equalTo: row.topAnchor),
             divider.bottomAnchor.constraint(equalTo: row.bottomAnchor),
-            divider.leadingAnchor.constraint(equalTo: termLabel.trailingAnchor, constant: 10),
+            divider.leadingAnchor.constraint(equalTo: termContainer.trailingAnchor, constant: 10),
             divider.widthAnchor.constraint(equalToConstant: 0.5),
 
             meaningLabel.topAnchor.constraint(equalTo: row.topAnchor, constant: 8),
@@ -901,6 +967,10 @@ private final class ScorecardGlossaryView: UIView {
             meaningLabel.trailingAnchor.constraint(equalTo: row.trailingAnchor, constant: -10),
             meaningLabel.bottomAnchor.constraint(equalTo: row.bottomAnchor, constant: -8)
         ])
+
+        row.accessibilityLabel = isHeader
+            ? "Glossary table header. Term and meaning."
+            : "\(term == "Ʞ" ? "Mirrored K" : term): \(meaning)"
 
         return row
     }
@@ -940,13 +1010,13 @@ private final class ScorecardMarkerLegendView: UIView {
 
         let titleLabel = UILabel()
         titleLabel.text = title
-        titleLabel.font = AppFont.patrick(18, textStyle: .body)
+        titleLabel.font = AppFont.ibmPlexCondensedBold(16, textStyle: .headline)
         titleLabel.textColor = AppColors.pencil
         titleLabel.numberOfLines = 0
 
         let detailLabel = UILabel()
         detailLabel.text = detail
-        detailLabel.font = AppFont.ibmPlexCondensed(15, textStyle: .body)
+        detailLabel.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1)
         detailLabel.textColor = AppColors.pencil.withAlphaComponent(0.85)
         detailLabel.numberOfLines = 0
 
@@ -975,25 +1045,30 @@ private final class ScorecardPreviewView: UIView {
     private let outsLabel = UILabel()
     private let pitchingChangeLayer = CAShapeLayer()
     private let inningBreakLayer = CAShapeLayer()
+    private var currentEvent: AtBatEvent?
+    private var guideDescription: String?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         translatesAutoresizingMaskIntoConstraints = false
         backgroundColor = .clear
+        isAccessibilityElement = true
         layer.borderWidth = 0.5
         layer.borderColor = AppColors.grid.cgColor
         clipsToBounds = false
 
         diamondView.translatesAutoresizingMaskIntoConstraints = false
+        diamondView.isAccessibilityElement = false
         addSubview(diamondView)
 
         resultLabel.translatesAutoresizingMaskIntoConstraints = false
         resultLabel.font = UIFont(name: AppFont.permanentMarker, size: 18) ?? .systemFont(ofSize: 18, weight: .bold)
         resultLabel.textColor = AppColors.pencil
         resultLabel.textAlignment = .center
-        resultLabel.numberOfLines = 0
+        resultLabel.enableDynamicType()
         resultLabel.adjustsFontSizeToFitWidth = true
         resultLabel.minimumScaleFactor = 0.5
+        resultLabel.isAccessibilityElement = false
         addSubview(resultLabel)
 
         [ballsLabel, strikesLabel, outsLabel].forEach {
@@ -1001,6 +1076,8 @@ private final class ScorecardPreviewView: UIView {
             $0.font = UIFont(name: AppFont.patrickHand, size: 12) ?? .systemFont(ofSize: 12)
             $0.textColor = AppColors.pencil
             $0.textAlignment = .center
+            $0.enableDynamicType(lines: 1)
+            $0.isAccessibilityElement = false
             addSubview($0)
         }
 
@@ -1044,6 +1121,7 @@ private final class ScorecardPreviewView: UIView {
     }
 
     func configure(with event: AtBatEvent) {
+        currentEvent = event
         let presentation = AtBatPresentation(event: event)
         resultLabel.attributedText = presentation.resultAttributedString(
             font: resultLabel.font ?? .systemFont(ofSize: 18)
@@ -1062,16 +1140,33 @@ private final class ScorecardPreviewView: UIView {
             isRun: event.result.isHomeRun,
             accentColor: presentation.diamondAccentColor
         )
+        updateAccessibility()
     }
 
     func showPitchingChange(_ show: Bool) {
         pitchingChangeLayer.isHidden = !show
+        if show {
+            guideDescription = "Pitching change marker."
+        } else if !inningBreakLayer.isHidden {
+            guideDescription = "Inning break marker."
+        } else {
+            guideDescription = nil
+        }
         setNeedsLayout()
+        updateAccessibility()
     }
 
     func showInningBreak(_ show: Bool) {
         inningBreakLayer.isHidden = !show
+        if show {
+            guideDescription = "Inning break marker."
+        } else if !pitchingChangeLayer.isHidden {
+            guideDescription = "Pitching change marker."
+        } else {
+            guideDescription = nil
+        }
         setNeedsLayout()
+        updateAccessibility()
     }
 
     override func layoutSubviews() {
@@ -1094,6 +1189,13 @@ private final class ScorecardPreviewView: UIView {
             inningPath.addLine(to: CGPoint(x: bounds.width - 2, y: 2))
             inningBreakLayer.path = inningPath.cgPath
         }
+    }
+
+    private func updateAccessibility() {
+        accessibilityLabel = AccessibilitySupport.joined([
+            guideDescription,
+            currentEvent.map { AccessibilitySupport.eventDescription($0) }
+        ])
     }
 }
 

@@ -300,12 +300,12 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
         let cell = tableView.dequeueReusableCell(withIdentifier: "SubtitleCell", for: indexPath)
         cell.backgroundColor = .clear
         cell.selectionStyle = .default
-        cell.textLabel?.font = AppFont.patrick(18, textStyle: .body, compatibleWith: traitCollection)
+        cell.textLabel?.font = AppFont.ibmPlexCondensedBold(18, textStyle: .body, compatibleWith: traitCollection)
         cell.textLabel?.textColor = AppColors.pencil
         cell.textLabel?.adjustsFontForContentSizeCategory = true
         cell.textLabel?.numberOfLines = 0
-        cell.detailTextLabel?.font = AppFont.patrick(14, textStyle: .caption1, compatibleWith: traitCollection)
-        cell.detailTextLabel?.textColor = AppColors.pencil.withAlphaComponent(0.6)
+        cell.detailTextLabel?.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1, compatibleWith: traitCollection)
+        cell.detailTextLabel?.textColor = AppColors.pencil.withAlphaComponent(0.55)
         cell.detailTextLabel?.adjustsFontForContentSizeCategory = true
         cell.detailTextLabel?.numberOfLines = 0
         cell.isAccessibilityElement = true
@@ -377,7 +377,7 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
         stack.translatesAutoresizingMaskIntoConstraints = false
         footerCell.contentView.addSubview(stack)
 
-        let font = AppFont.patrick(14, textStyle: .footnote, compatibleWith: traitCollection)
+        let font = AppFont.ibmPlexCondensed(14, textStyle: .footnote, compatibleWith: traitCollection)
         let color = AppColors.pencil.withAlphaComponent(0.6)
         let symbolHeight = UIFontMetrics(forTextStyle: .footnote).scaledValue(for: 14, compatibleWith: traitCollection)
         let symbolWidth = UIFontMetrics(forTextStyle: .footnote).scaledValue(for: 16, compatibleWith: traitCollection)
@@ -430,7 +430,7 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
         // MLB Attribution (left-aligned)
         let mlbLabel = UILabel()
         mlbLabel.text = "Statistical data is sourced via public API and is the proprietary property of MLB Advanced Media, L.P. All Major League Baseball trademarks, service marks, team names, and logos are the property of MLB Advanced Media, L.P. and its respective member clubs.\n\nThis application is an independent project and is not officially affiliated with, endorsed by, or sponsored by Major League Baseball or any of its affiliates."
-        mlbLabel.font = AppFont.patrick(11, textStyle: .caption2, compatibleWith: traitCollection)
+        mlbLabel.font = AppFont.ibmPlexCondensed(11, textStyle: .caption2, compatibleWith: traitCollection)
         mlbLabel.textColor = color.withAlphaComponent(0.4)
         mlbLabel.textAlignment = .left
         mlbLabel.numberOfLines = 0
@@ -459,10 +459,10 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
         // Reset cell to clean state
         cell.backgroundColor = .clear
         cell.selectionStyle = .default
-        cell.textLabel?.font = AppFont.patrick(18, textStyle: .body, compatibleWith: traitCollection)
-        cell.detailTextLabel?.font = AppFont.patrick(16, textStyle: .callout, compatibleWith: traitCollection)
+        cell.textLabel?.font = AppFont.ibmPlexCondensedBold(18, textStyle: .body, compatibleWith: traitCollection)
+        cell.detailTextLabel?.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1, compatibleWith: traitCollection)
         cell.textLabel?.textColor = AppColors.pencil
-        cell.detailTextLabel?.textColor = AppColors.pencil.withAlphaComponent(0.6)
+        cell.detailTextLabel?.textColor = AppColors.pencil.withAlphaComponent(0.55)
         cell.textLabel?.adjustsFontForContentSizeCategory = true
         cell.detailTextLabel?.adjustsFontForContentSizeCategory = true
         cell.textLabel?.numberOfLines = 0
@@ -632,17 +632,17 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
         container.addSubview(stack)
         
         let titleLabel = UILabel()
-        titleLabel.text = "FAVORITE TEAMS"
-        titleLabel.font = AppFont.permanent(16, textStyle: .headline, compatibleWith: traitCollection)
-        titleLabel.textColor = AppColors.pencil.withAlphaComponent(0.7)
+        titleLabel.text = "Favorite Teams"
+        titleLabel.font = AppFont.ibmPlexCondensedBold(16, textStyle: .headline, compatibleWith: traitCollection)
+        titleLabel.textColor = AppColors.pencil.withAlphaComponent(0.68)
         titleLabel.isAccessibilityElement = false
         titleLabel.adjustsFontForContentSizeCategory = true
         titleLabel.numberOfLines = 0
         
         let descLabel = UILabel()
         descLabel.text = "Favorite teams appear first in the schedule."
-        descLabel.font = AppFont.patrick(14, textStyle: .footnote, compatibleWith: traitCollection)
-        descLabel.textColor = AppColors.pencil.withAlphaComponent(0.5)
+        descLabel.font = AppFont.ibmPlexCondensed(14, textStyle: .footnote, compatibleWith: traitCollection)
+        descLabel.textColor = AppColors.pencil.withAlphaComponent(0.55)
         descLabel.isAccessibilityElement = false
         descLabel.adjustsFontForContentSizeCategory = true
         descLabel.numberOfLines = 0
@@ -666,17 +666,17 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
 
     func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
         switch section {
-        case 0: return "APPEARANCE"
+        case 0: return "Appearance"
         case 1: return nil // Custom view
-        case 2: return "MORE APPS"
+        case 2: return "More Apps"
         default: return nil
         }
     }
     
     func tableView(_ tableView: UITableView, willDisplayHeaderView view: UIView, forSection section: Int) {
         if let header = view as? UITableViewHeaderFooterView {
-            header.textLabel?.font = AppFont.permanent(16, textStyle: .headline, compatibleWith: traitCollection)
-            header.textLabel?.textColor = AppColors.pencil.withAlphaComponent(0.7)
+            header.textLabel?.font = AppFont.ibmPlexCondensedBold(16, textStyle: .headline, compatibleWith: traitCollection)
+            header.textLabel?.textColor = AppColors.pencil.withAlphaComponent(0.68)
             header.textLabel?.adjustsFontForContentSizeCategory = true
         }
     }
@@ -804,8 +804,8 @@ private final class SettingsSelectionViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, willDisplayHeaderView view: UIView, forSection section: Int) {
         if let header = view as? UITableViewHeaderFooterView {
-            header.textLabel?.font = AppFont.permanent(14, textStyle: .headline, compatibleWith: traitCollection)
-            header.textLabel?.textColor = AppColors.pencil.withAlphaComponent(0.7)
+            header.textLabel?.font = AppFont.ibmPlexCondensedBold(14, textStyle: .headline, compatibleWith: traitCollection)
+            header.textLabel?.textColor = AppColors.pencil.withAlphaComponent(0.68)
             header.textLabel?.adjustsFontForContentSizeCategory = true
         }
     }
@@ -815,7 +815,7 @@ private final class SettingsSelectionViewController: UITableViewController {
         let cell = tableView.dequeueReusableCell(withIdentifier: "OptionCell", for: indexPath)
         cell.backgroundColor = .clear
         cell.textLabel?.text = option.title
-        cell.textLabel?.font = AppFont.patrick(18, textStyle: .body, compatibleWith: traitCollection)
+        cell.textLabel?.font = AppFont.ibmPlexCondensedBold(18, textStyle: .body, compatibleWith: traitCollection)
         
         let textColor: UIColor
         if option.isDestructive {
