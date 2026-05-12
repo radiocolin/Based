@@ -152,7 +152,31 @@ class ScorecardViewDataSource: NSObject, UICollectionViewDataSource, UICollectio
             guard columnLayout.inningInfo(forColumn: col) != nil else { return }
             let paIndex = col
             let allPAs = compactPAsByColumn(for: batter, data: data, lineup: lineup)
-            guard let event = allPAs[paIndex] else { return }
+            
+            let isCurrentBatter = data.currentBatterId == batter.id
+            let isCurrentHalf = data.isTopInning == !isHomeTeam
+            let event = allPAs[paIndex]
+            
+            let isCurrentCell: Bool
+            if isLive && isCurrentHalf && isCurrentBatter {
+                if let event = event, event.result.isLive {
+                    isCurrentCell = true
+                } else if event == nil {
+                    let maxPAIndex = allPAs.keys.max() ?? -1
+                    isCurrentCell = paIndex == maxPAIndex + 1
+                } else {
+                    isCurrentCell = false
+                }
+            } else {
+                isCurrentCell = false
+            }
+
+            if isCurrentCell {
+                delegate?.didSelectActiveAtBat()
+                return
+            }
+
+            guard let event = event else { return }
             delegate?.didSelectAtBat(event, batter: batter, pitcherName: event.pitcherName)
         } else {
             let col = indexPath.item % totalCols
@@ -453,19 +477,45 @@ class ScorecardViewDataSource: NSObject, UICollectionViewDataSource, UICollectio
         )
         cell.showInningChangeIndicator(showsInningChange, color: data.teamAccentColor(isHomeTeam: isHomeTeam))
 
-        cell.contentView.layer.borderWidth = 0.5
-        cell.contentView.layer.borderColor = AppColors.grid.cgColor
+        let isCurrentBatter = data.currentBatterId == batter.id
+        let isCurrentHalf = data.isTopInning == !isHomeTeam
+        let isCurrentCell: Bool
+        if isLive && isCurrentHalf && isCurrentBatter {
+            if let event = event, event.result.isLive {
+                isCurrentCell = true
+            } else if event == nil {
+                let maxPAIndex = allPAs.keys.max() ?? -1
+                isCurrentCell = paIndex == maxPAIndex + 1
+            } else {
+                isCurrentCell = false
+            }
+        } else {
+            isCurrentCell = false
+        }
+
+        if isCurrentCell {
+            cell.contentView.layer.borderWidth = 3.0
+            cell.contentView.layer.borderColor = UIColor.systemBlue.cgColor
+            cell.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.08)
+        } else {
+            cell.contentView.layer.borderWidth = 0.5
+            cell.contentView.layer.borderColor = AppColors.grid.cgColor
+        }
+
         cell.isAccessibilityElement = true
 
         if let event = event {
             let compactCol = paIndex < compactColumns.count ? compactColumns[paIndex] : nil
             let inningRange = compactCol.map { "\($0.inningStart)-\($0.inningEnd)" } ?? ""
-            cell.accessibilityLabel = "\(batter.abbreviation), plate appearance \(paIndex + 1), innings \(inningRange): \(event.result.displayText)"
-            cell.accessibilityHint = "Double tap for at-bat details."
+            let baseLabel = "\(batter.abbreviation), plate appearance \(paIndex + 1), innings \(inningRange): \(event.result.displayText)"
+            cell.accessibilityLabel = isCurrentCell ? "Live: \(baseLabel)" : baseLabel
+            cell.accessibilityHint = isCurrentCell ? "Double tap for the live at-bat." : "Double tap for at-bat details."
             cell.accessibilityTraits = .button
         } else {
-            cell.accessibilityLabel = "\(batter.abbreviation), plate appearance \(paIndex + 1): no at-bat"
-            cell.accessibilityTraits = .staticText
+            let baseLabel = "\(batter.abbreviation), plate appearance \(paIndex + 1): no at-bat"
+            cell.accessibilityLabel = isCurrentCell ? "Live: \(baseLabel)" : baseLabel
+            cell.accessibilityHint = isCurrentCell ? "Double tap for the live at-bat." : nil
+            cell.accessibilityTraits = isCurrentCell ? .button : .staticText
         }
 
         return cell

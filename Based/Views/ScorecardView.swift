@@ -402,10 +402,22 @@ class ScorecardView: UIView {
         guard isViewingCurrentBattingTeam(data) else { return }
 
         let lineup = isHomeTeam ? data.lineups.home : data.lineups.away
-        guard lineup.firstIndex(where: { $0.id == batterId }) != nil else { return }
+        guard let batter = lineup.first(where: { $0.id == batterId }) else { return }
 
-        guard let inningLayout = dataSource.columnLayout.layout(forInning: inningNum) else { return }
-        let colIndex = inningLayout.startColumn + inningLayout.subColumnCount - 1
+        let colIndex: Int
+        if isCompact {
+            let allPAs = layoutEngine.compactPlateAppearancesBySlot(data: data, lineup: lineup, isHomeTeam: isHomeTeam)
+            let batterSlot = batter.battingOrderSlot ?? 0
+            let batterPAs = allPAs[batterSlot] ?? [:]
+            if let livePA = batterPAs.first(where: { $0.value.result.isLive })?.key {
+                colIndex = livePA
+            } else {
+                colIndex = (batterPAs.keys.max() ?? -1) + 1
+            }
+        } else {
+            guard let inningLayout = dataSource.columnLayout.layout(forInning: inningNum) else { return }
+            colIndex = inningLayout.startColumn + inningLayout.subColumnCount - 1
+        }
 
         // Horizontal Scroll
         let hOffset = max(0, CGFloat(colIndex) * inningWidth - (rightScrollView.bounds.width / 2) + (inningWidth / 2))
