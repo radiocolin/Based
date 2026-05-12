@@ -2,7 +2,7 @@ import UIKit
 
 class ScorecardAccessibilityProvider {
     func spokenPosition(for batter: ScorecardBatter) -> String {
-        var parts = [batter.position]
+        var parts = [AccessibilitySupport.positionDescription(batter.position)]
         if let jerseyNumber = batter.jerseyNumber {
             parts.append("number \(jerseyNumber)")
         }

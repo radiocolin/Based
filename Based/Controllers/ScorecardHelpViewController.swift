@@ -568,7 +568,7 @@ private final class ScorecardRosterLegendView: UIView {
         row.isAccessibilityElement = true
         row.accessibilityLabel = AccessibilitySupport.joined([
             name,
-            detail.replacingOccurrences(of: "#", with: "number ")
+            spokenNameDetail(detail)
         ])
 
         let topLine = UIView()
@@ -623,6 +623,19 @@ private final class ScorecardRosterLegendView: UIView {
         ])
 
         return row
+    }
+
+    private func spokenNameDetail(_ detail: String) -> String {
+        var spoken = detail
+        if let positionToken = detail.split(separator: " ").first {
+            let position = String(positionToken)
+            spoken = spoken.replacingOccurrences(
+                of: position,
+                with: AccessibilitySupport.positionDescription(position)
+            )
+        }
+        spoken = spoken.replacingOccurrences(of: "#", with: "number ")
+        return spoken
     }
 
     private func makeHeaderVisual() -> UIView {
