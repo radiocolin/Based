@@ -88,8 +88,8 @@ final class ScorecardImageGenerator {
         let totalHeight: CGFloat
     }
 
-    func generate(scorecard: ScorecardData, linescore: Linescore?, options: ScorecardExportMode = .full) async -> UIImage {
-        let pdfData = await generatePDF(scorecard: scorecard, linescore: linescore, options: options)
+    func generate(scorecard: ScorecardData, linescore: Linescore?, options: ScorecardExportMode = .full, userInterfaceStyle: UIUserInterfaceStyle = .unspecified) async -> UIImage {
+        let pdfData = await generatePDF(scorecard: scorecard, linescore: linescore, options: options, userInterfaceStyle: userInterfaceStyle)
         guard let provider = CGDataProvider(data: pdfData as CFData),
               let pdf = CGPDFDocument(provider),
               let page = pdf.page(at: 1) else {
@@ -102,16 +102,18 @@ final class ScorecardImageGenerator {
         format.scale = 1
         let renderer = UIGraphicsImageRenderer(size: size, format: format)
         return renderer.image { context in
-            let ctx = context.cgContext
-            self.config.paperColor.setFill()
-            ctx.fill(CGRect(origin: .zero, size: size))
-            ctx.translateBy(x: 0, y: size.height)
-            ctx.scaleBy(x: scale, y: -scale)
-            ctx.drawPDFPage(page)
+            withTraitStyle(userInterfaceStyle) {
+                let ctx = context.cgContext
+                self.config.paperColor.setFill()
+                ctx.fill(CGRect(origin: .zero, size: size))
+                ctx.translateBy(x: 0, y: size.height)
+                ctx.scaleBy(x: scale, y: -scale)
+                ctx.drawPDFPage(page)
+            }
         }
     }
 
-    func generatePDF(scorecard: ScorecardData, linescore: Linescore?, options: ScorecardExportMode = .full) async -> Data {
+    func generatePDF(scorecard: ScorecardData, linescore: Linescore?, options: ScorecardExportMode = .full, userInterfaceStyle: UIUserInterfaceStyle = .unspecified) async -> Data {
         let layout = computeLayout(scorecard: scorecard, linescore: linescore, options: options)
         let pageWidth: CGFloat = 792
         let pageHeight: CGFloat = 612
@@ -127,15 +129,25 @@ final class ScorecardImageGenerator {
 
         let renderer = UIGraphicsPDFRenderer(bounds: pageRect)
         return renderer.pdfData { context in
-            context.beginPage()
-            let ctx = context.cgContext
-            self.config.paperColor.setFill()
-            ctx.fill(pageRect)
-            ctx.saveGState()
-            ctx.translateBy(x: offsetX, y: offsetY)
-            ctx.scaleBy(x: scale, y: scale)
-            self.drawAllContent(scorecard: scorecard, linescore: linescore, layout: layout, imageWidth: layout.imageWidth, options: options, ctx: ctx)
-            ctx.restoreGState()
+            withTraitStyle(userInterfaceStyle) {
+                context.beginPage()
+                let ctx = context.cgContext
+                self.config.paperColor.setFill()
+                ctx.fill(pageRect)
+                ctx.saveGState()
+                ctx.translateBy(x: offsetX, y: offsetY)
+                ctx.scaleBy(x: scale, y: scale)
+                self.drawAllContent(scorecard: scorecard, linescore: linescore, layout: layout, imageWidth: layout.imageWidth, options: options, ctx: ctx)
+                ctx.restoreGState()
+            }
+        }
+    }
+
+    private func withTraitStyle(_ style: UIUserInterfaceStyle, _ work: () -> Void) {
+        if style == .unspecified {
+            work()
+        } else {
+            UITraitCollection(userInterfaceStyle: style).performAsCurrent(work)
         }
     }
 

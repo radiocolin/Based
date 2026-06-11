@@ -5,6 +5,7 @@ class ScorecardExportViewController: UIViewController {
     private let scorecard: ScorecardData
     private let linescore: Linescore?
     private var selectedMode: ScorecardExportMode = .full
+    private var selectedStyle: UIUserInterfaceStyle = .light
 
     private let scrollView = UIScrollView()
     private let previewImageView: UIImageView = {
@@ -16,6 +17,12 @@ class ScorecardExportViewController: UIViewController {
         iv.clipsToBounds = true
         iv.backgroundColor = AppColors.paper
         return iv
+    }()
+    private let appearanceStack: UIStackView = {
+        let s = UIStackView()
+        s.axis = .vertical
+        s.spacing = 0
+        return s
     }()
     private let modeStack: UIStackView = {
         let s = UIStackView()
@@ -32,7 +39,39 @@ class ScorecardExportViewController: UIViewController {
     }()
 
     private var modeRows: [UIView] = []
+    private var appearanceRows: [UIView] = []
     private var previewTask: Task<Void, Never>?
+    private var exportButtons: [UIButton] = []
+
+    private enum AppearanceOption: Int, CaseIterable {
+        case light = 0
+        case dark = 1
+
+        var title: String {
+            switch self {
+            case .light: return "Light"
+            case .dark: return "Dark"
+            }
+        }
+
+        var subtitle: String {
+            switch self {
+            case .light: return "Off-white paper background"
+            case .dark: return "Charcoal background"
+            }
+        }
+
+        var style: UIUserInterfaceStyle {
+            switch self {
+            case .light: return .light
+            case .dark: return .dark
+            }
+        }
+
+        static func from(_ style: UIUserInterfaceStyle) -> AppearanceOption {
+            style == .dark ? .dark : .light
+        }
+    }
 
     init(scorecard: ScorecardData, linescore: Linescore?) {
         self.scorecard = scorecard
@@ -46,12 +85,27 @@ class ScorecardExportViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        selectedStyle = resolveSystemStyle()
+        overrideUserInterfaceStyle = selectedStyle
         view.backgroundColor = AppColors.paper
         setupNavBar()
         setupLayout()
+        setupAppearanceList()
         setupModeList()
         setupButtons()
         refreshPreview()
+    }
+
+    private func resolveSystemStyle() -> UIUserInterfaceStyle {
+        let style = UITraitCollection.current.userInterfaceStyle
+        return style == .dark ? .dark : .light
+    }
+
+    private func refreshCachedColors() {
+        previewImageView.layer.borderColor = AppColors.grid.resolvedColor(with: traitCollection).cgColor
+        for btn in exportButtons {
+            btn.layer.borderColor = AppColors.grid.resolvedColor(with: traitCollection).cgColor
+        }
     }
 
     private func setupNavBar() {
@@ -84,6 +138,7 @@ class ScorecardExportViewController: UIViewController {
         scrollView.addSubview(contentStack)
 
         previewImageView.translatesAutoresizingMaskIntoConstraints = false
+        appearanceStack.translatesAutoresizingMaskIntoConstraints = false
         modeStack.translatesAutoresizingMaskIntoConstraints = false
         buttonStack.translatesAutoresizingMaskIntoConstraints = false
 
@@ -92,6 +147,9 @@ class ScorecardExportViewController: UIViewController {
         previewContainer.addSubview(previewImageView)
 
         contentStack.addArrangedSubview(previewContainer)
+        contentStack.addArrangedSubview(makeSectionHeader("APPEARANCE"))
+        contentStack.addArrangedSubview(appearanceStack)
+        contentStack.addArrangedSubview(makeSectionHeader("EXPORT MODE"))
         contentStack.addArrangedSubview(modeStack)
         contentStack.addArrangedSubview(buttonStack)
 
@@ -121,6 +179,31 @@ class ScorecardExportViewController: UIViewController {
         ])
     }
 
+    private func makeSectionHeader(_ title: String) -> UILabel {
+        let label = UILabel()
+        label.text = title
+        label.font = UIFont(name: AppFont.ibmPlexBold, size: 13) ?? .systemFont(ofSize: 13, weight: .bold)
+        label.textColor = AppColors.pencil.withAlphaComponent(0.55)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        return label
+    }
+
+    private func setupAppearanceList() {
+        for option in AppearanceOption.allCases {
+            let row = makeAppearanceRow(for: option)
+            appearanceStack.addArrangedSubview(row)
+            appearanceRows.append(row)
+        }
+        updateAppearanceCheckmarks()
+    }
+
+    private func makeAppearanceRow(for option: AppearanceOption) -> UIView {
+        let container = makeRowContainer(tag: option.rawValue, title: option.title, subtitle: option.subtitle)
+        let tap = UITapGestureRecognizer(target: self, action: #selector(appearanceRowTapped(_:)))
+        container.addGestureRecognizer(tap)
+        return container
+    }
+
     private func setupModeList() {
         for mode in ScorecardExportMode.allCases {
             let row = makeModeRow(for: mode)
@@ -131,9 +214,16 @@ class ScorecardExportViewController: UIViewController {
     }
 
     private func makeModeRow(for mode: ScorecardExportMode) -> UIView {
+        let container = makeRowContainer(tag: mode.rawValue, title: mode.title, subtitle: mode.subtitle)
+        let tap = UITapGestureRecognizer(target: self, action: #selector(modeRowTapped(_:)))
+        container.addGestureRecognizer(tap)
+        return container
+    }
+
+    private func makeRowContainer(tag: Int, title: String, subtitle: String) -> UIView {
         let container = UIView()
         container.translatesAutoresizingMaskIntoConstraints = false
-        container.tag = mode.rawValue
+        container.tag = tag
 
         let checkmark = UIImageView()
         checkmark.translatesAutoresizingMaskIntoConstraints = false
@@ -142,13 +232,13 @@ class ScorecardExportViewController: UIViewController {
         checkmark.tag = 100
 
         let titleLabel = UILabel()
-        titleLabel.text = mode.title
+        titleLabel.text = title
         titleLabel.font = UIFont(name: AppFont.patrickHand, size: 20) ?? .systemFont(ofSize: 20)
         titleLabel.textColor = AppColors.pencil
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
         let subtitleLabel = UILabel()
-        subtitleLabel.text = mode.subtitle
+        subtitleLabel.text = subtitle
         subtitleLabel.font = UIFont(name: AppFont.ibmPlexRegular, size: 14) ?? .systemFont(ofSize: 14)
         subtitleLabel.textColor = AppColors.pencil.withAlphaComponent(0.6)
         subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -181,9 +271,6 @@ class ScorecardExportViewController: UIViewController {
             separator.heightAnchor.constraint(equalToConstant: 0.5),
         ])
 
-        let tap = UITapGestureRecognizer(target: self, action: #selector(modeRowTapped(_:)))
-        container.addGestureRecognizer(tap)
-
         return container
     }
 
@@ -195,10 +282,29 @@ class ScorecardExportViewController: UIViewController {
         refreshPreview()
     }
 
+    @objc private func appearanceRowTapped(_ gesture: UITapGestureRecognizer) {
+        guard let row = gesture.view,
+              let option = AppearanceOption(rawValue: row.tag) else { return }
+        selectedStyle = option.style
+        overrideUserInterfaceStyle = selectedStyle
+        refreshCachedColors()
+        updateAppearanceCheckmarks()
+        refreshPreview()
+    }
+
     private func updateCheckmarks() {
         for row in modeRows {
             guard let checkmark = row.viewWithTag(100) as? UIImageView else { continue }
             let isSelected = row.tag == selectedMode.rawValue
+            checkmark.image = isSelected ? UIImage(systemName: "checkmark") : nil
+        }
+    }
+
+    private func updateAppearanceCheckmarks() {
+        let selected = AppearanceOption.from(selectedStyle)
+        for row in appearanceRows {
+            guard let checkmark = row.viewWithTag(100) as? UIImageView else { continue }
+            let isSelected = row.tag == selected.rawValue
             checkmark.image = isSelected ? UIImage(systemName: "checkmark") : nil
         }
     }
@@ -209,6 +315,8 @@ class ScorecardExportViewController: UIViewController {
 
         let pdfBtn = makeExportButton(title: "Save PDF", icon: "doc.richtext")
         pdfBtn.addTarget(self, action: #selector(sharePDFTapped), for: .touchUpInside)
+
+        exportButtons = [imageBtn, pdfBtn]
 
         buttonStack.addArrangedSubview(imageBtn)
         buttonStack.addArrangedSubview(pdfBtn)
@@ -239,9 +347,10 @@ class ScorecardExportViewController: UIViewController {
 
     private func refreshPreview() {
         previewTask?.cancel()
+        let style = selectedStyle
         previewTask = Task {
             let generator = ScorecardImageGenerator()
-            let image = await generator.generate(scorecard: scorecard, linescore: linescore, options: selectedMode)
+            let image = await generator.generate(scorecard: scorecard, linescore: linescore, options: selectedMode, userInterfaceStyle: style)
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 self.previewImageView.image = image
@@ -254,8 +363,8 @@ class ScorecardExportViewController: UIViewController {
     }
 
     @objc private func shareImageTapped() {
-        exportWith { generator, sc, ls, mode in
-            await generator.generate(scorecard: sc, linescore: ls, options: mode)
+        exportWith { generator, sc, ls, mode, style in
+            await generator.generate(scorecard: sc, linescore: ls, options: mode, userInterfaceStyle: style)
         } present: { image in
             let awayName = self.scorecard.teams.away.name ?? "Away"
             let homeName = self.scorecard.teams.home.name ?? "Home"
@@ -266,8 +375,8 @@ class ScorecardExportViewController: UIViewController {
     }
 
     @objc private func sharePDFTapped() {
-        exportWith { generator, sc, ls, mode in
-            await generator.generatePDF(scorecard: sc, linescore: ls, options: mode)
+        exportWith { generator, sc, ls, mode, style in
+            await generator.generatePDF(scorecard: sc, linescore: ls, options: mode, userInterfaceStyle: style)
         } present: { data in
             let awayName = self.scorecard.teams.away.name ?? "Away"
             let homeName = self.scorecard.teams.home.name ?? "Home"
@@ -277,7 +386,7 @@ class ScorecardExportViewController: UIViewController {
         }
     }
 
-    private func exportWith<T>(generate: @escaping (ScorecardImageGenerator, ScorecardData, Linescore?, ScorecardExportMode) async -> T, present: @escaping (T) -> URL) {
+    private func exportWith<T>(generate: @escaping (ScorecardImageGenerator, ScorecardData, Linescore?, ScorecardExportMode, UIUserInterfaceStyle) async -> T, present: @escaping (T) -> URL) {
         let activityIndicator = UIActivityIndicatorView(style: .large)
         activityIndicator.center = view.center
         activityIndicator.hidesWhenStopped = true
@@ -286,12 +395,13 @@ class ScorecardExportViewController: UIViewController {
         view.isUserInteractionEnabled = false
 
         let mode = selectedMode
+        let style = selectedStyle
         let sc = scorecard
         let ls = linescore
 
         Task {
             let generator = ScorecardImageGenerator()
-            let result = await generate(generator, sc, ls, mode)
+            let result = await generate(generator, sc, ls, mode, style)
 
             await MainActor.run {
                 activityIndicator.stopAnimating()
