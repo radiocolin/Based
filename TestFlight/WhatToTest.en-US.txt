@@ -1,17 +1,1 @@
--Added a new compact scorecard layout for following more of the game at once
--Added a new binoculars view menu with Regular, Compact, and Timeline modes
--Added a scorecard help sheet from game detail with interactive examples, glossary terms, and accessibility support
--Added inning context to the play detail view
--Improved the Teams view to be less dense
--Refined typography on the scorecard help sheet and Settings
--Fixed VoiceOver reading scorecard positions as letters instead of baseball positions
--Fixed multiple issues where you couldn't tap a pitcher's name to get their stats
--Fixed an issue where the Athletics weren't assigned a team color
-
-Please test:
--Switching between Regular, Compact, and Timeline from the new view menu
--Opening the scorecard help sheet from game detail and checking examples, glossary, Dynamic Type, and VoiceOver
--VoiceOver on lineup rows and help-sheet name examples for spoken position names
--Compact scorecard alignment on games with substitutions and multiple trips through the order
--Settings typography and section hierarchy
--Play detail sheets for correct Top/Bottom inning context
+Fixed an issue where a batting-around inning didn't appear correctly on exported score cards.

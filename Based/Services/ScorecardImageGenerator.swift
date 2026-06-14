@@ -474,10 +474,20 @@ final class ScorecardImageGenerator {
 
         ctx.setStrokeColor(config.gridColor.cgColor); ctx.setLineWidth(0.5)
 
+        let subDividerTop = rect.minY + config.headerHeight
+        let subDividerBottom = subDividerTop + CGFloat(max(rowCount - 1, 0)) * config.rowHeight
+
         var currentX = rect.minX
         func drawVLine(_ x: CGFloat) { UIBezierPath.pencilLine(from: CGPoint(x: x, y: rect.minY), to: CGPoint(x: x, y: rect.minY + totalHeight), jitter: 0.5).stroke() }
+        func drawSubColumnDivider(_ x: CGFloat) { UIBezierPath.pencilLine(from: CGPoint(x: x, y: subDividerTop), to: CGPoint(x: x, y: subDividerBottom), jitter: 0.5).stroke() }
         drawVLine(currentX); currentX += config.nameWidth; drawVLine(currentX)
-        for inning in layout.innings { currentX += CGFloat(inning.subColumnCount) * config.inningWidth; drawVLine(currentX) }
+        for inning in layout.innings {
+            for sub in 1..<inning.subColumnCount {
+                drawSubColumnDivider(currentX + CGFloat(sub) * config.inningWidth)
+            }
+            currentX += CGFloat(inning.subColumnCount) * config.inningWidth
+            drawVLine(currentX)
+        }
         for _ in layout.statColumns { currentX += config.statWidth; drawVLine(currentX) }
 
         var currentY = rect.minY
