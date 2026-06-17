@@ -40,8 +40,8 @@ class GameHeaderView: UIView {
 
     private let paperColor = AppColors.paper
     private var pencilColor: UIColor { AppColors.pencil }
-    private let headerFont = "IBMPlexSansCond-Regular"
     private let bodyFont = "PermanentMarker-Regular"
+    private let headerFontSize: CGFloat = 14
     private let nameWidth: CGFloat = 45
     private let statWidth: CGFloat = 28
     private let inningWidth: CGFloat = 28
@@ -63,6 +63,9 @@ class GameHeaderView: UIView {
         setupTapGestures()
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: GameHeaderView, _) in
             self.setNeedsLayout()
+        }
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: GameHeaderView, _) in
+            self.updateHeaderFonts()
         }
     }
 
@@ -147,9 +150,10 @@ class GameHeaderView: UIView {
         hHeader.text = "H"
         eHeader.text = "E"
 
-        rHeader.font = UIFont(name: headerFont, size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
-        hHeader.font = UIFont(name: headerFont, size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
-        eHeader.font = UIFont(name: headerFont, size: 16) ?? .systemFont(ofSize: 16, weight: .bold)
+        [rHeader, hHeader, eHeader].forEach {
+            $0.font = headerFont()
+            $0.adjustsFontForContentSizeCategory = true
+        }
 
         [awayR, awayH, awayE, homeR, homeH, homeE].forEach {
             $0.font = UIFont(name: bodyFont, size: 18) ?? .systemFont(ofSize: 18)
@@ -266,7 +270,7 @@ class GameHeaderView: UIView {
 
         var previousTrailing = inningsContentView.leadingAnchor
         for inning in 1...count {
-            let header = createLabel(text: "\(inning)", font: headerFont, size: 16)
+            let header = createHeaderLabel(text: "\(inning)")
             let away = createLabel(text: "", font: bodyFont, size: 18)
             let home = createLabel(text: "", font: bodyFont, size: 18)
             header.isAccessibilityElement = false
@@ -339,6 +343,24 @@ class GameHeaderView: UIView {
         label.textAlignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
+    }
+
+    private func createHeaderLabel(text: String) -> UILabel {
+        let label = createLabel(text: text, font: AppFont.ibmPlexRegular, size: headerFontSize)
+        label.font = headerFont()
+        label.adjustsFontForContentSizeCategory = true
+        return label
+    }
+
+    private func headerFont() -> UIFont {
+        AppFont.ibmPlexCondensed(headerFontSize, textStyle: .caption1, compatibleWith: traitCollection)
+    }
+
+    private func updateHeaderFonts() {
+        let font = headerFont()
+        ([rHeader, hHeader, eHeader] + inningHeaders).forEach {
+            $0.font = font
+        }
     }
 
     override func layoutSubviews() {

@@ -7,6 +7,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         case compact
         case timeline
     }
+    private static let scorecardHeaderFontSize: CGFloat = 14
     
     // UI Components
     private let teamSegmentedControl = UISegmentedControl(items: ["Away", "Home"])
@@ -18,10 +19,11 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private let topLeftLabel: UILabel = {
         let label = UILabel()
         label.text = "Batter"
-        label.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1)
+        label.font = GameDetailViewController.scorecardHeaderFont()
         label.textColor = AppColors.pencil
         label.textAlignment = .center
         label.backgroundColor = AppColors.header
+        label.adjustsFontForContentSizeCategory = true
         return label
     }()
     private let horizontalScrollView = UIScrollView()
@@ -775,26 +777,19 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private func updateStickyHeaders() {
         // Sync name column width with scorecard
         stickyNameWidthConstraint?.constant = scorecardView.currentNameWidth
+        topLeftLabel.font = Self.scorecardHeaderFont(compatibleWith: traitCollection)
         rightHeaderStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         rightHeaderStack.distribution = .fill
         let layout = scorecardView.currentColumnLayout
 
         if scorecardView.currentIsCompact {
             for compact in scorecardView.currentCompactColumns {
-                let label = UILabel()
-                label.translatesAutoresizingMaskIntoConstraints = false
+                let label = makeScorecardHeaderLabel()
                 if compact.inningStart == compact.inningEnd {
                     label.text = "\(compact.inningStart)"
                 } else {
                     label.text = "\(compact.inningStart)-\(compact.inningEnd)"
                 }
-                label.textAlignment = .center
-                label.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1)
-                label.textColor = AppColors.pencil
-                label.backgroundColor = AppColors.header
-                label.isAccessibilityElement = false
-                label.layer.borderWidth = 0.5
-                label.layer.borderColor = AppColors.grid.cgColor
 
                 let widthConstraint = label.widthAnchor.constraint(equalToConstant: inningWidth)
                 widthConstraint.priority = .init(999)
@@ -804,16 +799,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             }
         } else {
             for inningLayout in layout.innings {
-                let label = UILabel()
-                label.translatesAutoresizingMaskIntoConstraints = false
+                let label = makeScorecardHeaderLabel()
                 label.text = "\(inningLayout.inningNum)"
-                label.textAlignment = .center
-                label.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1)
-                label.textColor = AppColors.pencil
-                label.backgroundColor = AppColors.header
-                label.isAccessibilityElement = false
-                label.layer.borderWidth = 0.5
-                label.layer.borderColor = AppColors.grid.cgColor
 
                 let width = inningWidth * CGFloat(inningLayout.subColumnCount)
                 let widthConstraint = label.widthAnchor.constraint(equalToConstant: width)
@@ -824,16 +811,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             }
         }
         for stat in layout.statColumns {
-            let label = UILabel()
-            label.translatesAutoresizingMaskIntoConstraints = false
+            let label = makeScorecardHeaderLabel()
             label.text = stat
-            label.textAlignment = .center
-            label.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1)
-            label.textColor = AppColors.pencil
-            label.backgroundColor = AppColors.header
-            label.isAccessibilityElement = false
-            label.layer.borderWidth = 0.5
-            label.layer.borderColor = AppColors.grid.cgColor
 
             let widthConstraint = label.widthAnchor.constraint(equalToConstant: statWidth)
             widthConstraint.priority = .init(999)
@@ -841,6 +820,24 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
             rightHeaderStack.addArrangedSubview(label)
         }
+    }
+
+    private func makeScorecardHeaderLabel() -> UILabel {
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.textAlignment = .center
+        label.font = Self.scorecardHeaderFont(compatibleWith: traitCollection)
+        label.adjustsFontForContentSizeCategory = true
+        label.textColor = AppColors.pencil
+        label.backgroundColor = AppColors.header
+        label.isAccessibilityElement = false
+        label.layer.borderWidth = 0.5
+        label.layer.borderColor = AppColors.grid.cgColor
+        return label
+    }
+
+    private static func scorecardHeaderFont(compatibleWith traitCollection: UITraitCollection? = nil) -> UIFont {
+        AppFont.ibmPlexCondensed(scorecardHeaderFontSize, textStyle: .caption1, compatibleWith: traitCollection)
     }
 
     private func performWithoutAnimations(_ updates: () -> Void) {
@@ -1030,10 +1027,12 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     @objc private func teamChanged() {
         segmentJustChanged = true
         let isHome = teamSegmentedControl.selectedSegmentIndex == 1
-        scorecardView.setTeam(isHome: isHome)
-        updateStickyHeaders()
-        updatePitcherList()
-        updatePlaceholderVisibility()
+        performWithoutAnimations {
+            self.scorecardView.setTeam(isHome: isHome)
+            self.updateStickyHeaders()
+            self.updatePitcherList()
+            self.updatePlaceholderVisibility()
+        }
     }
 
     @objc private func segmentTapped() {

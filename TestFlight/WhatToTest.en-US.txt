@@ -2,6 +2,8 @@ Fixed an issue where a batting-around inning didn't appear correctly on exported
 
 Fixed an issue where inning totals were not summed correctly in compact mode.
 
+Fixed an issue where the Batter column did not resize properly when switching teams.
+
 Added compact mode option to scorecard exports (to be improved).
 
 Miscellaneous typography improvements.

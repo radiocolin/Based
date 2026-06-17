@@ -18,10 +18,11 @@ class ScorecardView: UIView {
     private let topLeftLabel: UILabel = {
         let label = UILabel()
         label.text = "Batter"
-        label.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1)
+        label.font = ScorecardView.headerFont()
         label.textColor = AppColors.pencil
         label.textAlignment = .center
         label.backgroundColor = AppColors.header
+        label.adjustsFontForContentSizeCategory = true
         return label
     }()
     
@@ -59,6 +60,7 @@ class ScorecardView: UIView {
     private let statWidth: CGFloat = 38
     private let headerHeight: CGFloat = 32
     private let rowHeight: CGFloat = 64
+    private static let headerFontSize: CGFloat = 14
     
     override init(frame: CGRect) {
         let initialLayout = ColumnLayout(innings: (1...9).map { InningColumnLayout(inningNum: $0, subColumnCount: 1, startColumn: $0 - 1) })
@@ -82,6 +84,11 @@ class ScorecardView: UIView {
             }
             self.leftCollectionView.reloadData()
             self.rightCollectionView.reloadData()
+        }
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: ScorecardView, _) in
+            self.topLeftLabel.font = Self.headerFont(compatibleWith: self.traitCollection)
+            self.lastColumnLayout = nil
+            self.updateHeaderLabels()
         }
     }
     
@@ -222,20 +229,12 @@ class ScorecardView: UIView {
         rightHeaderStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         if isCompact {
             for compact in compactColumns {
-                let label = UILabel()
-                label.translatesAutoresizingMaskIntoConstraints = false
+                let label = makeHeaderLabel()
                 if compact.inningStart == compact.inningEnd {
                     label.text = "\(compact.inningStart)"
                 } else {
                     label.text = "\(compact.inningStart)-\(compact.inningEnd)"
                 }
-                label.textAlignment = .center
-                label.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1)
-                label.textColor = AppColors.pencil
-                label.backgroundColor = AppColors.header
-                label.isAccessibilityElement = false
-                label.layer.borderWidth = 0.5
-                label.layer.borderColor = AppColors.grid.cgColor
 
                 let widthConstraint = label.widthAnchor.constraint(equalToConstant: inningWidth)
                 widthConstraint.priority = .init(999)
@@ -245,16 +244,8 @@ class ScorecardView: UIView {
             }
         } else {
             for inningLayout in columnLayout.innings {
-                let label = UILabel()
-                label.translatesAutoresizingMaskIntoConstraints = false
+                let label = makeHeaderLabel()
                 label.text = "\(inningLayout.inningNum)"
-                label.textAlignment = .center
-                label.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1)
-                label.textColor = AppColors.pencil
-                label.backgroundColor = AppColors.header
-                label.isAccessibilityElement = false
-                label.layer.borderWidth = 0.5
-                label.layer.borderColor = AppColors.grid.cgColor
 
                 let width = inningWidth * CGFloat(inningLayout.subColumnCount)
                 let widthConstraint = label.widthAnchor.constraint(equalToConstant: width)
@@ -265,16 +256,8 @@ class ScorecardView: UIView {
             }
         }
         for stat in columnLayout.statColumns {
-            let label = UILabel()
-            label.translatesAutoresizingMaskIntoConstraints = false
+            let label = makeHeaderLabel()
             label.text = stat
-            label.textAlignment = .center
-            label.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1)
-            label.textColor = AppColors.pencil
-            label.backgroundColor = AppColors.header
-            label.isAccessibilityElement = false
-            label.layer.borderWidth = 0.5
-            label.layer.borderColor = AppColors.grid.cgColor
             
             let widthConstraint = label.widthAnchor.constraint(equalToConstant: statWidth)
             widthConstraint.priority = .init(999)
@@ -282,6 +265,24 @@ class ScorecardView: UIView {
             
             rightHeaderStack.addArrangedSubview(label)
         }
+    }
+
+    private func makeHeaderLabel() -> UILabel {
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.textAlignment = .center
+        label.font = Self.headerFont(compatibleWith: traitCollection)
+        label.adjustsFontForContentSizeCategory = true
+        label.textColor = AppColors.pencil
+        label.backgroundColor = AppColors.header
+        label.isAccessibilityElement = false
+        label.layer.borderWidth = 0.5
+        label.layer.borderColor = AppColors.grid.cgColor
+        return label
+    }
+
+    private static func headerFont(compatibleWith traitCollection: UITraitCollection? = nil) -> UIFont {
+        AppFont.ibmPlexCondensed(headerFontSize, textStyle: .caption1, compatibleWith: traitCollection)
     }
     
     func configure(with data: ScorecardData) {
@@ -327,9 +328,13 @@ class ScorecardView: UIView {
         updateNameColumnWidth()
         updateHeaderLabels()
         updateContentWidth()
+        leftCollectionView.collectionViewLayout.invalidateLayout()
+        rightCollectionView.collectionViewLayout.invalidateLayout()
         leftCollectionView.reloadData()
         rightCollectionView.reloadData()
         invalidateIntrinsicContentSize()
+        setNeedsLayout()
+        layoutIfNeeded()
     }
 
     private func updateNameColumnWidth() {
