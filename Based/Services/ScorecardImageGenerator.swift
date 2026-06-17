@@ -6,12 +6,14 @@ enum ScorecardExportMode: Int, CaseIterable {
     case blank = 0
     case summary = 1
     case full = 2
+    case compact = 3
 
     var title: String {
         switch self {
         case .blank: return "Blank Scorecard"
         case .summary: return "Game Summary"
         case .full: return "Full Scorecard"
+        case .compact: return "Compact Scorecard"
         }
     }
 
@@ -20,15 +22,22 @@ enum ScorecardExportMode: Int, CaseIterable {
         case .blank: return "Structure and labels only — fill in by hand"
         case .summary: return "Score, lineups, game info, and umpires"
         case .full: return "Complete scorecard with play-by-play"
+        case .compact: return "Order-based layout — one column per plate appearance"
         }
     }
 
-    var showScoreboard: Bool { rawValue >= Self.summary.rawValue }
-    var showGameInfo: Bool { rawValue >= Self.summary.rawValue }
-    var showLineup: Bool { rawValue >= Self.summary.rawValue }
-    var showAtBatResults: Bool { rawValue >= Self.full.rawValue }
-    var showPitchers: Bool { rawValue >= Self.full.rawValue }
-    var showUmpires: Bool { rawValue >= Self.summary.rawValue }
+    private var detailLevel: Int {
+        // Compact carries the same detail as Full, just laid out differently.
+        self == .compact ? Self.full.rawValue : rawValue
+    }
+
+    var showScoreboard: Bool { detailLevel >= Self.summary.rawValue }
+    var showGameInfo: Bool { detailLevel >= Self.summary.rawValue }
+    var showLineup: Bool { detailLevel >= Self.summary.rawValue }
+    var showAtBatResults: Bool { detailLevel >= Self.full.rawValue }
+    var showPitchers: Bool { detailLevel >= Self.full.rawValue }
+    var showUmpires: Bool { detailLevel >= Self.summary.rawValue }
+    var isCompact: Bool { self == .compact }
 }
 
 final class ScorecardImageGenerator {
@@ -81,12 +90,16 @@ final class ScorecardImageGenerator {
         let colWidth: CGFloat
         let awayLayout: ColumnLayout
         let homeLayout: ColumnLayout
+        let awayCompactColumns: [CompactColumn]
+        let homeCompactColumns: [CompactColumn]
         let scorecardSectionHeight: CGFloat
         let pitcherSectionHeight: CGFloat
         let umpireHeight: CGFloat
         let sbWidth: CGFloat
         let totalHeight: CGFloat
     }
+
+    private let layoutEngine = ScorecardLayoutEngine()
 
     func generate(scorecard: ScorecardData, linescore: Linescore?, options: ScorecardExportMode = .full, userInterfaceStyle: UIUserInterfaceStyle = .unspecified) async -> UIImage {
         let pdfData = await generatePDF(scorecard: scorecard, linescore: linescore, options: options, userInterfaceStyle: userInterfaceStyle)
@@ -181,8 +194,23 @@ final class ScorecardImageGenerator {
             GameInfoItem(label: label, value: infoMap[label] ?? "")
         }
 
-        let awayLayout = computeColumnLayout(for: scorecard, isHome: false)
-        let homeLayout = computeColumnLayout(for: scorecard, isHome: true)
+        let awayLayout: ColumnLayout
+        let homeLayout: ColumnLayout
+        let awayCompactColumns: [CompactColumn]
+        let homeCompactColumns: [CompactColumn]
+        if options.isCompact {
+            let awayCompact = layoutEngine.computeCompactColumnLayout(data: scorecard, isHomeTeam: false)
+            let homeCompact = layoutEngine.computeCompactColumnLayout(data: scorecard, isHomeTeam: true)
+            awayLayout = awayCompact.columnLayout
+            homeLayout = homeCompact.columnLayout
+            awayCompactColumns = awayCompact.columns
+            homeCompactColumns = homeCompact.columns
+        } else {
+            awayLayout = computeColumnLayout(for: scorecard, isHome: false)
+            homeLayout = computeColumnLayout(for: scorecard, isHome: true)
+            awayCompactColumns = []
+            homeCompactColumns = []
+        }
 
         let awayColWidth = actualColumnWidth(layout: awayLayout)
         let homeColWidth = actualColumnWidth(layout: homeLayout)
@@ -200,7 +228,18 @@ final class ScorecardImageGenerator {
         let scorecardTotalWidth = config.margin + colWidth + config.columnGap + colWidth + config.margin
         let scoreboardTotalWidth = sbWidth + 2 * config.margin
         let pitcherTotalWidth = config.margin + pitcherTableWidth + config.columnGap + pitcherTableWidth + config.margin
-        let imageWidth = max(scorecardTotalWidth, max(scoreboardTotalWidth, pitcherTotalWidth))
+
+        // In compact the scorecard is naturally narrow, which would squeeze the game info table
+        // at the top right. Floor the page width to what a regular layout would produce.
+        var compactPageFloor: CGFloat = 0
+        if options.isCompact {
+            let regularAway = computeColumnLayout(for: scorecard, isHome: false)
+            let regularHome = computeColumnLayout(for: scorecard, isHome: true)
+            let regularColWidth = max(actualColumnWidth(layout: regularAway), actualColumnWidth(layout: regularHome))
+            compactPageFloor = config.margin + regularColWidth + config.columnGap + regularColWidth + config.margin
+        }
+
+        let imageWidth = max(scorecardTotalWidth, max(scoreboardTotalWidth, max(pitcherTotalWidth, compactPageFloor)))
         let contentWidth = imageWidth - (config.margin * 2)
 
         let defaultLineupRows = 9
@@ -242,6 +281,8 @@ final class ScorecardImageGenerator {
             colWidth: colWidth,
             awayLayout: awayLayout,
             homeLayout: homeLayout,
+            awayCompactColumns: awayCompactColumns,
+            homeCompactColumns: homeCompactColumns,
             scorecardSectionHeight: scorecardSectionHeight,
             pitcherSectionHeight: pitcherSectionHeight,
             umpireHeight: umpireHeight,
@@ -285,10 +326,10 @@ final class ScorecardImageGenerator {
         currentY += 55
 
         let awayRect = CGRect(x: config.margin, y: currentY, width: layout.colWidth, height: layout.scorecardSectionHeight)
-        drawScorecard(in: awayRect, data: scorecard, layout: layout.awayLayout, isHome: false, drawLineup: options.showLineup && hasAwayLineup, drawResults: options.showAtBatResults, ctx: ctx)
+        drawScorecard(in: awayRect, data: scorecard, layout: layout.awayLayout, compactColumns: layout.awayCompactColumns, isHome: false, drawLineup: options.showLineup && hasAwayLineup, drawResults: options.showAtBatResults, ctx: ctx)
 
         let homeRect = CGRect(x: config.margin + layout.colWidth + config.columnGap, y: currentY, width: layout.colWidth, height: layout.scorecardSectionHeight)
-        drawScorecard(in: homeRect, data: scorecard, layout: layout.homeLayout, isHome: true, drawLineup: options.showLineup && hasHomeLineup, drawResults: options.showAtBatResults, ctx: ctx)
+        drawScorecard(in: homeRect, data: scorecard, layout: layout.homeLayout, compactColumns: layout.homeCompactColumns, isHome: true, drawLineup: options.showLineup && hasHomeLineup, drawResults: options.showAtBatResults, ctx: ctx)
 
         currentY += layout.scorecardSectionHeight
 
@@ -447,7 +488,7 @@ final class ScorecardImageGenerator {
         return map[teamName] ?? String(teamName.prefix(3)).uppercased()
     }
     
-    private func drawScorecard(in rect: CGRect, data: ScorecardData, layout: ColumnLayout, isHome: Bool, drawLineup: Bool = true, drawResults: Bool = true, ctx: CGContext) {
+    private func drawScorecard(in rect: CGRect, data: ScorecardData, layout: ColumnLayout, compactColumns: [CompactColumn], isHome: Bool, drawLineup: Bool = true, drawResults: Bool = true, ctx: CGContext) {
         let lineup = isHome ? data.lineups.home : data.lineups.away
         let rowCount = drawLineup ? max(lineup.count, 9) + 1 : 10
 
@@ -460,12 +501,12 @@ final class ScorecardImageGenerator {
         drawScorecardGrid(in: rect, actualWidth: actualWidth, totalHeight: totalHeight, rowCount: rowCount, layout: layout, ctx: ctx)
 
         let hAttrs: [NSAttributedString.Key: Any] = [.font: config.headerFont, .foregroundColor: config.pencilColor]
-        let bLabel = "BATTER", bSize = (bLabel as NSString).size(withAttributes: hAttrs)
-        drawScorecardHeaders(in: rect, layout: layout, hAttrs: hAttrs, bSize: bSize, ctx: ctx)
+        let bLabel = "Batter", bSize = (bLabel as NSString).size(withAttributes: hAttrs)
+        drawScorecardHeaders(in: rect, layout: layout, compactColumns: compactColumns, hAttrs: hAttrs, bSize: bSize, ctx: ctx)
 
-        drawScorecardLineup(in: rect, data: data, layout: layout, isHome: isHome, lineup: lineup, rowCount: rowCount, drawLineup: drawLineup, drawResults: drawResults, ctx: ctx)
+        drawScorecardLineup(in: rect, data: data, layout: layout, compactColumns: compactColumns, isHome: isHome, lineup: lineup, rowCount: rowCount, drawLineup: drawLineup, drawResults: drawResults, ctx: ctx)
 
-        drawScorecardTotals(in: rect, data: data, layout: layout, isHome: isHome, lineup: lineup, rowCount: rowCount, hAttrs: hAttrs, drawResults: drawResults, ctx: ctx)
+        drawScorecardTotals(in: rect, data: data, layout: layout, compactColumns: compactColumns, isHome: isHome, lineup: lineup, rowCount: rowCount, hAttrs: hAttrs, drawResults: drawResults, ctx: ctx)
     }
 
     private func drawScorecardGrid(in rect: CGRect, actualWidth: CGFloat, totalHeight: CGFloat, rowCount: Int, layout: ColumnLayout, ctx: CGContext) {
@@ -496,13 +537,21 @@ final class ScorecardImageGenerator {
         for _ in 0..<rowCount { currentY += config.rowHeight; drawHLine(currentY) }
     }
 
-    private func drawScorecardHeaders(in rect: CGRect, layout: ColumnLayout, hAttrs: [NSAttributedString.Key: Any], bSize: CGSize, ctx: CGContext) {
-        let bLabel = "BATTER"
+    private func drawScorecardHeaders(in rect: CGRect, layout: ColumnLayout, compactColumns: [CompactColumn], hAttrs: [NSAttributedString.Key: Any], bSize: CGSize, ctx: CGContext) {
+        let bLabel = "Batter"
         NSAttributedString(string: bLabel, attributes: hAttrs).draw(at: CGPoint(x: rect.minX + (config.nameWidth - bSize.width)/2, y: rect.minY + (config.headerHeight - bSize.height)/2))
 
+        let isCompact = !compactColumns.isEmpty
         var currentX = rect.minX + config.nameWidth
-        for inning in layout.innings {
-            let label = "\(inning.inningNum)", colW = CGFloat(inning.subColumnCount) * config.inningWidth
+        for (i, inning) in layout.innings.enumerated() {
+            let label: String
+            if isCompact, i < compactColumns.count {
+                let c = compactColumns[i]
+                label = c.inningStart == c.inningEnd ? "\(c.inningStart)" : "\(c.inningStart)-\(c.inningEnd)"
+            } else {
+                label = "\(inning.inningNum)"
+            }
+            let colW = CGFloat(inning.subColumnCount) * config.inningWidth
             let size = (label as NSString).size(withAttributes: hAttrs)
             NSAttributedString(string: label, attributes: hAttrs).draw(at: CGPoint(x: currentX + (colW - size.width)/2, y: rect.minY + (config.headerHeight - bSize.height)/2))
             currentX += colW
@@ -514,8 +563,12 @@ final class ScorecardImageGenerator {
         }
     }
 
-    private func drawScorecardLineup(in rect: CGRect, data: ScorecardData, layout: ColumnLayout, isHome: Bool, lineup: [ScorecardBatter], rowCount: Int, drawLineup: Bool, drawResults: Bool, ctx: CGContext) {
+    private func drawScorecardLineup(in rect: CGRect, data: ScorecardData, layout: ColumnLayout, compactColumns: [CompactColumn], isHome: Bool, lineup: [ScorecardBatter], rowCount: Int, drawLineup: Bool, drawResults: Bool, ctx: CGContext) {
         let hasAnyResults = !data.timeline.isEmpty
+        let isCompact = !compactColumns.isEmpty
+        let compactEventsBySlot = isCompact
+            ? layoutEngine.compactPlateAppearancesBySlot(data: data, lineup: lineup, isHomeTeam: isHome)
+            : [:]
         for idx in 0..<rowCount {
             let rowY = rect.minY + config.headerHeight + CGFloat(idx) * config.rowHeight
 
@@ -537,8 +590,13 @@ final class ScorecardImageGenerator {
                     if idx < rowCount - 1 {
                         drawEmptyDiamond(in: cellRect, ctx: ctx)
                     }
-                } else if let bId = (idx < lineup.count ? lineup[idx].id : nil) {
-                    drawAtBatEvents(in: cellRect, bId: bId, col: col, isHome: isHome, data: data, layout: layout, ctx: ctx)
+                } else if idx < lineup.count {
+                    let batter = lineup[idx]
+                    if isCompact {
+                        drawCompactAtBatEvent(in: cellRect, batter: batter, paIndex: col, isHome: isHome, data: data, eventsBySlot: compactEventsBySlot, ctx: ctx)
+                    } else {
+                        drawAtBatEvents(in: cellRect, bId: batter.id, col: col, isHome: isHome, data: data, layout: layout, ctx: ctx)
+                    }
                 }
                 actualX += config.inningWidth
             }
@@ -570,6 +628,23 @@ final class ScorecardImageGenerator {
         }
     }
 
+    private func drawCompactAtBatEvent(in cellRect: CGRect, batter: ScorecardBatter, paIndex: Int, isHome: Bool, data: ScorecardData, eventsBySlot: [Int: [Int: AtBatEvent]], ctx: CGContext) {
+        guard let slot = batter.battingOrderSlot,
+              let event = eventsBySlot[slot]?[paIndex],
+              event.batterId == batter.id else { return }
+
+        drawAtBatCell(
+            in: cellRect,
+            event: event,
+            accentColor: data.teamAccentColor(isHomeTeam: isHome),
+            ctx: ctx
+        )
+
+        if event.isPitchingChange {
+            drawPitchingChangeIndicator(in: cellRect, ctx: ctx)
+        }
+    }
+
     private func drawPitchingChangeIndicator(in cellRect: CGRect, ctx: CGContext) {
         ctx.saveGState()
         ctx.setStrokeColor(config.pencilColor.cgColor)
@@ -594,16 +669,31 @@ final class ScorecardImageGenerator {
         }
     }
 
-    private func drawScorecardTotals(in rect: CGRect, data: ScorecardData, layout: ColumnLayout, isHome: Bool, lineup: [ScorecardBatter], rowCount: Int, hAttrs: [NSAttributedString.Key: Any], drawResults: Bool, ctx: CGContext) {
+    private func drawScorecardTotals(in rect: CGRect, data: ScorecardData, layout: ColumnLayout, compactColumns: [CompactColumn], isHome: Bool, lineup: [ScorecardBatter], rowCount: Int, hAttrs: [NSAttributedString.Key: Any], drawResults: Bool, ctx: CGContext) {
         let totalsY = rect.minY + config.headerHeight + CGFloat(rowCount - 1) * config.rowHeight
         let tLabel = "TOTALS", tSize = (tLabel as NSString).size(withAttributes: hAttrs)
         NSAttributedString(string: tLabel, attributes: hAttrs).draw(at: CGPoint(x: rect.minX + (config.nameWidth - tSize.width)/2, y: totalsY + (config.rowHeight - tSize.height)/2))
 
         if drawResults {
+            let isCompact = !compactColumns.isEmpty
             var actualX = rect.minX + config.nameWidth
-            for inning in layout.innings {
-                drawInningTotal(in: actualX, totalsY: totalsY, inning: inning, isHome: isHome, data: data, ctx: ctx)
-                actualX += CGFloat(inning.subColumnCount) * config.inningWidth
+            if isCompact {
+                let eventsBySlot = layoutEngine.compactPlateAppearancesBySlot(data: data, lineup: lineup, isHomeTeam: isHome)
+                for paIndex in 0..<compactColumns.count {
+                    var runs = 0
+                    for events in eventsBySlot.values {
+                        if let event = events[paIndex], event.bases.home {
+                            runs += 1
+                        }
+                    }
+                    drawColumnRunTotal(in: actualX, totalsY: totalsY, columnWidth: config.inningWidth, runs: runs, isHome: isHome, data: data)
+                    actualX += config.inningWidth
+                }
+            } else {
+                for inning in layout.innings {
+                    drawInningTotal(in: actualX, totalsY: totalsY, inning: inning, isHome: isHome, data: data, ctx: ctx)
+                    actualX += CGFloat(inning.subColumnCount) * config.inningWidth
+                }
             }
 
             var tAB = 0, tR = 0, tH = 0, tRBI = 0
@@ -623,23 +713,26 @@ final class ScorecardImageGenerator {
         let linescoreRuns = isHome ? inningObj?.homeRuns : inningObj?.awayRuns
         let derivedRuns = events.filter { $0.bases.home }.count
         let runs = linescoreRuns ?? derivedRuns
+        let columnWidth = CGFloat(inning.subColumnCount) * config.inningWidth
+        drawColumnRunTotal(in: actualX, totalsY: totalsY, columnWidth: columnWidth, runs: runs, isHome: isHome, data: data)
+    }
 
-        if runs > 0 {
-            let str = "\(runs)"
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: config.nameFont,
-                .foregroundColor: data.teamAccentColor(isHomeTeam: isHome)
-            ]
-            let size = (str as NSString).size(withAttributes: attrs)
-            let inningWidth = CGFloat(inning.subColumnCount) * config.inningWidth
-            NSAttributedString(string: str, attributes: attrs).draw(
-                at: CGPoint(
-                    x: actualX + (inningWidth - size.width) / 2,
-                    y: totalsY + (config.rowHeight - size.height) / 2
-                )
+    private func drawColumnRunTotal(in actualX: CGFloat, totalsY: CGFloat, columnWidth: CGFloat, runs: Int, isHome: Bool, data: ScorecardData) {
+        guard runs > 0 else { return }
+        let str = "\(runs)"
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: config.nameFont,
+            .foregroundColor: data.teamAccentColor(isHomeTeam: isHome)
+        ]
+        let size = (str as NSString).size(withAttributes: attrs)
+        NSAttributedString(string: str, attributes: attrs).draw(
+            at: CGPoint(
+                x: actualX + (columnWidth - size.width) / 2,
+                y: totalsY + (config.rowHeight - size.height) / 2
             )
-        }
-    }    
+        )
+    }
+
     private func drawPitcherTable(in rect: CGRect, pitchers: [ScorecardPitcher], drawData: Bool = true, ctx: CGContext) {
         let tableWidth = config.pNameWidth + 6 * config.pStatWidth
         let gridRows = Int((rect.height - config.headerHeight) / config.pRowHeight)

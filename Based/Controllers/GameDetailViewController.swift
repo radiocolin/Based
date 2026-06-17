@@ -17,8 +17,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private let stickyHeaderContainer = UIView()
     private let topLeftLabel: UILabel = {
         let label = UILabel()
-        label.text = "BATTER"
-        label.font = AppFont.ibmPlexCondensed(18, textStyle: .headline)
+        label.text = "Batter"
+        label.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1)
         label.textColor = AppColors.pencil
         label.textAlignment = .center
         label.backgroundColor = AppColors.header
@@ -808,7 +808,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
                 label.translatesAutoresizingMaskIntoConstraints = false
                 label.text = "\(inningLayout.inningNum)"
                 label.textAlignment = .center
-                label.font = AppFont.ibmPlexCondensed(16, textStyle: .caption1)
+                label.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1)
                 label.textColor = AppColors.pencil
                 label.backgroundColor = AppColors.header
                 label.isAccessibilityElement = false
@@ -828,7 +828,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
             label.translatesAutoresizingMaskIntoConstraints = false
             label.text = stat
             label.textAlignment = .center
-            label.font = AppFont.ibmPlexCondensed(16, textStyle: .caption1)
+            label.font = AppFont.ibmPlexCondensed(14, textStyle: .caption1)
             label.textColor = AppColors.pencil
             label.backgroundColor = AppColors.header
             label.isAccessibilityElement = false

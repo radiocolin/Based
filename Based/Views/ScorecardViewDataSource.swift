@@ -542,11 +542,12 @@ class ScorecardViewDataSource: NSObject, UICollectionViewDataSource, UICollectio
         }
 
         let compact = compactColumns[paIndex]
+        let lineup = isHomeTeam ? data.lineups.home : data.lineups.away
+        let eventsBySlot = layoutEngine.compactPlateAppearancesBySlot(data: data, lineup: lineup, isHomeTeam: isHomeTeam)
         var runs = 0
-        for inning in compact.inningStart...compact.inningEnd {
-            let inningObj = data.innings.first { $0.num == inning }
-            if let r = isHomeTeam ? inningObj?.homeRuns : inningObj?.awayRuns {
-                runs += r
+        for events in eventsBySlot.values {
+            if let event = events[paIndex], event.bases.home {
+                runs += 1
             }
         }
         cell.label.text = runs > 0 ? "\(runs)" : ""
