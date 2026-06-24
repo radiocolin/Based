@@ -42,6 +42,8 @@ class ScorecardExportViewController: UIViewController {
     private var appearanceRows: [UIView] = []
     private var previewTask: Task<Void, Never>?
     private var exportButtons: [UIButton] = []
+    private var previewAspectConstraint: NSLayoutConstraint?
+    private var previewMaxHeightConstraint: NSLayoutConstraint?
 
     private enum AppearanceOption: Int, CaseIterable {
         case light = 0
@@ -170,13 +172,37 @@ class ScorecardExportViewController: UIViewController {
             contentStack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor, constant: -40),
 
             previewImageView.topAnchor.constraint(equalTo: previewContainer.topAnchor),
-            previewImageView.leadingAnchor.constraint(equalTo: previewContainer.leadingAnchor),
-            previewImageView.trailingAnchor.constraint(equalTo: previewContainer.trailingAnchor),
+            previewImageView.centerXAnchor.constraint(equalTo: previewContainer.centerXAnchor),
+            previewImageView.widthAnchor.constraint(lessThanOrEqualTo: previewContainer.widthAnchor),
             previewImageView.bottomAnchor.constraint(equalTo: previewContainer.bottomAnchor),
-            previewImageView.heightAnchor.constraint(equalTo: previewImageView.widthAnchor, multiplier: 612.0 / 792.0),
 
             buttonStack.heightAnchor.constraint(equalToConstant: 50),
         ])
+
+        let widthFill = previewImageView.widthAnchor.constraint(equalTo: previewContainer.widthAnchor)
+        widthFill.priority = .defaultHigh
+        widthFill.isActive = true
+        applyPreviewAspectMultiplier()
+    }
+
+    private func previewAspectMultiplier() -> CGFloat {
+        selectedMode.isShareCard ? 1280.0 / 720.0 : 612.0 / 792.0
+    }
+
+    private func applyPreviewAspectMultiplier() {
+        previewAspectConstraint?.isActive = false
+        let c = previewImageView.heightAnchor.constraint(
+            equalTo: previewImageView.widthAnchor,
+            multiplier: previewAspectMultiplier()
+        )
+        c.isActive = true
+        previewAspectConstraint = c
+
+        if previewMaxHeightConstraint == nil {
+            let cap = previewImageView.heightAnchor.constraint(lessThanOrEqualToConstant: 520)
+            previewMaxHeightConstraint = cap
+        }
+        previewMaxHeightConstraint?.isActive = selectedMode.isShareCard
     }
 
     private func makeSectionHeader(_ title: String) -> UILabel {
@@ -279,6 +305,7 @@ class ScorecardExportViewController: UIViewController {
               let mode = ScorecardExportMode(rawValue: row.tag) else { return }
         selectedMode = mode
         updateCheckmarks()
+        applyPreviewAspectMultiplier()
         refreshPreview()
     }
 

@@ -22,12 +22,11 @@ enum ScorecardExportMode: Int, CaseIterable {
         case .blank: return "Structure and labels only — fill in by hand"
         case .summary: return "Score, lineups, game info, and umpires"
         case .full: return "Complete scorecard with play-by-play"
-        case .compact: return "Order-based layout — one column per plate appearance"
+        case .compact: return "9:16 share card — line score and play-by-play"
         }
     }
 
     private var detailLevel: Int {
-        // Compact carries the same detail as Full, just laid out differently.
         self == .compact ? Self.full.rawValue : rawValue
     }
 
@@ -37,7 +36,7 @@ enum ScorecardExportMode: Int, CaseIterable {
     var showAtBatResults: Bool { detailLevel >= Self.full.rawValue }
     var showPitchers: Bool { detailLevel >= Self.full.rawValue }
     var showUmpires: Bool { detailLevel >= Self.summary.rawValue }
-    var isCompact: Bool { self == .compact }
+    var isShareCard: Bool { self == .compact }
 }
 
 final class ScorecardImageGenerator {
@@ -90,8 +89,6 @@ final class ScorecardImageGenerator {
         let colWidth: CGFloat
         let awayLayout: ColumnLayout
         let homeLayout: ColumnLayout
-        let awayCompactColumns: [CompactColumn]
-        let homeCompactColumns: [CompactColumn]
         let scorecardSectionHeight: CGFloat
         let pitcherSectionHeight: CGFloat
         let umpireHeight: CGFloat
@@ -127,6 +124,9 @@ final class ScorecardImageGenerator {
     }
 
     func generatePDF(scorecard: ScorecardData, linescore: Linescore?, options: ScorecardExportMode = .full, userInterfaceStyle: UIUserInterfaceStyle = .unspecified) async -> Data {
+        if options.isShareCard {
+            return generateShareCardPDF(scorecard: scorecard, linescore: linescore, userInterfaceStyle: userInterfaceStyle)
+        }
         let layout = computeLayout(scorecard: scorecard, linescore: linescore, options: options)
         let pageWidth: CGFloat = 792
         let pageHeight: CGFloat = 612
@@ -164,6 +164,580 @@ final class ScorecardImageGenerator {
         }
     }
 
+    // MARK: - Share Card (9:16 portrait)
+
+    private enum ShareCard {
+        static let pageWidth: CGFloat = 720
+        static let pageHeight: CGFloat = 1280
+        static let pdfMargin: CGFloat = 8
+
+        static let outerPadding: CGFloat = 8
+        static let sectionGap: CGFloat = 8
+        static let teamGap: CGFloat = 8
+        static let attributionHeight: CGFloat = 16
+
+        // Square cells: rowHeight == inningWidth == statWidth.
+        static let nameWidth: CGFloat = 230
+        static let inningWidth: CGFloat = 42
+        static let statWidth: CGFloat = 42
+        static let rowHeight: CGFloat = 42
+        static let headerHeight: CGFloat = 20
+
+        static let teamHeaderHeight: CGFloat = 34
+
+        static let sidebarWidth: CGFloat = 46
+        static let sidebarGap: CGFloat = 8
+        static let infoMaxFontSize: CGFloat = 22
+
+        static let pSectionLabelHeight: CGFloat = 12
+        static let pHeaderHeight: CGFloat = 10
+        static let pRowHeight: CGFloat = 10
+        static let pNameWidth: CGFloat = 180
+        static let pStatWidth: CGFloat = 44
+        static let pDefaultRows: Int = 4
+    }
+
+    private struct ShareCardLayout {
+        let contentWidth: CGFloat
+        let contentHeight: CGFloat
+        let bodyWidth: CGFloat
+        let scorecardWidth: CGFloat
+        let pitcherTableWidth: CGFloat
+        let columnCount: Int
+        let awayColumns: [CompactColumn]
+        let homeColumns: [CompactColumn]
+        let awayLineup: [ScorecardBatter]
+        let homeLineup: [ScorecardBatter]
+        let awayRowCount: Int
+        let homeRowCount: Int
+        let awayPitcherRows: Int
+        let homePitcherRows: Int
+        let info: [GameInfoItem]
+    }
+
+    private func generateShareCardPDF(scorecard: ScorecardData, linescore: Linescore?, userInterfaceStyle: UIUserInterfaceStyle) -> Data {
+        let layout = computeShareCardLayout(scorecard: scorecard, linescore: linescore)
+        let pageRect = CGRect(x: 0, y: 0, width: ShareCard.pageWidth, height: ShareCard.pageHeight)
+        let printableWidth = ShareCard.pageWidth - 2 * ShareCard.pdfMargin
+        let printableHeight = ShareCard.pageHeight - 2 * ShareCard.pdfMargin
+        let scale = min(printableWidth / layout.contentWidth, printableHeight / layout.contentHeight)
+        let scaledWidth = layout.contentWidth * scale
+        let scaledHeight = layout.contentHeight * scale
+        let offsetX = (ShareCard.pageWidth - scaledWidth) / 2
+        let offsetY = (ShareCard.pageHeight - scaledHeight) / 2
+
+        let renderer = UIGraphicsPDFRenderer(bounds: pageRect)
+        return renderer.pdfData { context in
+            withTraitStyle(userInterfaceStyle) {
+                context.beginPage()
+                let ctx = context.cgContext
+                self.config.paperColor.setFill()
+                ctx.fill(pageRect)
+                ctx.saveGState()
+                ctx.translateBy(x: offsetX, y: offsetY)
+                ctx.scaleBy(x: scale, y: scale)
+                self.drawShareCardContent(scorecard: scorecard, linescore: linescore, layout: layout, ctx: ctx)
+                ctx.restoreGState()
+            }
+        }
+    }
+
+    private func computeShareCardLayout(scorecard: ScorecardData, linescore: Linescore?) -> ShareCardLayout {
+        let awayCompact = layoutEngine.computeCompactColumnLayout(data: scorecard, isHomeTeam: false)
+        let homeCompact = layoutEngine.computeCompactColumnLayout(data: scorecard, isHomeTeam: true)
+        let columnCount = max(awayCompact.columns.count, homeCompact.columns.count, 1)
+
+        let awayLineup = scorecard.lineups.away
+        let homeLineup = scorecard.lineups.home
+        let awayRowCount = max(awayLineup.count, 9) + 1
+        let homeRowCount = max(homeLineup.count, 9) + 1
+
+        let scorecardWidth = ShareCard.nameWidth + CGFloat(columnCount) * ShareCard.inningWidth + 4 * ShareCard.statWidth
+        let pitcherTableWidth = scorecardWidth
+
+        let info = gatherGameInfo(scorecard: scorecard, labels: ["DATE", "VENUE", "WEATHER", "ATTENDANCE", "DURATION", "FIRST PITCH"])
+
+        let awayPitcherRows = max(scorecard.pitchers.away.count, ShareCard.pDefaultRows)
+        let homePitcherRows = max(scorecard.pitchers.home.count, ShareCard.pDefaultRows)
+
+        let bodyWidth = scorecardWidth
+        let contentWidth = bodyWidth + ShareCard.sidebarGap + ShareCard.sidebarWidth + ShareCard.outerPadding * 2
+
+        let awayGridHeight = ShareCard.headerHeight + CGFloat(awayRowCount) * ShareCard.rowHeight
+        let homeGridHeight = ShareCard.headerHeight + CGFloat(homeRowCount) * ShareCard.rowHeight
+        let awayPitcherSectionHeight = ShareCard.pSectionLabelHeight
+            + ShareCard.pHeaderHeight
+            + CGFloat(awayPitcherRows) * ShareCard.pRowHeight
+        let homePitcherSectionHeight = ShareCard.pSectionLabelHeight
+            + ShareCard.pHeaderHeight
+            + CGFloat(homePitcherRows) * ShareCard.pRowHeight
+
+        let teamBlockHeight = ShareCard.teamHeaderHeight + awayGridHeight + awayPitcherSectionHeight
+        let homeBlockHeight = ShareCard.teamHeaderHeight + homeGridHeight + homePitcherSectionHeight
+
+        let contentHeight = ShareCard.outerPadding
+            + teamBlockHeight
+            + ShareCard.teamGap
+            + homeBlockHeight
+            + ShareCard.sectionGap
+            + ShareCard.attributionHeight
+            + ShareCard.outerPadding
+
+        return ShareCardLayout(
+            contentWidth: contentWidth,
+            contentHeight: contentHeight,
+            bodyWidth: bodyWidth,
+            scorecardWidth: scorecardWidth,
+            pitcherTableWidth: pitcherTableWidth,
+            columnCount: columnCount,
+            awayColumns: awayCompact.columns,
+            homeColumns: homeCompact.columns,
+            awayLineup: awayLineup,
+            homeLineup: homeLineup,
+            awayRowCount: awayRowCount,
+            homeRowCount: homeRowCount,
+            awayPitcherRows: awayPitcherRows,
+            homePitcherRows: homePitcherRows,
+            info: info
+        )
+    }
+
+    private func drawShareCardContent(scorecard: ScorecardData, linescore: Linescore?, layout: ShareCardLayout, ctx: CGContext) {
+        config.paperColor.setFill()
+        ctx.fill(CGRect(origin: .zero, size: CGSize(width: layout.contentWidth, height: layout.contentHeight)))
+
+        let centerX = layout.contentWidth / 2
+        let bodyX = ShareCard.outerPadding
+        var currentY = ShareCard.outerPadding
+
+        let awayName = scorecard.teams.away.name ?? "Away"
+        let homeName = scorecard.teams.home.name ?? "Home"
+        let awayColor = TeamColorProvider.color(for: awayName)
+        let homeColor = TeamColorProvider.color(for: homeName)
+        let hasLinescore = linescore?.innings != nil && !(linescore?.innings?.isEmpty ?? true)
+
+        currentY = drawShareCardTeamBlock(
+            at: CGPoint(x: bodyX, y: currentY),
+            name: awayName,
+            color: awayColor,
+            teamStats: linescore?.teams?.away,
+            hasLinescore: hasLinescore,
+            scorecard: scorecard,
+            isHome: false,
+            compactColumns: layout.awayColumns,
+            columnCount: layout.columnCount,
+            lineup: layout.awayLineup,
+            rowCount: layout.awayRowCount,
+            pitchers: scorecard.pitchers.away,
+            pitcherRows: layout.awayPitcherRows,
+            layout: layout,
+            ctx: ctx
+        )
+        currentY += ShareCard.teamGap
+
+        currentY = drawShareCardTeamBlock(
+            at: CGPoint(x: bodyX, y: currentY),
+            name: homeName,
+            color: homeColor,
+            teamStats: linescore?.teams?.home,
+            hasLinescore: hasLinescore,
+            scorecard: scorecard,
+            isHome: true,
+            compactColumns: layout.homeColumns,
+            columnCount: layout.columnCount,
+            lineup: layout.homeLineup,
+            rowCount: layout.homeRowCount,
+            pitchers: scorecard.pitchers.home,
+            pitcherRows: layout.homePitcherRows,
+            layout: layout,
+            ctx: ctx
+        )
+        let sidebarRect = CGRect(
+            x: bodyX + layout.bodyWidth + ShareCard.sidebarGap,
+            y: ShareCard.outerPadding,
+            width: ShareCard.sidebarWidth,
+            height: currentY - ShareCard.outerPadding
+        )
+        drawShareCardInfoSidebar(in: sidebarRect, info: layout.info, ctx: ctx)
+        currentY += ShareCard.sectionGap
+
+        let attrFont = UIFont(name: AppFont.ibmPlexBold, size: 13) ?? .systemFont(ofSize: 13, weight: .bold)
+        let attrAttrs: [NSAttributedString.Key: Any] = [
+            .font: attrFont,
+            .foregroundColor: config.pencilColor.withAlphaComponent(0.45),
+            .kern: 3.0
+        ]
+        let attrText = "BASED"
+        let aSize = (attrText as NSString).size(withAttributes: attrAttrs)
+        NSAttributedString(string: attrText, attributes: attrAttrs)
+            .draw(at: CGPoint(x: centerX - aSize.width / 2, y: currentY + (ShareCard.attributionHeight - aSize.height) / 2))
+    }
+
+    private func drawShareCardInfoSidebar(in rect: CGRect, info: [GameInfoItem], ctx: CGContext) {
+        guard !info.isEmpty else { return }
+
+        ctx.saveGState()
+        ctx.translateBy(x: rect.maxX, y: rect.minY)
+        ctx.rotate(by: .pi / 2)
+        drawShareCardInfoStrip(in: CGRect(x: 0, y: 0, width: rect.height, height: rect.width), info: info, ctx: ctx)
+        ctx.restoreGState()
+    }
+
+    private func drawShareCardInfoStrip(in rect: CGRect, info: [GameInfoItem], ctx: CGContext) {
+        let cleanInfo = info.map { item in
+            (
+                item.label.uppercased(),
+                (item.value ?? "").trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ".", with: "")
+            )
+        }
+        guard !cleanInfo.isEmpty else { return }
+
+        let cellWidth = rect.width / CGFloat(cleanInfo.count)
+        let labelFont = UIFont(name: AppFont.ibmPlexBold, size: 8) ?? .systemFont(ofSize: 8, weight: .bold)
+        let valueFont = UIFont(name: AppFont.patrickHand, size: 15) ?? .systemFont(ofSize: 15)
+        let labelAttrs: [NSAttributedString.Key: Any] = [
+            .font: labelFont,
+            .foregroundColor: config.pencilColor.withAlphaComponent(0.42),
+            .kern: 1.0
+        ]
+
+        ctx.setStrokeColor(config.gridColor.withAlphaComponent(0.8).cgColor)
+        ctx.setLineWidth(0.5)
+        UIBezierPath.pencilLine(from: CGPoint(x: rect.minX, y: rect.minY), to: CGPoint(x: rect.maxX, y: rect.minY), jitter: 0.25).stroke()
+        UIBezierPath.pencilLine(from: CGPoint(x: rect.minX, y: rect.maxY), to: CGPoint(x: rect.maxX, y: rect.maxY), jitter: 0.25).stroke()
+
+        for index in 1..<cleanInfo.count {
+            let x = rect.minX + CGFloat(index) * cellWidth
+            UIBezierPath.pencilLine(from: CGPoint(x: x, y: rect.minY), to: CGPoint(x: x, y: rect.maxY), jitter: 0.25).stroke()
+        }
+
+        for (index, item) in cleanInfo.enumerated() {
+            let cellRect = CGRect(x: rect.minX + CGFloat(index) * cellWidth, y: rect.minY, width: cellWidth, height: rect.height)
+            let labelSize = (item.0 as NSString).size(withAttributes: labelAttrs)
+            NSAttributedString(string: item.0, attributes: labelAttrs).draw(at: CGPoint(
+                x: cellRect.midX - labelSize.width / 2,
+                y: cellRect.minY + 4
+            ))
+
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.alignment = .center
+            paragraph.lineBreakMode = .byTruncatingTail
+            var valueSize: CGFloat = 15
+            while valueSize > 10 {
+                let font = UIFont(name: AppFont.patrickHand, size: valueSize) ?? .systemFont(ofSize: valueSize)
+                let width = (item.1 as NSString).size(withAttributes: [.font: font]).width
+                if width <= cellRect.width - 10 { break }
+                valueSize -= 1
+            }
+            let fittedValueFont = UIFont(name: AppFont.patrickHand, size: valueSize) ?? valueFont
+            let valueAttrs: [NSAttributedString.Key: Any] = [
+                .font: fittedValueFont,
+                .foregroundColor: config.pencilColor,
+                .paragraphStyle: paragraph
+            ]
+            let valueRect = CGRect(x: cellRect.minX + 5, y: cellRect.minY + 19, width: cellRect.width - 10, height: cellRect.height - 20)
+            (item.1 as NSString).draw(with: valueRect, options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: valueAttrs, context: nil)
+        }
+    }
+
+    private func drawShareCardTeamBlock(at origin: CGPoint, name: String, color: UIColor, teamStats: TeamGameStats?, hasLinescore: Bool, scorecard: ScorecardData, isHome: Bool, compactColumns: [CompactColumn], columnCount: Int, lineup: [ScorecardBatter], rowCount: Int, pitchers: [ScorecardPitcher], pitcherRows: Int, layout: ShareCardLayout, ctx: CGContext) -> CGFloat {
+        var y = origin.y
+        let headerRect = CGRect(x: origin.x, y: y, width: layout.bodyWidth, height: ShareCard.teamHeaderHeight)
+        drawShareCardTeamHeader(
+            in: headerRect,
+            name: name,
+            color: color,
+            runs: teamStats?.runs ?? 0,
+            hits: teamStats?.hits ?? 0,
+            errors: teamStats?.errors ?? 0,
+            drawData: hasLinescore,
+            ctx: ctx
+        )
+        y += ShareCard.teamHeaderHeight
+
+        let gridX = origin.x + (layout.bodyWidth - layout.scorecardWidth) / 2
+        drawShareCardGrid(
+            at: CGPoint(x: gridX, y: y),
+            scorecard: scorecard,
+            columnCount: columnCount,
+            compactColumns: compactColumns,
+            lineup: lineup,
+            rowCount: rowCount,
+            isHome: isHome,
+            ctx: ctx
+        )
+        let gridHeight = ShareCard.headerHeight + CGFloat(rowCount) * ShareCard.rowHeight
+        y += gridHeight
+
+        let pitcherRect = CGRect(
+            x: gridX,
+            y: y,
+            width: layout.pitcherTableWidth,
+            height: ShareCard.pSectionLabelHeight + ShareCard.pHeaderHeight + CGFloat(pitcherRows) * ShareCard.pRowHeight
+        )
+        drawShareCardPitchers(in: pitcherRect, pitchers: pitchers, teamColor: color, rows: pitcherRows, ctx: ctx)
+        y += pitcherRect.height
+        return y
+    }
+
+    private func drawShareCardTeamHeader(in rect: CGRect, name: String, color: UIColor, runs: Int, hits: Int, errors: Int, drawData: Bool, ctx: CGContext) {
+        let nameFont = UIFont(name: AppFont.permanentMarker, size: 24) ?? .systemFont(ofSize: 24, weight: .bold)
+        let valueFont = UIFont(name: AppFont.permanentMarker, size: 22) ?? .systemFont(ofSize: 22, weight: .bold)
+        let labelFont = UIFont(name: AppFont.ibmPlexBold, size: 11) ?? .systemFont(ofSize: 11, weight: .bold)
+
+        let title = name.uppercased()
+        let titleAttrs: [NSAttributedString.Key: Any] = [.font: nameFont, .foregroundColor: color]
+        let titleSize = (title as NSString).size(withAttributes: titleAttrs)
+        NSAttributedString(string: title, attributes: titleAttrs)
+            .draw(at: CGPoint(x: rect.minX, y: rect.maxY - titleSize.height - 2))
+
+        let labels = ["R", "H", "E"]
+        let values = [runs, hits, errors]
+        let cellWidth: CGFloat = 54
+        let cellsTotal = cellWidth * 3
+        let cellsStartX = rect.maxX - cellsTotal
+        let labelAreaHeight: CGFloat = 12
+        let labelAttrs: [NSAttributedString.Key: Any] = [
+            .font: labelFont,
+            .foregroundColor: config.pencilColor.withAlphaComponent(0.45),
+            .kern: 1.6
+        ]
+
+        for (i, label) in labels.enumerated() {
+            let cellX = cellsStartX + CGFloat(i) * cellWidth
+            let lSize = (label as NSString).size(withAttributes: labelAttrs)
+            NSAttributedString(string: label, attributes: labelAttrs)
+                .draw(at: CGPoint(x: cellX + (cellWidth - lSize.width) / 2, y: rect.minY + (labelAreaHeight - lSize.height) / 2))
+
+            guard drawData else { continue }
+            let value = "\(values[i])"
+            let valColor: UIColor = (i == 0 && runs > 0) ? color : config.pencilColor
+            let valAttrs: [NSAttributedString.Key: Any] = [.font: valueFont, .foregroundColor: valColor]
+            let vSize = (value as NSString).size(withAttributes: valAttrs)
+            NSAttributedString(string: value, attributes: valAttrs)
+                .draw(at: CGPoint(x: cellX + (cellWidth - vSize.width) / 2, y: rect.maxY - vSize.height - 2))
+        }
+    }
+
+    private func drawShareCardGrid(at origin: CGPoint, scorecard: ScorecardData, columnCount: Int, compactColumns: [CompactColumn], lineup: [ScorecardBatter], rowCount: Int, isHome: Bool, ctx: CGContext) {
+        let gridWidth = ShareCard.nameWidth + CGFloat(columnCount) * ShareCard.inningWidth + 4 * ShareCard.statWidth
+        let gridHeight = ShareCard.headerHeight + CGFloat(rowCount) * ShareCard.rowHeight
+
+        config.gridColor.withAlphaComponent(0.05).setFill()
+        ctx.fill(CGRect(x: origin.x, y: origin.y, width: gridWidth, height: ShareCard.headerHeight))
+
+        ctx.setStrokeColor(config.gridColor.cgColor)
+        ctx.setLineWidth(0.5)
+
+        var x = origin.x
+        UIBezierPath.pencilLine(from: CGPoint(x: x, y: origin.y), to: CGPoint(x: x, y: origin.y + gridHeight), jitter: 0.5).stroke()
+        x += ShareCard.nameWidth
+        UIBezierPath.pencilLine(from: CGPoint(x: x, y: origin.y), to: CGPoint(x: x, y: origin.y + gridHeight), jitter: 0.5).stroke()
+        for _ in 0..<columnCount {
+            x += ShareCard.inningWidth
+            UIBezierPath.pencilLine(from: CGPoint(x: x, y: origin.y), to: CGPoint(x: x, y: origin.y + gridHeight), jitter: 0.5).stroke()
+        }
+        for _ in 0..<4 {
+            x += ShareCard.statWidth
+            UIBezierPath.pencilLine(from: CGPoint(x: x, y: origin.y), to: CGPoint(x: x, y: origin.y + gridHeight), jitter: 0.5).stroke()
+        }
+
+        var y = origin.y
+        UIBezierPath.pencilLine(from: CGPoint(x: origin.x, y: y), to: CGPoint(x: origin.x + gridWidth, y: y), jitter: 0.5).stroke()
+        y += ShareCard.headerHeight
+        UIBezierPath.pencilLine(from: CGPoint(x: origin.x, y: y), to: CGPoint(x: origin.x + gridWidth, y: y), jitter: 0.5).stroke()
+        for _ in 0..<rowCount {
+            y += ShareCard.rowHeight
+            UIBezierPath.pencilLine(from: CGPoint(x: origin.x, y: y), to: CGPoint(x: origin.x + gridWidth, y: y), jitter: 0.5).stroke()
+        }
+
+        let headerFont = UIFont(name: AppFont.ibmPlexBold, size: 12) ?? .systemFont(ofSize: 12, weight: .bold)
+        let hAttrs: [NSAttributedString.Key: Any] = [.font: headerFont, .foregroundColor: config.pencilColor]
+
+        func drawCentered(_ text: String, in cellRect: CGRect, attrs: [NSAttributedString.Key: Any]) {
+            let size = (text as NSString).size(withAttributes: attrs)
+            NSAttributedString(string: text, attributes: attrs).draw(at: CGPoint(
+                x: cellRect.midX - size.width / 2,
+                y: cellRect.midY - size.height / 2
+            ))
+        }
+
+        drawCentered("Batter", in: CGRect(x: origin.x, y: origin.y, width: ShareCard.nameWidth, height: ShareCard.headerHeight), attrs: hAttrs)
+        var currentX = origin.x + ShareCard.nameWidth
+        for i in 0..<columnCount {
+            if i < compactColumns.count {
+                let c = compactColumns[i]
+                let label = c.inningStart == c.inningEnd ? "\(c.inningStart)" : "\(c.inningStart)-\(c.inningEnd)"
+                drawCentered(label, in: CGRect(x: currentX, y: origin.y, width: ShareCard.inningWidth, height: ShareCard.headerHeight), attrs: hAttrs)
+            }
+            currentX += ShareCard.inningWidth
+        }
+        for stat in ["AB", "R", "H", "RBI"] {
+            drawCentered(stat, in: CGRect(x: currentX, y: origin.y, width: ShareCard.statWidth, height: ShareCard.headerHeight), attrs: hAttrs)
+            currentX += ShareCard.statWidth
+        }
+
+        let nameFont = UIFont(name: AppFont.permanentMarker, size: 13) ?? .systemFont(ofSize: 13)
+        let posFont = UIFont(name: AppFont.patrickHand, size: 10) ?? .systemFont(ofSize: 10)
+        let statFont = UIFont(name: AppFont.permanentMarker, size: 12) ?? .systemFont(ofSize: 12)
+
+        let hasAnyResults = !scorecard.timeline.isEmpty
+        let eventsBySlot = layoutEngine.compactPlateAppearancesBySlot(data: scorecard, lineup: lineup, isHomeTeam: isHome)
+        let dataRowCount = max(rowCount - 1, 0)
+
+        for idx in 0..<dataRowCount {
+            let rowY = origin.y + ShareCard.headerHeight + CGFloat(idx) * ShareCard.rowHeight
+
+            if idx < lineup.count {
+                let batter = lineup[idx]
+                NSAttributedString(string: batter.abbreviation, attributes: [.font: nameFont, .foregroundColor: config.pencilColor])
+                    .draw(at: CGPoint(x: origin.x + 8, y: rowY + 4))
+                let posText = batter.position + (batter.jerseyNumber.map { " #\($0)" } ?? "")
+                NSAttributedString(string: posText, attributes: [.font: posFont, .foregroundColor: config.pencilColor.withAlphaComponent(0.6)])
+                    .draw(at: CGPoint(x: origin.x + 8, y: rowY + ShareCard.rowHeight - 13))
+            }
+
+            for paIdx in 0..<columnCount {
+                let cellRect = CGRect(
+                    x: origin.x + ShareCard.nameWidth + CGFloat(paIdx) * ShareCard.inningWidth,
+                    y: rowY,
+                    width: ShareCard.inningWidth,
+                    height: ShareCard.rowHeight
+                )
+                if !hasAnyResults || idx >= lineup.count {
+                    drawEmptyDiamond(in: cellRect, ctx: ctx)
+                } else {
+                    drawCompactAtBatEvent(in: cellRect, batter: lineup[idx], paIndex: paIdx, isHome: isHome, data: scorecard, eventsBySlot: eventsBySlot, ctx: ctx)
+                }
+            }
+
+            if idx < lineup.count, hasAnyResults {
+                let stats = scorecard.calculatePlayerStats(for: lineup[idx].id, isHome: isHome)
+                var sx = origin.x + ShareCard.nameWidth + CGFloat(columnCount) * ShareCard.inningWidth
+                for val in [stats.atBats, stats.runs, stats.hits, stats.rbi] {
+                    let str = "\(val)"
+                    let size = (str as NSString).size(withAttributes: [.font: statFont])
+                    NSAttributedString(string: str, attributes: [.font: statFont, .foregroundColor: config.pencilColor])
+                        .draw(at: CGPoint(x: sx + (ShareCard.statWidth - size.width) / 2, y: rowY + (ShareCard.rowHeight - size.height) / 2))
+                    sx += ShareCard.statWidth
+                }
+            }
+        }
+
+        let totalsY = origin.y + ShareCard.headerHeight + CGFloat(rowCount - 1) * ShareCard.rowHeight
+        let tLabel = "TOTALS"
+        let tSize = (tLabel as NSString).size(withAttributes: hAttrs)
+        NSAttributedString(string: tLabel, attributes: hAttrs)
+            .draw(at: CGPoint(x: origin.x + (ShareCard.nameWidth - tSize.width) / 2, y: totalsY + (ShareCard.rowHeight - tSize.height) / 2))
+
+        guard hasAnyResults else { return }
+
+        var tx = origin.x + ShareCard.nameWidth
+        let accent = scorecard.teamAccentColor(isHomeTeam: isHome)
+        for paIdx in 0..<columnCount {
+            var runs = 0
+            for events in eventsBySlot.values where events[paIdx]?.bases.home == true {
+                runs += 1
+            }
+            if runs > 0 {
+                let str = "\(runs)"
+                let attrs: [NSAttributedString.Key: Any] = [.font: nameFont, .foregroundColor: accent]
+                let size = (str as NSString).size(withAttributes: attrs)
+                NSAttributedString(string: str, attributes: attrs)
+                    .draw(at: CGPoint(x: tx + (ShareCard.inningWidth - size.width) / 2, y: totalsY + (ShareCard.rowHeight - size.height) / 2))
+            }
+            tx += ShareCard.inningWidth
+        }
+
+        var tAB = 0, tR = 0, tH = 0, tRBI = 0
+        for batter in lineup {
+            let s = scorecard.calculatePlayerStats(for: batter.id, isHome: isHome)
+            tAB += s.atBats; tR += s.runs; tH += s.hits; tRBI += s.rbi
+        }
+        var sx = origin.x + ShareCard.nameWidth + CGFloat(columnCount) * ShareCard.inningWidth
+        for val in [tAB, tR, tH, tRBI] {
+            let str = "\(val)"
+            let attrs: [NSAttributedString.Key: Any] = [.font: statFont, .foregroundColor: config.pencilColor]
+            let size = (str as NSString).size(withAttributes: attrs)
+            NSAttributedString(string: str, attributes: attrs)
+                .draw(at: CGPoint(x: sx + (ShareCard.statWidth - size.width) / 2, y: totalsY + (ShareCard.rowHeight - size.height) / 2))
+            sx += ShareCard.statWidth
+        }
+    }
+
+    private func drawShareCardPitchers(in rect: CGRect, pitchers: [ScorecardPitcher], teamColor: UIColor, rows: Int, ctx: CGContext) {
+        let labelFont = UIFont(name: AppFont.ibmPlexBold, size: 11) ?? .systemFont(ofSize: 11, weight: .bold)
+        let labelAttrs: [NSAttributedString.Key: Any] = [
+            .font: labelFont,
+            .foregroundColor: teamColor,
+            .kern: 1.6
+        ]
+        let labelText = "PITCHERS"
+        let labelSize = (labelText as NSString).size(withAttributes: labelAttrs)
+        NSAttributedString(string: labelText, attributes: labelAttrs)
+            .draw(at: CGPoint(x: rect.minX, y: rect.minY + (ShareCard.pSectionLabelHeight - labelSize.height) / 2))
+
+        let tableY = rect.minY + ShareCard.pSectionLabelHeight
+        let tableHeight = ShareCard.pHeaderHeight + CGFloat(rows) * ShareCard.pRowHeight
+        let stats = ["IP", "H", "R", "ER", "BB", "K"]
+        let tableWidth = rect.width
+        let statWidth = ShareCard.statWidth
+        let nameWidth = tableWidth - CGFloat(stats.count) * statWidth
+
+        ctx.setStrokeColor(config.gridColor.cgColor)
+        ctx.setLineWidth(0.5)
+        var x = rect.minX
+        func drawVLine(_ x: CGFloat) { UIBezierPath.pencilLine(from: CGPoint(x: x, y: tableY), to: CGPoint(x: x, y: tableY + tableHeight), jitter: 0.4).stroke() }
+        drawVLine(x); x += nameWidth; drawVLine(x)
+        for _ in 0..<stats.count { x += statWidth; drawVLine(x) }
+        var y = tableY
+        func drawHLine(_ y: CGFloat) { UIBezierPath.pencilLine(from: CGPoint(x: rect.minX, y: y), to: CGPoint(x: rect.minX + tableWidth, y: y), jitter: 0.4).stroke() }
+        drawHLine(y); y += ShareCard.pHeaderHeight; drawHLine(y)
+        for _ in 0..<rows { y += ShareCard.pRowHeight; drawHLine(y) }
+
+        let headerFont = UIFont(name: AppFont.ibmPlexBold, size: 8) ?? .systemFont(ofSize: 8, weight: .bold)
+        let hAttrs: [NSAttributedString.Key: Any] = [.font: headerFont, .foregroundColor: config.pencilColor]
+        let nameFont = UIFont(name: AppFont.permanentMarker, size: 9) ?? .systemFont(ofSize: 9)
+        let valFont = UIFont(name: AppFont.permanentMarker, size: 8) ?? .systemFont(ofSize: 8)
+
+        func drawCentered(_ text: String, in cellRect: CGRect, attrs: [NSAttributedString.Key: Any]) {
+            let size = (text as NSString).size(withAttributes: attrs)
+            NSAttributedString(string: text, attributes: attrs).draw(at: CGPoint(
+                x: cellRect.midX - size.width / 2,
+                y: cellRect.midY - size.height / 2
+            ))
+        }
+
+        drawCentered("NAME", in: CGRect(x: rect.minX, y: tableY, width: nameWidth, height: ShareCard.pHeaderHeight), attrs: hAttrs)
+        for (i, s) in stats.enumerated() {
+            let cellX = rect.minX + nameWidth + CGFloat(i) * statWidth
+            drawCentered(s, in: CGRect(x: cellX, y: tableY, width: statWidth, height: ShareCard.pHeaderHeight), attrs: hAttrs)
+        }
+
+        let nameAttrs: [NSAttributedString.Key: Any] = [.font: nameFont, .foregroundColor: config.pencilColor]
+        let valAttrs: [NSAttributedString.Key: Any] = [.font: valFont, .foregroundColor: config.pencilColor]
+        for (i, p) in pitchers.enumerated() {
+            let rowY = tableY + ShareCard.pHeaderHeight + CGFloat(i) * ShareCard.pRowHeight
+            let displayName = pitcherAbbreviation(p.fullName)
+            let nameSize = (displayName as NSString).size(withAttributes: nameAttrs)
+            NSAttributedString(string: displayName, attributes: nameAttrs)
+                .draw(at: CGPoint(x: rect.minX + 6, y: rowY + (ShareCard.pRowHeight - nameSize.height) / 2))
+            let vals = [p.ip, "\(p.h)", "\(p.r)", "\(p.er)", "\(p.bb)", "\(p.k)"]
+            for (vi, v) in vals.enumerated() {
+                let cellX = rect.minX + nameWidth + CGFloat(vi) * statWidth
+                drawCentered(v, in: CGRect(x: cellX, y: rowY, width: statWidth, height: ShareCard.pRowHeight), attrs: valAttrs)
+            }
+        }
+    }
+
+    private func pitcherAbbreviation(_ fullName: String) -> String {
+        let parts = fullName.split(separator: " ").map(String.init).filter { !$0.isEmpty }
+        if parts.count >= 2, let firstInitial = parts.first?.first {
+            return "\(firstInitial). \(parts.last?.uppercased() ?? "")"
+        }
+        return fullName.uppercased()
+    }
+
     private func actualColumnWidth(layout: ColumnLayout) -> CGFloat {
         var w = config.nameWidth
         for inning in layout.innings { w += CGFloat(inning.subColumnCount) * config.inningWidth }
@@ -171,46 +745,27 @@ final class ScorecardImageGenerator {
         return w
     }
 
-    private func computeLayout(scorecard: ScorecardData, linescore: Linescore?, options: ScorecardExportMode = .full) -> LayoutInfo {
-        let displayLabels = ["DATE", "VENUE", "WEATHER", "ATTENDANCE", "DURATION", "FIRST PITCH"]
+    private func gatherGameInfo(scorecard: ScorecardData, labels: [String]) -> [GameInfoItem] {
         var infoMap: [String: String] = [:]
-        
         if let date = scorecard.gameDate {
             infoMap["DATE"] = date
         }
-        
         let mapping = ["Venue": "VENUE", "Weather": "WEATHER", "Att": "ATTENDANCE", "T": "DURATION", "First pitch": "FIRST PITCH"]
         for item in scorecard.gameInfo {
             let raw = item.label.replacingOccurrences(of: ":", with: "").trimmingCharacters(in: .whitespaces)
-            for (key, val) in mapping {
-                if raw.contains(key) {
-                    infoMap[val] = item.value
-                    break
-                }
+            for (key, val) in mapping where raw.contains(key) {
+                infoMap[val] = item.value
+                break
             }
         }
-        
-        let filteredInfo = displayLabels.map { label in
-            GameInfoItem(label: label, value: infoMap[label] ?? "")
-        }
+        return labels.map { GameInfoItem(label: $0, value: infoMap[$0] ?? "") }
+    }
 
-        let awayLayout: ColumnLayout
-        let homeLayout: ColumnLayout
-        let awayCompactColumns: [CompactColumn]
-        let homeCompactColumns: [CompactColumn]
-        if options.isCompact {
-            let awayCompact = layoutEngine.computeCompactColumnLayout(data: scorecard, isHomeTeam: false)
-            let homeCompact = layoutEngine.computeCompactColumnLayout(data: scorecard, isHomeTeam: true)
-            awayLayout = awayCompact.columnLayout
-            homeLayout = homeCompact.columnLayout
-            awayCompactColumns = awayCompact.columns
-            homeCompactColumns = homeCompact.columns
-        } else {
-            awayLayout = computeColumnLayout(for: scorecard, isHome: false)
-            homeLayout = computeColumnLayout(for: scorecard, isHome: true)
-            awayCompactColumns = []
-            homeCompactColumns = []
-        }
+    private func computeLayout(scorecard: ScorecardData, linescore: Linescore?, options: ScorecardExportMode = .full) -> LayoutInfo {
+        let filteredInfo = gatherGameInfo(scorecard: scorecard, labels: ["DATE", "VENUE", "WEATHER", "ATTENDANCE", "DURATION", "FIRST PITCH"])
+
+        let awayLayout = computeColumnLayout(for: scorecard, isHome: false)
+        let homeLayout = computeColumnLayout(for: scorecard, isHome: true)
 
         let awayColWidth = actualColumnWidth(layout: awayLayout)
         let homeColWidth = actualColumnWidth(layout: homeLayout)
@@ -229,17 +784,7 @@ final class ScorecardImageGenerator {
         let scoreboardTotalWidth = sbWidth + 2 * config.margin
         let pitcherTotalWidth = config.margin + pitcherTableWidth + config.columnGap + pitcherTableWidth + config.margin
 
-        // In compact the scorecard is naturally narrow, which would squeeze the game info table
-        // at the top right. Floor the page width to what a regular layout would produce.
-        var compactPageFloor: CGFloat = 0
-        if options.isCompact {
-            let regularAway = computeColumnLayout(for: scorecard, isHome: false)
-            let regularHome = computeColumnLayout(for: scorecard, isHome: true)
-            let regularColWidth = max(actualColumnWidth(layout: regularAway), actualColumnWidth(layout: regularHome))
-            compactPageFloor = config.margin + regularColWidth + config.columnGap + regularColWidth + config.margin
-        }
-
-        let imageWidth = max(scorecardTotalWidth, max(scoreboardTotalWidth, max(pitcherTotalWidth, compactPageFloor)))
+        let imageWidth = max(scorecardTotalWidth, max(scoreboardTotalWidth, pitcherTotalWidth))
         let contentWidth = imageWidth - (config.margin * 2)
 
         let defaultLineupRows = 9
@@ -281,8 +826,6 @@ final class ScorecardImageGenerator {
             colWidth: colWidth,
             awayLayout: awayLayout,
             homeLayout: homeLayout,
-            awayCompactColumns: awayCompactColumns,
-            homeCompactColumns: homeCompactColumns,
             scorecardSectionHeight: scorecardSectionHeight,
             pitcherSectionHeight: pitcherSectionHeight,
             umpireHeight: umpireHeight,
@@ -326,10 +869,10 @@ final class ScorecardImageGenerator {
         currentY += 55
 
         let awayRect = CGRect(x: config.margin, y: currentY, width: layout.colWidth, height: layout.scorecardSectionHeight)
-        drawScorecard(in: awayRect, data: scorecard, layout: layout.awayLayout, compactColumns: layout.awayCompactColumns, isHome: false, drawLineup: options.showLineup && hasAwayLineup, drawResults: options.showAtBatResults, ctx: ctx)
+        drawScorecard(in: awayRect, data: scorecard, layout: layout.awayLayout, isHome: false, drawLineup: options.showLineup && hasAwayLineup, drawResults: options.showAtBatResults, ctx: ctx)
 
         let homeRect = CGRect(x: config.margin + layout.colWidth + config.columnGap, y: currentY, width: layout.colWidth, height: layout.scorecardSectionHeight)
-        drawScorecard(in: homeRect, data: scorecard, layout: layout.homeLayout, compactColumns: layout.homeCompactColumns, isHome: true, drawLineup: options.showLineup && hasHomeLineup, drawResults: options.showAtBatResults, ctx: ctx)
+        drawScorecard(in: homeRect, data: scorecard, layout: layout.homeLayout, isHome: true, drawLineup: options.showLineup && hasHomeLineup, drawResults: options.showAtBatResults, ctx: ctx)
 
         currentY += layout.scorecardSectionHeight
 
@@ -488,7 +1031,7 @@ final class ScorecardImageGenerator {
         return map[teamName] ?? String(teamName.prefix(3)).uppercased()
     }
     
-    private func drawScorecard(in rect: CGRect, data: ScorecardData, layout: ColumnLayout, compactColumns: [CompactColumn], isHome: Bool, drawLineup: Bool = true, drawResults: Bool = true, ctx: CGContext) {
+    private func drawScorecard(in rect: CGRect, data: ScorecardData, layout: ColumnLayout, isHome: Bool, drawLineup: Bool = true, drawResults: Bool = true, ctx: CGContext) {
         let lineup = isHome ? data.lineups.home : data.lineups.away
         let rowCount = drawLineup ? max(lineup.count, 9) + 1 : 10
 
@@ -502,11 +1045,11 @@ final class ScorecardImageGenerator {
 
         let hAttrs: [NSAttributedString.Key: Any] = [.font: config.headerFont, .foregroundColor: config.pencilColor]
         let bLabel = "Batter", bSize = (bLabel as NSString).size(withAttributes: hAttrs)
-        drawScorecardHeaders(in: rect, layout: layout, compactColumns: compactColumns, hAttrs: hAttrs, bSize: bSize, ctx: ctx)
+        drawScorecardHeaders(in: rect, layout: layout, hAttrs: hAttrs, bSize: bSize, ctx: ctx)
 
-        drawScorecardLineup(in: rect, data: data, layout: layout, compactColumns: compactColumns, isHome: isHome, lineup: lineup, rowCount: rowCount, drawLineup: drawLineup, drawResults: drawResults, ctx: ctx)
+        drawScorecardLineup(in: rect, data: data, layout: layout, isHome: isHome, lineup: lineup, rowCount: rowCount, drawLineup: drawLineup, drawResults: drawResults, ctx: ctx)
 
-        drawScorecardTotals(in: rect, data: data, layout: layout, compactColumns: compactColumns, isHome: isHome, lineup: lineup, rowCount: rowCount, hAttrs: hAttrs, drawResults: drawResults, ctx: ctx)
+        drawScorecardTotals(in: rect, data: data, layout: layout, isHome: isHome, lineup: lineup, rowCount: rowCount, hAttrs: hAttrs, drawResults: drawResults, ctx: ctx)
     }
 
     private func drawScorecardGrid(in rect: CGRect, actualWidth: CGFloat, totalHeight: CGFloat, rowCount: Int, layout: ColumnLayout, ctx: CGContext) {
@@ -537,20 +1080,13 @@ final class ScorecardImageGenerator {
         for _ in 0..<rowCount { currentY += config.rowHeight; drawHLine(currentY) }
     }
 
-    private func drawScorecardHeaders(in rect: CGRect, layout: ColumnLayout, compactColumns: [CompactColumn], hAttrs: [NSAttributedString.Key: Any], bSize: CGSize, ctx: CGContext) {
+    private func drawScorecardHeaders(in rect: CGRect, layout: ColumnLayout, hAttrs: [NSAttributedString.Key: Any], bSize: CGSize, ctx: CGContext) {
         let bLabel = "Batter"
         NSAttributedString(string: bLabel, attributes: hAttrs).draw(at: CGPoint(x: rect.minX + (config.nameWidth - bSize.width)/2, y: rect.minY + (config.headerHeight - bSize.height)/2))
 
-        let isCompact = !compactColumns.isEmpty
         var currentX = rect.minX + config.nameWidth
-        for (i, inning) in layout.innings.enumerated() {
-            let label: String
-            if isCompact, i < compactColumns.count {
-                let c = compactColumns[i]
-                label = c.inningStart == c.inningEnd ? "\(c.inningStart)" : "\(c.inningStart)-\(c.inningEnd)"
-            } else {
-                label = "\(inning.inningNum)"
-            }
+        for inning in layout.innings {
+            let label = "\(inning.inningNum)"
             let colW = CGFloat(inning.subColumnCount) * config.inningWidth
             let size = (label as NSString).size(withAttributes: hAttrs)
             NSAttributedString(string: label, attributes: hAttrs).draw(at: CGPoint(x: currentX + (colW - size.width)/2, y: rect.minY + (config.headerHeight - bSize.height)/2))
@@ -563,12 +1099,8 @@ final class ScorecardImageGenerator {
         }
     }
 
-    private func drawScorecardLineup(in rect: CGRect, data: ScorecardData, layout: ColumnLayout, compactColumns: [CompactColumn], isHome: Bool, lineup: [ScorecardBatter], rowCount: Int, drawLineup: Bool, drawResults: Bool, ctx: CGContext) {
+    private func drawScorecardLineup(in rect: CGRect, data: ScorecardData, layout: ColumnLayout, isHome: Bool, lineup: [ScorecardBatter], rowCount: Int, drawLineup: Bool, drawResults: Bool, ctx: CGContext) {
         let hasAnyResults = !data.timeline.isEmpty
-        let isCompact = !compactColumns.isEmpty
-        let compactEventsBySlot = isCompact
-            ? layoutEngine.compactPlateAppearancesBySlot(data: data, lineup: lineup, isHomeTeam: isHome)
-            : [:]
         for idx in 0..<rowCount {
             let rowY = rect.minY + config.headerHeight + CGFloat(idx) * config.rowHeight
 
@@ -592,11 +1124,7 @@ final class ScorecardImageGenerator {
                     }
                 } else if idx < lineup.count {
                     let batter = lineup[idx]
-                    if isCompact {
-                        drawCompactAtBatEvent(in: cellRect, batter: batter, paIndex: col, isHome: isHome, data: data, eventsBySlot: compactEventsBySlot, ctx: ctx)
-                    } else {
-                        drawAtBatEvents(in: cellRect, bId: batter.id, col: col, isHome: isHome, data: data, layout: layout, ctx: ctx)
-                    }
+                    drawAtBatEvents(in: cellRect, bId: batter.id, col: col, isHome: isHome, data: data, layout: layout, ctx: ctx)
                 }
                 actualX += config.inningWidth
             }
@@ -669,31 +1197,16 @@ final class ScorecardImageGenerator {
         }
     }
 
-    private func drawScorecardTotals(in rect: CGRect, data: ScorecardData, layout: ColumnLayout, compactColumns: [CompactColumn], isHome: Bool, lineup: [ScorecardBatter], rowCount: Int, hAttrs: [NSAttributedString.Key: Any], drawResults: Bool, ctx: CGContext) {
+    private func drawScorecardTotals(in rect: CGRect, data: ScorecardData, layout: ColumnLayout, isHome: Bool, lineup: [ScorecardBatter], rowCount: Int, hAttrs: [NSAttributedString.Key: Any], drawResults: Bool, ctx: CGContext) {
         let totalsY = rect.minY + config.headerHeight + CGFloat(rowCount - 1) * config.rowHeight
         let tLabel = "TOTALS", tSize = (tLabel as NSString).size(withAttributes: hAttrs)
         NSAttributedString(string: tLabel, attributes: hAttrs).draw(at: CGPoint(x: rect.minX + (config.nameWidth - tSize.width)/2, y: totalsY + (config.rowHeight - tSize.height)/2))
 
         if drawResults {
-            let isCompact = !compactColumns.isEmpty
             var actualX = rect.minX + config.nameWidth
-            if isCompact {
-                let eventsBySlot = layoutEngine.compactPlateAppearancesBySlot(data: data, lineup: lineup, isHomeTeam: isHome)
-                for paIndex in 0..<compactColumns.count {
-                    var runs = 0
-                    for events in eventsBySlot.values {
-                        if let event = events[paIndex], event.bases.home {
-                            runs += 1
-                        }
-                    }
-                    drawColumnRunTotal(in: actualX, totalsY: totalsY, columnWidth: config.inningWidth, runs: runs, isHome: isHome, data: data)
-                    actualX += config.inningWidth
-                }
-            } else {
-                for inning in layout.innings {
-                    drawInningTotal(in: actualX, totalsY: totalsY, inning: inning, isHome: isHome, data: data, ctx: ctx)
-                    actualX += CGFloat(inning.subColumnCount) * config.inningWidth
-                }
+            for inning in layout.innings {
+                drawInningTotal(in: actualX, totalsY: totalsY, inning: inning, isHome: isHome, data: data, ctx: ctx)
+                actualX += CGFloat(inning.subColumnCount) * config.inningWidth
             }
 
             var tAB = 0, tR = 0, tH = 0, tRBI = 0
@@ -767,7 +1280,7 @@ final class ScorecardImageGenerator {
         }
     }
     
-    private func drawGameInfoTable(in rect: CGRect, info: [GameInfoItem], drawData: Bool = true, ctx: CGContext) {
+    private func drawGameInfoTable(in rect: CGRect, info: [GameInfoItem], drawData: Bool = true, maxFontSize: CGFloat = 60, ctx: CGContext) {
         let labelFont = UIFont(name: AppFont.ibmPlexSemiBold, size: 14) ?? .systemFont(ofSize: 14, weight: .semibold)
         let labelAttrs: [NSAttributedString.Key: Any] = [.font: labelFont, .foregroundColor: config.pencilColor.withAlphaComponent(0.45)]
 
@@ -821,13 +1334,13 @@ final class ScorecardImageGenerator {
         }
 
         // Find the base size from the longest (multi-line) values
-        var baseSize: CGFloat = 60
+        var baseSize: CGFloat = maxFontSize
         for pair in cleanLabels {
-            let fitted = fittedSize(for: pair.1, maxFontSize: 60)
+            let fitted = fittedSize(for: pair.1, maxFontSize: maxFontSize)
             baseSize = min(baseSize, fitted)
         }
         // Short single-word values get a small bump (20%) for visual weight balance
-        let bumpedSize = min(baseSize * 1.2, 60)
+        let bumpedSize = min(baseSize * 1.2, maxFontSize)
 
         for (i, pair) in cleanLabels.enumerated() {
             let cellX = tableX + CGFloat(i) * colWidth
@@ -902,12 +1415,7 @@ final class ScorecardImageGenerator {
     }
     
     private func drawEmptyDiamond(in rect: CGRect, ctx: CGContext) {
-        let dRect = CGRect(
-            x: rect.minX + 2,
-            y: rect.minY + 4,
-            width: rect.width - 4,
-            height: rect.height - 8
-        )
+        let dRect = squareDiamondRect(in: rect)
         let home = CGPoint(x: dRect.midX, y: dRect.maxY)
         let first = CGPoint(x: dRect.maxX, y: dRect.midY)
         let second = CGPoint(x: dRect.midX, y: dRect.minY)
@@ -933,12 +1441,7 @@ final class ScorecardImageGenerator {
             return
         }
 
-        let dRect = CGRect(
-            x: rect.minX + 2,
-            y: rect.minY + 4,
-            width: rect.width - 4,
-            height: rect.height - 8
-        )
+        let dRect = squareDiamondRect(in: rect)
         let baseSize = max(5, min(dRect.width, dRect.height) * 0.11)
         let baseStrokeWidth = max(0.5, min(1.5, min(dRect.width, dRect.height) * 0.015))
         let progressLineWidth = max(1.5, min(4, min(dRect.width, dRect.height) * 0.035))
@@ -953,6 +1456,16 @@ final class ScorecardImageGenerator {
         drawProgressPath(in: dRect, event: event, home: home, first: first, second: second, third: third, diamondColor: diamondColor, progressLineWidth: progressLineWidth, ctx: ctx)
         drawBaseBoxes(event: event, home: home, first: first, second: second, third: third, diamondColor: diamondColor, baseSize: baseSize, baseStrokeWidth: baseStrokeWidth, ctx: ctx)
         drawResultAndCounts(in: rect, dRect: dRect, event: event, diamondColor: diamondColor, ctx: ctx)
+    }
+
+    private func squareDiamondRect(in rect: CGRect) -> CGRect {
+        let side = max(0, min(rect.width, rect.height) - 8)
+        return CGRect(
+            x: rect.midX - side / 2,
+            y: rect.midY - side / 2,
+            width: side,
+            height: side
+        )
     }
 
     private func drawDiamondShape(in dRect: CGRect, home: CGPoint, first: CGPoint, second: CGPoint, third: CGPoint, shouldUseAccent: Bool, diamondColor: UIColor, ctx: CGContext) {
