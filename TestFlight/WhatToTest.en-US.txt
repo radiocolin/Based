@@ -1,1 +1,5 @@
-Initial support for WPBL
+Initial support for the WPBL (Women's Pro Baseball League) — switch leagues from the dropdown on Games, Teams, and Standings (defaults to MLB), and favorite WPBL teams alongside your MLB favorites in Settings. WPBL scorecards infer base-running from the league's play-by-play data, so please flag anything that looks off, especially base paths and pitch sequences.
+
+New Highlights export: from a game's scorecard, pick up to 6 plays and generate a 9:16 share card (image or PDF) built around those at-bats.
+
+Miscellaneous fixes: WPBL team colors, scorecard base-path rendering, and Teams/Standings navigation.
