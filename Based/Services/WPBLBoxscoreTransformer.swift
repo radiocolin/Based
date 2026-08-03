@@ -216,6 +216,13 @@ struct WPBLBoxscoreTransformer {
                 return
             }
             let next = plays[k + 1]
+            guard next.inning == current.inning, next.half == current.half else {
+                // The half-inning ended (third out recorded by someone else) with this runner
+                // still on base — left on base, not an out. Without this check, the next play's
+                // occupancy belongs to the *other* team's fresh, empty-bases state, which the
+                // diff below would misread as this runner having vanished/been put out.
+                return
+            }
             let nextBases = (first: next.firstBase, second: next.secondBase, third: next.thirdBase)
 
             if nextBases.third == runnerName {
@@ -227,6 +234,9 @@ struct WPBLBoxscoreTransformer {
             } else if scoredNames(in: current.narrative).contains(runnerName) {
                 state.advanceRunner(to: "score")
                 return
+            } else if let explicitBase = explicitOutBase(for: runnerName, in: current.narrative) {
+                state.recordOut(at: explicitBase)
+                return
             } else {
                 if let base = state.currentBase, base < 4 {
                     state.recordOut(at: base == 1 ? "1b" : base == 2 ? "2b" : "3b")
@@ -236,6 +246,23 @@ struct WPBLBoxscoreTransformer {
             k += 1
         }
         // Ran out of plays without resolving — runner left on base; state stays at last known position.
+    }
+
+    /// WPBL's narrative explicitly names the retired runner and the base they were thrown out at
+    /// (e.g. "Ticara Geldenhuis out at second 2b to ss") on force-out/fielder's-choice plays where
+    /// a preceding runner is retired advancing to a base *further* than their last confirmed
+    /// position. The occupancy diff alone can't distinguish that from "still on their old base" —
+    /// a retired runner simply vanishes from every later snapshot either way — so this is read
+    /// from the narrative text instead. Verified against both fixture games: every "<name> out at
+    /// <base>" occurrence names the base the runner was actually retired at, not their prior one.
+    private static func explicitOutBase(for runnerName: String, in narrative: String) -> String? {
+        guard let range = narrative.range(of: "\(runnerName) out at ") else { return nil }
+        let rest = narrative[range.upperBound...]
+        if rest.hasPrefix("first") { return "1b" }
+        if rest.hasPrefix("second") { return "2b" }
+        if rest.hasPrefix("third") { return "3b" }
+        if rest.hasPrefix("home") { return "home" }
+        return nil
     }
 
     private static let scoredPattern = /([A-Z][A-Za-z'.\-]+(?: [A-Z][A-Za-z'.\-]+)+) scored/
