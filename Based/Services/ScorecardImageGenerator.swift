@@ -389,6 +389,17 @@ final class ScorecardImageGenerator {
         }
     }
 
+    /// The scorecard's own lineup abbreviation (last name, suffix-aware — same field the grid's
+    /// column headers use), falling back to the last word of the full name for a batter who
+    /// isn't in the starting lineup (a pinch hitter, say).
+    private func batterDisplayName(for event: AtBatEvent, scorecard: ScorecardData) -> String {
+        let lineup = scorecard.lineups.away + scorecard.lineups.home
+        if let batter = lineup.first(where: { $0.id == event.batterId }) {
+            return batter.abbreviation
+        }
+        return event.batterName.components(separatedBy: " ").last ?? event.batterName
+    }
+
     private func drawHighlightsCell(in rect: CGRect, event: AtBatEvent, scorecard: ScorecardData, ctx: CGContext) {
         ctx.setStrokeColor(config.gridColor.withAlphaComponent(0.55).cgColor)
         ctx.setLineWidth(0.6)
@@ -419,16 +430,18 @@ final class ScorecardImageGenerator {
         NSAttributedString(string: inningText, attributes: inningAttrs)
             .draw(at: CGPoint(x: inset.maxX - iSize.width, y: inset.minY))
 
-        let batterAttrs: [NSAttributedString.Key: Any] = [.font: batterFont, .foregroundColor: config.pencilColor]
+        // Last name only, matching the abbreviation the rest of the app's scorecard already uses
+        // for batters — a full "Andreanne Leblanc" at this font size wraps to two lines, and the
+        // fixed ~1-line-tall draw box silently clipped the second line off entirely.
+        let displayName = batterDisplayName(for: event, scorecard: scorecard)
         let maxNameWidth = inset.width - iSize.width - 8
-        let batterBounds = (event.batterName as NSString).boundingRect(
-            with: CGSize(width: maxNameWidth, height: batterFont.lineHeight * 1.3),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: batterAttrs,
-            context: nil
-        )
-        let batterHeight = ceil(min(batterBounds.height, batterFont.lineHeight * 1.3))
-        (event.batterName as NSString).draw(
+        var fittedBatterFont = batterFont
+        while (displayName as NSString).size(withAttributes: [.font: fittedBatterFont]).width > maxNameWidth && fittedBatterFont.pointSize > 16 {
+            fittedBatterFont = fittedBatterFont.withSize(fittedBatterFont.pointSize - 1)
+        }
+        let batterAttrs: [NSAttributedString.Key: Any] = [.font: fittedBatterFont, .foregroundColor: config.pencilColor]
+        let batterHeight = ceil(fittedBatterFont.lineHeight)
+        (displayName as NSString).draw(
             with: CGRect(x: inset.minX, y: inset.minY, width: maxNameWidth, height: batterHeight),
             options: [.usesLineFragmentOrigin, .usesFontLeading],
             attributes: batterAttrs,
@@ -483,7 +496,8 @@ final class ScorecardImageGenerator {
                 width: dSide,
                 height: dSide
             )
-            drawAtBatCell(in: diamondRect, event: event, accentColor: accent, ctx: ctx)
+            let resultFontSize = min(80, max(24, dSide * 0.4))
+            drawAtBatCell(in: diamondRect, event: event, accentColor: accent, resultFontSize: resultFontSize, ctx: ctx)
         }
     }
 
@@ -494,20 +508,28 @@ final class ScorecardImageGenerator {
         return w
     }
 
+    /// Only labels with a real, non-blank value are returned — leagues like WPBL that don't
+    /// report weather/attendance/duration/first-pitch (ScorecardData.gameInfo comes back empty)
+    /// shouldn't render a row of blank fill-in-the-blank cells in a data export; that treatment
+    /// is reserved for the intentional hand-fill .blank template.
     private func gatherGameInfo(scorecard: ScorecardData, labels: [String]) -> [GameInfoItem] {
         var infoMap: [String: String] = [:]
-        if let date = scorecard.gameDate {
+        if let date = scorecard.gameDate, !date.trimmingCharacters(in: .whitespaces).isEmpty {
             infoMap["DATE"] = date
         }
         let mapping = ["Venue": "VENUE", "Weather": "WEATHER", "Att": "ATTENDANCE", "T": "DURATION", "First pitch": "FIRST PITCH"]
         for item in scorecard.gameInfo {
             let raw = item.label.replacingOccurrences(of: ":", with: "").trimmingCharacters(in: .whitespaces)
+            guard let value = item.value, !value.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
             for (key, val) in mapping where raw.contains(key) {
-                infoMap[val] = item.value
+                infoMap[val] = value
                 break
             }
         }
-        return labels.map { GameInfoItem(label: $0, value: infoMap[$0] ?? "") }
+        return labels.compactMap { label in
+            guard let value = infoMap[label] else { return nil }
+            return GameInfoItem(label: label, value: value)
+        }
     }
 
     private func computeLayout(scorecard: ScorecardData, linescore: Linescore?, options: ScorecardExportMode = .full) -> LayoutInfo {
@@ -520,7 +542,7 @@ final class ScorecardImageGenerator {
         let homeColWidth = actualColumnWidth(layout: homeLayout)
         let colWidth = max(awayColWidth, homeColWidth)
 
-        let inningCount = max(9, linescore?.innings?.count ?? 9)
+        let inningCount = max(scorecard.scheduledInnings, linescore?.innings?.count ?? scorecard.scheduledInnings)
         let sbTeamCol: CGFloat = 140
         let sbInningCol: CGFloat = 65
         let sbStatCol: CGFloat = 70
@@ -554,7 +576,12 @@ final class ScorecardImageGenerator {
         let homePHeight = config.headerHeight + CGFloat(homePRows) * config.pRowHeight
         let pitcherSectionHeight = max(awayPHeight, homePHeight)
 
-        let umpireHeight: CGFloat = 24
+        // The .blank template always shows fill-in-the-blank umpire lines regardless of league —
+        // that's its whole purpose. Everywhere else, only real umpire data earns the section;
+        // WPBL has none, and blank "HP: ___" placeholders look unfinished next to an otherwise
+        // fully-populated export.
+        let showUmpireSection = options == .blank || !scorecard.umpires.isEmpty
+        let umpireHeight: CGFloat = showUmpireSection ? 24 : 0
 
         var totalHeight: CGFloat = config.margin
         totalHeight += 120                    // scoreboard + game info (side by side)
@@ -564,8 +591,10 @@ final class ScorecardImageGenerator {
         totalHeight += 8                      // gap before pitcher title
         totalHeight += 34                     // pitcher section title
         totalHeight += pitcherSectionHeight
-        totalHeight += 8                      // gap before umpires
-        totalHeight += umpireHeight
+        if showUmpireSection {
+            totalHeight += 8                  // gap before umpires
+            totalHeight += umpireHeight
+        }
         totalHeight += config.margin
 
         return LayoutInfo(
@@ -640,9 +669,11 @@ final class ScorecardImageGenerator {
 
         currentY += layout.pitcherSectionHeight
 
-        currentY += 8
-        let umpires = hasUmpires ? scorecard.umpires : ScorecardImageGenerator.defaultUmpirePositions
-        drawUmpireLine(in: CGRect(x: config.margin, y: currentY, width: layout.contentWidth, height: layout.umpireHeight), umpires: umpires, drawData: options.showUmpires && hasUmpires, ctx: ctx)
+        if options == .blank || hasUmpires {
+            currentY += 8
+            let umpires = hasUmpires ? scorecard.umpires : ScorecardImageGenerator.defaultUmpirePositions
+            drawUmpireLine(in: CGRect(x: config.margin, y: currentY, width: layout.contentWidth, height: layout.umpireHeight), umpires: umpires, drawData: options.showUmpires && hasUmpires, ctx: ctx)
+        }
     }
 
     // MARK: - Drawing Helpers
@@ -665,7 +696,7 @@ final class ScorecardImageGenerator {
         let inningColWidth: CGFloat = 65
         let statColWidth: CGFloat = 70
         let separatorGap: CGFloat = 15
-        let inningCount = max(9, linescore?.innings?.count ?? 9)
+        let inningCount = max(scorecard.scheduledInnings, linescore?.innings?.count ?? scorecard.scheduledInnings)
         let tableWidth = teamColWidth + CGFloat(inningCount) * inningColWidth + separatorGap + 3 * statColWidth
         let rowHeight: CGFloat = 40
         let tableHeight: CGFloat = 3 * rowHeight
@@ -1181,7 +1212,7 @@ final class ScorecardImageGenerator {
         drawBaseBox(at: home, occupied: false, base: 0, diamondColor: config.pencilColor, baseSize: baseSize, baseStrokeWidth: baseStrokeWidth, ctx: ctx)
     }
 
-    private func drawAtBatCell(in rect: CGRect, event: AtBatEvent, accentColor: UIColor, ctx: CGContext) {
+    private func drawAtBatCell(in rect: CGRect, event: AtBatEvent, accentColor: UIColor, resultFontSize: CGFloat? = nil, ctx: CGContext) {
         if event.result.isLive {
             ctx.saveGState()
             ctx.setAlpha(0.3)
@@ -1204,7 +1235,7 @@ final class ScorecardImageGenerator {
         drawDiamondShape(in: dRect, home: home, first: first, second: second, third: third, shouldUseAccent: shouldUseAccent, diamondColor: diamondColor, ctx: ctx)
         drawProgressPath(in: dRect, event: event, home: home, first: first, second: second, third: third, diamondColor: diamondColor, progressLineWidth: progressLineWidth, ctx: ctx)
         drawBaseBoxes(event: event, home: home, first: first, second: second, third: third, diamondColor: diamondColor, baseSize: baseSize, baseStrokeWidth: baseStrokeWidth, ctx: ctx)
-        drawResultAndCounts(in: rect, dRect: dRect, event: event, diamondColor: diamondColor, ctx: ctx)
+        drawResultAndCounts(in: rect, dRect: dRect, event: event, diamondColor: diamondColor, baseFontSize: resultFontSize, ctx: ctx)
     }
 
     private func squareDiamondRect(in rect: CGRect) -> CGRect {
@@ -1336,9 +1367,9 @@ final class ScorecardImageGenerator {
         bPath.stroke()
     }
 
-    private func drawResultAndCounts(in rect: CGRect, dRect: CGRect, event: AtBatEvent, diamondColor: UIColor, ctx: CGContext) {
+    private func drawResultAndCounts(in rect: CGRect, dRect: CGRect, event: AtBatEvent, diamondColor: UIColor, baseFontSize: CGFloat? = nil, ctx: CGContext) {
         let res = event.result.displayText
-        var font = config.resultFont
+        var font = baseFontSize.map { config.resultFont.withSize($0) } ?? config.resultFont
         let maxWidth = rect.width * 0.8
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineHeightMultiple = 0.75
@@ -1549,7 +1580,7 @@ final class ScorecardImageGenerator {
     
     private func computeColumnLayout(for data: ScorecardData, isHome: Bool) -> ColumnLayout {
         let lineup = isHome ? data.lineups.home : data.lineups.away
-        let inningCount = max(data.innings.count, 9)
+        let inningCount = max(data.innings.count, data.scheduledInnings)
         var layouts: [InningColumnLayout] = [], runningColumn = 0
         for i in 1...inningCount {
             let events = data.events(inningNum: i, isHomeBatting: isHome)
