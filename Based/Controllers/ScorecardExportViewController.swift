@@ -45,6 +45,21 @@ class ScorecardExportViewController: UIViewController {
     private var previewAspectConstraint: NSLayoutConstraint?
     private var previewMaxHeightConstraint: NSLayoutConstraint?
 
+    private var imageButton: UIButton?
+    private var pdfButton: UIButton?
+    private var choosePlaysButton: UIButton?
+    private let previewPlaceholderLabel: UILabel = {
+        let l = UILabel()
+        l.text = "Pick plays to preview\nyour highlights card"
+        l.font = UIFont(name: AppFont.patrickHand, size: 20) ?? .systemFont(ofSize: 20)
+        l.textColor = AppColors.pencil.withAlphaComponent(0.55)
+        l.textAlignment = .center
+        l.numberOfLines = 0
+        l.isHidden = true
+        l.translatesAutoresizingMaskIntoConstraints = false
+        return l
+    }()
+
     private enum AppearanceOption: Int, CaseIterable {
         case light = 0
         case dark = 1
@@ -147,6 +162,7 @@ class ScorecardExportViewController: UIViewController {
         let previewContainer = UIView()
         previewContainer.translatesAutoresizingMaskIntoConstraints = false
         previewContainer.addSubview(previewImageView)
+        previewContainer.addSubview(previewPlaceholderLabel)
 
         contentStack.addArrangedSubview(previewContainer)
         contentStack.addArrangedSubview(makeSectionHeader("APPEARANCE"))
@@ -176,6 +192,11 @@ class ScorecardExportViewController: UIViewController {
             previewImageView.widthAnchor.constraint(lessThanOrEqualTo: previewContainer.widthAnchor),
             previewImageView.bottomAnchor.constraint(equalTo: previewContainer.bottomAnchor),
 
+            previewPlaceholderLabel.centerXAnchor.constraint(equalTo: previewImageView.centerXAnchor),
+            previewPlaceholderLabel.centerYAnchor.constraint(equalTo: previewImageView.centerYAnchor),
+            previewPlaceholderLabel.leadingAnchor.constraint(greaterThanOrEqualTo: previewImageView.leadingAnchor, constant: 20),
+            previewPlaceholderLabel.trailingAnchor.constraint(lessThanOrEqualTo: previewImageView.trailingAnchor, constant: -20),
+
             buttonStack.heightAnchor.constraint(equalToConstant: 50),
         ])
 
@@ -186,7 +207,7 @@ class ScorecardExportViewController: UIViewController {
     }
 
     private func previewAspectMultiplier() -> CGFloat {
-        selectedMode.isShareCard ? 1280.0 / 720.0 : 612.0 / 792.0
+        612.0 / 792.0
     }
 
     private func applyPreviewAspectMultiplier() {
@@ -197,12 +218,6 @@ class ScorecardExportViewController: UIViewController {
         )
         c.isActive = true
         previewAspectConstraint = c
-
-        if previewMaxHeightConstraint == nil {
-            let cap = previewImageView.heightAnchor.constraint(lessThanOrEqualToConstant: 520)
-            previewMaxHeightConstraint = cap
-        }
-        previewMaxHeightConstraint?.isActive = selectedMode.isShareCard
     }
 
     private func makeSectionHeader(_ title: String) -> UILabel {
@@ -306,7 +321,16 @@ class ScorecardExportViewController: UIViewController {
         selectedMode = mode
         updateCheckmarks()
         applyPreviewAspectMultiplier()
+        updateModeChrome()
         refreshPreview()
+    }
+
+    private func updateModeChrome() {
+        let isHighlights = selectedMode.isHighlights
+        imageButton?.isHidden = isHighlights
+        pdfButton?.isHidden = isHighlights
+        choosePlaysButton?.isHidden = !isHighlights
+        previewPlaceholderLabel.isHidden = !isHighlights
     }
 
     @objc private func appearanceRowTapped(_ gesture: UITapGestureRecognizer) {
@@ -343,10 +367,18 @@ class ScorecardExportViewController: UIViewController {
         let pdfBtn = makeExportButton(title: "Save PDF", icon: "doc.richtext")
         pdfBtn.addTarget(self, action: #selector(sharePDFTapped), for: .touchUpInside)
 
-        exportButtons = [imageBtn, pdfBtn]
+        let chooseBtn = makeExportButton(title: "Choose Plays", icon: "chevron.right")
+        chooseBtn.addTarget(self, action: #selector(choosePlaysTapped), for: .touchUpInside)
+
+        exportButtons = [imageBtn, pdfBtn, chooseBtn]
+        imageButton = imageBtn
+        pdfButton = pdfBtn
+        choosePlaysButton = chooseBtn
 
         buttonStack.addArrangedSubview(imageBtn)
         buttonStack.addArrangedSubview(pdfBtn)
+        buttonStack.addArrangedSubview(chooseBtn)
+        updateModeChrome()
     }
 
     private func makeExportButton(title: String, icon: String) -> UIButton {
@@ -374,6 +406,10 @@ class ScorecardExportViewController: UIViewController {
 
     private func refreshPreview() {
         previewTask?.cancel()
+        if selectedMode.isHighlights {
+            previewImageView.image = nil
+            return
+        }
         let style = selectedStyle
         previewTask = Task {
             let generator = ScorecardImageGenerator()
@@ -387,6 +423,11 @@ class ScorecardExportViewController: UIViewController {
 
     @objc private func cancelTapped() {
         dismiss(animated: true)
+    }
+
+    @objc private func choosePlaysTapped() {
+        let picker = HighlightsPickerViewController(scorecard: scorecard, linescore: linescore, style: selectedStyle)
+        navigationController?.pushViewController(picker, animated: true)
     }
 
     @objc private func shareImageTapped() {
