@@ -315,78 +315,126 @@ final class ScorecardImageGenerator {
         return nil
     }
 
-    private func highlightsCellRects(count: Int, in rect: CGRect) -> [CGRect] {
-        guard count > 0 else { return [] }
-        let gap = Highlights.cellGap
-        switch count {
-        case 1:
-            return [rect]
-        case 2, 3:
-            let rows = count
-            let cellH = (rect.height - CGFloat(rows - 1) * gap) / CGFloat(rows)
-            return (0..<rows).map { i in
-                CGRect(x: rect.minX, y: rect.minY + CGFloat(i) * (cellH + gap), width: rect.width, height: cellH)
-            }
-        case 4:
-            let cellW = (rect.width - gap) / 2
-            let cellH = (rect.height - gap) / 2
-            var rects: [CGRect] = []
-            for r in 0..<2 {
-                for c in 0..<2 {
-                    rects.append(CGRect(
-                        x: rect.minX + CGFloat(c) * (cellW + gap),
-                        y: rect.minY + CGFloat(r) * (cellH + gap),
-                        width: cellW,
-                        height: cellH
-                    ))
-                }
-            }
-            return rects
-        case 5:
-            let cellW = (rect.width - gap) / 2
-            let cellH = (rect.height - 2 * gap) / 3
-            var rects: [CGRect] = []
-            for r in 0..<2 {
-                for c in 0..<2 {
-                    rects.append(CGRect(
-                        x: rect.minX + CGFloat(c) * (cellW + gap),
-                        y: rect.minY + CGFloat(r) * (cellH + gap),
-                        width: cellW,
-                        height: cellH
-                    ))
-                }
-            }
-            rects.append(CGRect(
-                x: rect.minX,
-                y: rect.minY + 2 * (cellH + gap),
-                width: rect.width,
-                height: cellH
-            ))
-            return rects
-        default:
-            let cellW = (rect.width - gap) / 2
-            let cellH = (rect.height - 2 * gap) / 3
-            var rects: [CGRect] = []
-            for r in 0..<3 {
-                for c in 0..<2 {
-                    rects.append(CGRect(
-                        x: rect.minX + CGFloat(c) * (cellW + gap),
-                        y: rect.minY + CGFloat(r) * (cellH + gap),
-                        width: cellW,
-                        height: cellH
-                    ))
-                }
-            }
-            return rects
+    /// One full-width row per play, stacked vertically, rather than a 2-column grid. A grid only
+    /// gives each play half the card's width, and baseball play descriptions ("Andreanne Leblanc
+    /// singled to right center, RBI...") routinely run 80-140 characters — at half width they
+    /// wrapped to more lines than the fixed cell height budgeted for and got cut off with an
+    /// ellipsis. Full width roughly doubles the wrap width, which is the single biggest lever for
+    /// fitting the whole sentence without shrinking text into illegibility.
+    ///
+    /// Typography is shared across every row on the card (one binary-searched scale factor), not
+    /// computed per row — rows with a short description shouldn't render in a different type size
+    /// than rows with a long one just because they ended up shorter. What varies per row is
+    /// height: a search finds the largest uniform scale whose *total* natural content height
+    /// still fits the card, so fewer/shorter plays render bigger (using the space instead of
+    /// leaving it blank) and more/longer plays render smaller — always filling the card exactly,
+    /// never overflowing it. Leftover space becomes gap between rows (capped) plus equal top/
+    /// bottom padding, rather than dead air trapped inside a single row.
+    private func drawHighlightsGrid(in rect: CGRect, plays: [AtBatEvent], scorecard: ScorecardData, ctx: CGContext) {
+        let capped = Array(plays.prefix(Highlights.maxPlays))
+        guard !capped.isEmpty else { return }
+        let count = capped.count
+        let minGap: CGFloat = 14
+        let maxGap: CGFloat = 44
+
+        func naturalHeights(at scale: CGFloat) -> [CGFloat] {
+            let sizes = HighlightsRowSizes(scale: scale)
+            return capped.map { highlightsNaturalRowHeight(for: $0, cardWidth: rect.width, sizes: sizes) }
+        }
+
+        let targetRows = rect.height - CGFloat(count - 1) * minGap
+        var lo: CGFloat = 0.6, hi: CGFloat = 2.6
+        for _ in 0..<20 {
+            let mid = (lo + hi) / 2
+            if naturalHeights(at: mid).reduce(0, +) > targetRows { hi = mid } else { lo = mid }
+        }
+        let scale = min(2.6, max(0.6, lo))
+        let sizes = HighlightsRowSizes(scale: scale)
+        let heights = naturalHeights(at: scale)
+        let naturalTotal = heights.reduce(0, +)
+        let leftover = max(0, rect.height - CGFloat(count - 1) * minGap - naturalTotal)
+        let gap = min(maxGap, minGap + leftover / CGFloat(max(1, count - 1)))
+        let usedTotal = naturalTotal + CGFloat(count - 1) * gap
+        let topPad = max(0, (rect.height - usedTotal) / 2)
+
+        var y = rect.minY + topPad
+        for (i, event) in capped.enumerated() {
+            let h = heights[i]
+            let rowRect = CGRect(x: rect.minX, y: y, width: rect.width, height: h)
+            drawHighlightsPlayRow(in: rowRect, event: event, scorecard: scorecard, sizes: sizes, ctx: ctx)
+            y += h + gap
         }
     }
 
-    private func drawHighlightsGrid(in rect: CGRect, plays: [AtBatEvent], scorecard: ScorecardData, ctx: CGContext) {
-        let capped = Array(plays.prefix(Highlights.maxPlays))
-        let rects = highlightsCellRects(count: capped.count, in: rect)
-        for (i, event) in capped.enumerated() where i < rects.count {
-            drawHighlightsCell(in: rects[i], event: event, scorecard: scorecard, ctx: ctx)
+    /// The one set of font/glyph sizes shared by every row on a given card, at a given scale
+    /// factor found by drawHighlightsGrid's search. Base sizes were tuned by eye against real
+    /// WPBL and MLB games at 1-6 plays.
+    private struct HighlightsRowSizes {
+        let diamondSide: CGFloat
+        let metaSize: CGFloat
+        let nameSize: CGFloat
+        let descSize: CGFloat
+
+        init(scale: CGFloat) {
+            diamondSide = 78 * scale
+            // Capped independently of `scale`, unlike the other sizes: this is a compact label
+            // ("TOP 1 · DOUBLE · VS. PADGHAM"), not hero text, and letting it grow all the way to
+            // a 1-play card's ~2.6x scale made it wide enough to wrap — which silently clipped
+            // the pitcher's name, since its height budget assumed a single line.
+            metaSize = min(22, 15 * scale)
+            nameSize = 30 * scale
+            descSize = 20 * scale
         }
+    }
+
+    /// "TOP 1 · DOUBLE · VS. PADGHAM" — half/inning, plain-English result, and the pitcher, all on
+    /// one compact meta line. Shared by the height estimate and the actual draw so they can never
+    /// disagree about what text is being measured.
+    private func highlightsMetaText(for event: AtBatEvent) -> String {
+        var parts = ["\(event.isTop ? "TOP" : "BOT") \(event.inning)"]
+        let resultLabel = highlightsResultLabel(for: event.result)
+        if !resultLabel.isEmpty { parts.append(resultLabel.uppercased()) }
+        parts.append("vs. \(event.pitcherName)".uppercased())
+        return parts.joined(separator: "  \u{00B7}  ")
+    }
+
+    /// How tall a row needs to be at these sizes to fit its meta line, batter name, and full
+    /// description without truncation. Mirrors drawHighlightsPlayRow's own layout math exactly —
+    /// both derive positions from the same `sizes` struct — so the estimate here always matches
+    /// what actually gets drawn. The meta line's height is measured the same wrapping-aware way
+    /// as the description, not assumed to be one line — metaSize is capped low enough that it
+    /// practically never wraps, but "practically never" isn't "never," and an unmeasured second
+    /// line is exactly how the batter name and this meta line each got silently clipped before.
+    private func highlightsNaturalRowHeight(for event: AtBatEvent, cardWidth: CGFloat, sizes: HighlightsRowSizes) -> CGFloat {
+        let barWidth: CGFloat = 5
+        let contentWidth = cardWidth - barWidth - 18
+        let dSide = min(sizes.diamondSide, contentWidth * 0.4)
+        let textWidth = contentWidth - dSide - 20
+
+        let metaFont = UIFont(name: AppFont.ibmPlexBold, size: sizes.metaSize) ?? .systemFont(ofSize: sizes.metaSize, weight: .bold)
+        let nameFont = UIFont(name: AppFont.permanentMarker, size: sizes.nameSize) ?? .systemFont(ofSize: sizes.nameSize, weight: .bold)
+        let descFont = UIFont(name: AppFont.patrickHand, size: sizes.descSize) ?? .systemFont(ofSize: sizes.descSize)
+
+        // .kern must match the draw call's attributes exactly — boundingRect's wrap point shifts
+        // with kerning (extra letter-spacing compounds across a ~35-character line), and using a
+        // kern-less measurement here previously under-counted the meta line by a full line
+        // whenever it wrapped, stealing that line's height from the description below it.
+        let metaBounds = (highlightsMetaText(for: event) as NSString).boundingRect(
+            with: CGSize(width: textWidth, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: metaFont, .kern: 1.0],
+            context: nil
+        )
+        let nameHeight = ceil(nameFont.lineHeight)
+        let descBounds = (event.description as NSString).boundingRect(
+            with: CGSize(width: textWidth, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: descFont],
+            context: nil
+        )
+
+        let textNeeded = ceil(metaBounds.height) + 2 + nameHeight + 4 + ceil(descBounds.height)
+        return max(textNeeded, dSide)
     }
 
     /// The scorecard's own lineup abbreviation (last name, suffix-aware — same field the grid's
@@ -400,104 +448,134 @@ final class ScorecardImageGenerator {
         return event.batterName.components(separatedBy: " ").last ?? event.batterName
     }
 
-    private func drawHighlightsCell(in rect: CGRect, event: AtBatEvent, scorecard: ScorecardData, ctx: CGContext) {
-        ctx.setStrokeColor(config.gridColor.withAlphaComponent(0.55).cgColor)
-        ctx.setLineWidth(0.6)
-        UIBezierPath(rect: rect.insetBy(dx: 0.5, dy: 0.5)).stroke()
-
-        let s = min(rect.width, rect.height)
-        let batterFontSize = min(60, max(20, s * 0.12))
-        let pitcherFontSize = min(36, max(14, s * 0.075))
-        let descFontSize = min(30, max(14, s * 0.07))
-        let inningFontSize = min(18, max(10, s * 0.05))
-
-        let batterFont = UIFont(name: AppFont.permanentMarker, size: batterFontSize) ?? .systemFont(ofSize: batterFontSize, weight: .bold)
-        let pitcherFont = UIFont(name: AppFont.patrickHand, size: pitcherFontSize) ?? .systemFont(ofSize: pitcherFontSize)
-        let descFont = UIFont(name: AppFont.patrickHand, size: descFontSize) ?? .systemFont(ofSize: descFontSize)
-        let inningFont = UIFont(name: AppFont.ibmPlexBold, size: inningFontSize) ?? .systemFont(ofSize: inningFontSize, weight: .bold)
-
-        let accent = scorecard.teamAccentColor(for: event)
-        let padding: CGFloat = max(10, s * 0.045)
-        let inset = rect.insetBy(dx: padding, dy: padding)
-
-        let inningText = "\(event.isTop ? "TOP" : "BOT") \(event.inning)"
-        let inningAttrs: [NSAttributedString.Key: Any] = [
-            .font: inningFont,
-            .foregroundColor: accent.withAlphaComponent(0.85),
-            .kern: 1.4
-        ]
-        let iSize = (inningText as NSString).size(withAttributes: inningAttrs)
-        NSAttributedString(string: inningText, attributes: inningAttrs)
-            .draw(at: CGPoint(x: inset.maxX - iSize.width, y: inset.minY))
-
-        // Last name only, matching the abbreviation the rest of the app's scorecard already uses
-        // for batters — a full "Andreanne Leblanc" at this font size wraps to two lines, and the
-        // fixed ~1-line-tall draw box silently clipped the second line off entirely.
-        let displayName = batterDisplayName(for: event, scorecard: scorecard)
-        let maxNameWidth = inset.width - iSize.width - 8
-        var fittedBatterFont = batterFont
-        while (displayName as NSString).size(withAttributes: [.font: fittedBatterFont]).width > maxNameWidth && fittedBatterFont.pointSize > 16 {
-            fittedBatterFont = fittedBatterFont.withSize(fittedBatterFont.pointSize - 1)
+    /// ScorecardResult.displayText ("1B", "F8", "GIDP") is scorecard notation, the right call for
+    /// the dense batter/inning grid where a literate reader expects it. A highlights card is built
+    /// to be understood by anyone scrolling past it, so the headline uses plain English instead.
+    private func highlightsResultLabel(for result: ScorecardResult) -> String {
+        switch result {
+        case .single: return "Single"
+        case .double: return "Double"
+        case .triple: return "Triple"
+        case .homeRun: return "Home Run"
+        case .walk: return "Walk"
+        case .intentionalWalk: return "Intentional Walk"
+        case .hitByPitch: return "Hit By Pitch"
+        case .strikeoutSwinging, .strikeoutLooking: return "Strikeout"
+        case .flyout: return "Flyout"
+        case .popout: return "Pop Out"
+        case .lineout: return "Lineout"
+        case .groundout: return "Groundout"
+        case .forceOut: return "Force Out"
+        case .fieldersChoice: return "Fielder's Choice"
+        case .doublePlay: return "Double Play"
+        case .triplePlay: return "Triple Play"
+        case .sacFly: return "Sac Fly"
+        case .sacBunt: return "Sac Bunt"
+        case .fieldError: return "Error"
+        case .stolenBase: return "Stolen Base"
+        case .caughtStealing: return "Caught Stealing"
+        case .pickoff: return "Pickoff"
+        case .balk: return "Balk"
+        case .wildPitch: return "Wild Pitch"
+        case .passedBall: return "Passed Ball"
+        case .live, .runnerOnly, .empty: return ""
+        case .other(let text): return text.capitalized
         }
-        let batterAttrs: [NSAttributedString.Key: Any] = [.font: fittedBatterFont, .foregroundColor: config.pencilColor]
-        let batterHeight = ceil(fittedBatterFont.lineHeight)
-        (displayName as NSString).draw(
-            with: CGRect(x: inset.minX, y: inset.minY, width: maxNameWidth, height: batterHeight),
+    }
+
+
+    /// Small diamond badge on the left, everything else stacked in a full-width text column on
+    /// the right — the same "icon beside unlimited-line text" shape as the in-app TimelineCell
+    /// (88x80pt diamond, description with numberOfLines=0), which never has this problem. The
+    /// diamond here trades the full base/out/count detail of drawAtBatCell (illegible at badge
+    /// size) for a single bold result code and a "did this score" fill — a supporting glyph, not
+    /// the dominant element competing with text for space. `sizes` is shared across every row on
+    /// the card (see drawHighlightsGrid); `rect.height` is only used to vertically center content.
+    private func drawHighlightsPlayRow(in rect: CGRect, event: AtBatEvent, scorecard: ScorecardData, sizes: HighlightsRowSizes, ctx: CGContext) {
+        let accent = scorecard.teamAccentColor(for: event)
+
+        let barWidth: CGFloat = 5
+        ctx.setFillColor(accent.cgColor)
+        ctx.fill(CGRect(x: rect.minX, y: rect.minY, width: barWidth, height: rect.height))
+
+        let contentRect = CGRect(x: rect.minX + barWidth + 18, y: rect.minY, width: rect.width - barWidth - 18, height: rect.height)
+        let dSide = min(sizes.diamondSide, contentRect.width * 0.4)
+        let textRect = CGRect(
+            x: contentRect.minX + dSide + 20,
+            y: contentRect.minY,
+            width: contentRect.width - dSide - 20,
+            height: contentRect.height
+        )
+
+        // Meta line: half/inning, plain-English result, and the pitcher — e.g. "TOP 1 · DOUBLE · VS. PADGHAM"
+        let metaFont = UIFont(name: AppFont.ibmPlexBold, size: sizes.metaSize) ?? .systemFont(ofSize: sizes.metaSize, weight: .bold)
+        let metaText = highlightsMetaText(for: event)
+        let metaAttrs: [NSAttributedString.Key: Any] = [.font: metaFont, .foregroundColor: accent, .kern: 1.0]
+        let metaBounds = (metaText as NSString).boundingRect(
+            with: CGSize(width: textRect.width, height: .greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: batterAttrs,
+            attributes: metaAttrs,
+            context: nil
+        )
+        let metaHeight = ceil(metaBounds.height)
+        (metaText as NSString).draw(
+            with: CGRect(x: textRect.minX, y: textRect.minY, width: textRect.width, height: metaHeight + 4),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: metaAttrs,
             context: nil
         )
 
-        let pitcherText = "vs. \(event.pitcherName)"
-        let pitcherAttrs: [NSAttributedString.Key: Any] = [.font: pitcherFont, .foregroundColor: config.pencilColor.withAlphaComponent(0.65)]
-        let pitcherY = inset.minY + batterHeight + 1
-        let pitcherHeight = ceil(pitcherFont.lineHeight + 2)
-        (pitcherText as NSString).draw(
-            with: CGRect(x: inset.minX, y: pitcherY, width: inset.width, height: pitcherHeight),
+        // Batter name — last name only (see batterDisplayName), the card's hero text.
+        let nameFont = UIFont(name: AppFont.permanentMarker, size: sizes.nameSize) ?? .systemFont(ofSize: sizes.nameSize, weight: .bold)
+        let displayName = batterDisplayName(for: event, scorecard: scorecard)
+        let nameY = textRect.minY + metaHeight + 2
+        let nameAttrs: [NSAttributedString.Key: Any] = [.font: nameFont, .foregroundColor: config.pencilColor]
+        (displayName as NSString).draw(at: CGPoint(x: textRect.minX, y: nameY), withAttributes: nameAttrs)
+        let nameHeight = ceil(nameFont.lineHeight)
+
+        // Description — sized identically to every other row on the card, guaranteed to fit by
+        // drawHighlightsGrid's height search (never truncated, never needs its own shrink pass).
+        let descFont = UIFont(name: AppFont.patrickHand, size: sizes.descSize) ?? .systemFont(ofSize: sizes.descSize)
+        let descTop = nameY + nameHeight + 4
+        (event.description as NSString).draw(
+            with: CGRect(x: textRect.minX, y: descTop, width: textRect.width, height: max(0, textRect.maxY - descTop)),
             options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: pitcherAttrs,
+            attributes: [.font: descFont, .foregroundColor: config.pencilColor.withAlphaComponent(0.85)],
             context: nil
         )
 
-        let descText = event.description
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.lineBreakMode = .byTruncatingTail
-        paragraph.alignment = .left
-        let descAttrs: [NSAttributedString.Key: Any] = [
-            .font: descFont,
-            .foregroundColor: config.pencilColor.withAlphaComponent(0.85),
-            .paragraphStyle: paragraph
-        ]
-        let descMaxLines: Int = rect.height > 600 ? 4 : (rect.height > 300 ? 3 : 2)
-        let descAvailableHeight = descFont.lineHeight * CGFloat(descMaxLines) + 2
-        let descBoundingRect = (descText as NSString).boundingRect(
-            with: CGSize(width: inset.width, height: descAvailableHeight),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: descAttrs,
-            context: nil
-        )
-        let descHeight = min(ceil(descBoundingRect.height), descAvailableHeight)
-        let descY = inset.maxY - descHeight
-        (descText as NSString).draw(
-            with: CGRect(x: inset.minX, y: descY, width: inset.width, height: descHeight),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: descAttrs,
-            context: nil
-        )
+        // Diamond badge, vertically centered against the row.
+        if dSide > 20 {
+            let diamondRect = CGRect(x: contentRect.minX, y: contentRect.midY - dSide / 2, width: dSide, height: dSide)
+            let home = CGPoint(x: diamondRect.midX, y: diamondRect.maxY)
+            let first = CGPoint(x: diamondRect.maxX, y: diamondRect.midY)
+            let second = CGPoint(x: diamondRect.midX, y: diamondRect.minY)
+            let third = CGPoint(x: diamondRect.minX, y: diamondRect.midY)
+            let diamondPath = UIBezierPath()
+            diamondPath.move(to: home); diamondPath.addLine(to: first); diamondPath.addLine(to: second); diamondPath.addLine(to: third); diamondPath.close()
 
-        let diamondTop = pitcherY + pitcherHeight + 4
-        let diamondBottom = descY - 4
-        let diamondArea = CGRect(x: inset.minX, y: diamondTop, width: inset.width, height: max(0, diamondBottom - diamondTop))
-        let dSide = min(diamondArea.width, diamondArea.height)
-        if dSide > 24 {
-            let diamondRect = CGRect(
-                x: diamondArea.midX - dSide / 2,
-                y: diamondArea.midY - dSide / 2,
-                width: dSide,
-                height: dSide
+            let scored = event.bases.home || event.result.isHomeRun
+            (scored ? accent.withAlphaComponent(0.18) : config.pencilColor.withAlphaComponent(0.06)).setFill()
+            diamondPath.fill()
+            accent.setStroke()
+            diamondPath.lineWidth = 2
+            diamondPath.stroke()
+
+            let codeFont = UIFont(name: AppFont.permanentMarker, size: dSide * 0.22) ?? .systemFont(ofSize: dSide * 0.22, weight: .bold)
+            let codeAttrs: [NSAttributedString.Key: Any] = [.font: codeFont, .foregroundColor: accent]
+            let codeText = event.result.displayText
+            let codeBounds = (codeText as NSString).boundingRect(
+                with: CGSize(width: dSide * 0.9, height: dSide * 0.9),
+                options: [.usesLineFragmentOrigin, .usesFontLeading],
+                attributes: codeAttrs,
+                context: nil
             )
-            let resultFontSize = min(80, max(24, dSide * 0.4))
-            drawAtBatCell(in: diamondRect, event: event, accentColor: accent, resultFontSize: resultFontSize, ctx: ctx)
+            (codeText as NSString).draw(
+                with: CGRect(x: diamondRect.midX - codeBounds.width / 2, y: diamondRect.midY - codeBounds.height / 2, width: codeBounds.width, height: codeBounds.height),
+                options: [.usesLineFragmentOrigin, .usesFontLeading],
+                attributes: codeAttrs,
+                context: nil
+            )
         }
     }
 
@@ -1212,7 +1290,7 @@ final class ScorecardImageGenerator {
         drawBaseBox(at: home, occupied: false, base: 0, diamondColor: config.pencilColor, baseSize: baseSize, baseStrokeWidth: baseStrokeWidth, ctx: ctx)
     }
 
-    private func drawAtBatCell(in rect: CGRect, event: AtBatEvent, accentColor: UIColor, resultFontSize: CGFloat? = nil, ctx: CGContext) {
+    private func drawAtBatCell(in rect: CGRect, event: AtBatEvent, accentColor: UIColor, ctx: CGContext) {
         if event.result.isLive {
             ctx.saveGState()
             ctx.setAlpha(0.3)
@@ -1235,7 +1313,7 @@ final class ScorecardImageGenerator {
         drawDiamondShape(in: dRect, home: home, first: first, second: second, third: third, shouldUseAccent: shouldUseAccent, diamondColor: diamondColor, ctx: ctx)
         drawProgressPath(in: dRect, event: event, home: home, first: first, second: second, third: third, diamondColor: diamondColor, progressLineWidth: progressLineWidth, ctx: ctx)
         drawBaseBoxes(event: event, home: home, first: first, second: second, third: third, diamondColor: diamondColor, baseSize: baseSize, baseStrokeWidth: baseStrokeWidth, ctx: ctx)
-        drawResultAndCounts(in: rect, dRect: dRect, event: event, diamondColor: diamondColor, baseFontSize: resultFontSize, ctx: ctx)
+        drawResultAndCounts(in: rect, dRect: dRect, event: event, diamondColor: diamondColor, ctx: ctx)
     }
 
     private func squareDiamondRect(in rect: CGRect) -> CGRect {
@@ -1367,9 +1445,9 @@ final class ScorecardImageGenerator {
         bPath.stroke()
     }
 
-    private func drawResultAndCounts(in rect: CGRect, dRect: CGRect, event: AtBatEvent, diamondColor: UIColor, baseFontSize: CGFloat? = nil, ctx: CGContext) {
+    private func drawResultAndCounts(in rect: CGRect, dRect: CGRect, event: AtBatEvent, diamondColor: UIColor, ctx: CGContext) {
         let res = event.result.displayText
-        var font = baseFontSize.map { config.resultFont.withSize($0) } ?? config.resultFont
+        var font = config.resultFont
         let maxWidth = rect.width * 0.8
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineHeightMultiple = 0.75
