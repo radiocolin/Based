@@ -39,13 +39,28 @@ struct RunnerBaseState {
         }
     }
 
+    /// A runner physically passes through every intermediate base to reach a further one — a
+    /// single that sends a runner from first to third never stops her at second, but the
+    /// scorecard path must still be drawn unbroken through it. Each case therefore cascades
+    /// through every earlier base the runner didn't already start this half-inning on, otherwise
+    /// the diamond draws a disconnected floating segment (e.g. second-to-third with no
+    /// first-to-second line feeding into it) whenever a runner skips stopping at an intermediate
+    /// base. The `priorBase` guard exists for MLB's placed extra-innings runner, who can start a
+    /// half-inning already on second or third — cascading unconditionally would fabricate a line
+    /// for a leg she never actually ran this inning.
     mutating func advanceRunner(to end: String) {
+        let priorBase = currentBase ?? 0
         switch end {
-        case "1b": reachFirst = true
-        case "2b": reachSecond = true; lineToSecond = true
-        case "3b": reachThird = true; lineToThird = true
+        case "1b":
+            reachFirst = true
+        case "2b":
+            reachSecond = true; lineToSecond = true
+        case "3b":
+            if priorBase < 2 { reachSecond = true; lineToSecond = true }
+            reachThird = true; lineToThird = true
         case "score", "home":
-            if reachSecond { reachThird = true; lineToThird = true }
+            if priorBase < 2 { reachSecond = true; lineToSecond = true }
+            if priorBase < 3 { reachThird = true; lineToThird = true }
             reachHome = true; lineToHome = true
         default: break
         }

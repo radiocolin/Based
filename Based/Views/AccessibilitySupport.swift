@@ -21,7 +21,11 @@ enum AccessibilitySupport {
 
     static func spokenGameTime(_ isoDate: String) -> String? {
         guard let date = gameDate(from: isoDate) else { return nil }
-        return accessibilityGameDateFormatter.string(from: date)
+        return spokenGameTime(date)
+    }
+
+    static func spokenGameTime(_ date: Date) -> String {
+        accessibilityGameDateFormatter.string(from: date)
     }
 
     static func joined(_ parts: [String?]) -> String {
@@ -188,26 +192,28 @@ enum AccessibilitySupport {
         return parts.joined(separator: ". ")
     }
 
-    static func gameCardDescription(_ game: ScheduleGame) -> String {
-        let awayName = game.teams.away.team.name ?? "Away"
-        let homeName = game.teams.home.team.name ?? "Home"
+    static func gameCardDescription(_ game: LeagueGame) -> String {
+        let awayName = game.awayTeamName
+        let homeName = game.homeTeamName
         var parts = ["\(awayName) at \(homeName)"]
 
-        let status = game.status.detailedState
-        let shouldSpeakScore = !["Scheduled", "Pre-Game"].contains(status)
-            && game.teams.away.score != nil
-            && game.teams.home.score != nil
+        let shouldSpeakScore = game.status != .scheduled && game.awayScore != nil && game.homeScore != nil
 
         if shouldSpeakScore {
-            let awayScore = game.teams.away.score.map(String.init) ?? "0"
-            let homeScore = game.teams.home.score.map(String.init) ?? "0"
+            let awayScore = game.awayScore.map(String.init) ?? "0"
+            let homeScore = game.homeScore.map(String.init) ?? "0"
             parts.append("Score, \(awayName) \(awayScore), \(homeName) \(homeScore)")
-        } else if let spokenTime = spokenGameTime(game.gameDate) {
-            parts.append("First pitch \(spokenTime)")
+        } else {
+            parts.append("First pitch \(spokenGameTime(game.startDate))")
         }
 
-        parts.append(status)
-        parts.append(game.venue?.name ?? "")
+        switch game.status {
+        case .final: parts.append("Final")
+        case .live: parts.append("Live")
+        case .scheduled: parts.append("Scheduled")
+        case .other(let text): parts.append(text)
+        }
+        parts.append(game.venue ?? "")
         return joined(parts)
     }
 

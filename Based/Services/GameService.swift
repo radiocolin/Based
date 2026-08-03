@@ -51,7 +51,7 @@ class GameService: GamePollingServiceDelegate {
 
     func startPolling(gamePk: Int, scheduledStartTime: Date? = nil) {
         currentGamePk = gamePk
-        pollingService.start(gamePk: gamePk, scheduledStartTime: scheduledStartTime)
+        pollingService.start(gamePk: String(gamePk), scheduledStartTime: scheduledStartTime)
     }
 
     func stopPolling() {
@@ -68,12 +68,13 @@ class GameService: GamePollingServiceDelegate {
 
     func willEnterForeground() {
         guard let gamePk = currentGamePk else { return }
-        pollingService.willEnterForeground(gamePk: gamePk)
+        pollingService.willEnterForeground(gamePk: String(gamePk))
     }
 
     // MARK: - GamePollingServiceDelegate
 
-    func pollingService(_ service: GamePollingService, shouldPerformUpdateFor gamePk: Int, sessionID: UUID) async throws {
+    func pollingService(_ service: GamePollingService, shouldPerformUpdateFor gamePk: String, sessionID: UUID) async throws {
+        guard let gamePk = Int(gamePk) else { return }
         try await performSmartUpdate(gamePk: gamePk, sessionID: sessionID)
     }
 

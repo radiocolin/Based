@@ -485,10 +485,10 @@ private enum ScorecardExamples {
     ) -> AtBatEvent {
         AtBatEvent(
             atBatIndex: 0,
-            batterId: 1,
+            batterId: "1",
             batterName: "Example Batter",
             pinchRunnerName: nil,
-            pitcherId: 2,
+            pitcherId: "2",
             pitcherName: "Example Pitcher",
             previousPitcherName: nil,
             inning: 1,

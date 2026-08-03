@@ -10,10 +10,11 @@ class ScheduleViewController: UIViewController {
     private var dateHeaderHeightConstraint: NSLayoutConstraint?
     
     private var collectionView: UICollectionView!
-    private var currentGames: [ScheduleGame] = []
+    private var currentGames: [LeagueGame] = []
     private var currentDate: Date = Date()
     private var hasAttemptedAutoEntry = false
     private var backgroundTime: Date?
+    private var provider: LeagueProvider { LeagueRegistry.shared.provider(for: LeagueSelectionStore.shared.selectedLeague) }
     
     // Date Picker Pop-up Overlay
     private let datePickerOverlay = UIView()
@@ -82,6 +83,7 @@ class ScheduleViewController: UIViewController {
         NotificationCenter.default.addObserver(self, selector: #selector(tintDidChange), name: TintService.tintDidChangeNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(appDidBecomeActive), name: UIApplication.didBecomeActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(appDidEnterBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(leagueSelectionChanged), name: LeagueSelectionStore.selectionDidChangeNotification, object: nil)
         
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: ScheduleViewController, _) in
             self.setupNavigationBar()
@@ -124,6 +126,12 @@ class ScheduleViewController: UIViewController {
 
     @objc private func appDidEnterBackground() {
         backgroundTime = Date()
+    }
+
+    @objc private func leagueSelectionChanged() {
+        setupNavigationBar()
+        hasAttemptedAutoEntry = false
+        loadSchedule(for: currentDate, triggerAutoEntry: true)
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -300,6 +308,12 @@ class ScheduleViewController: UIViewController {
             navigationBar.setNeedsLayout()
             navigationBar.layoutIfNeeded()
         }
+
+        updateLeagueSwitcher()
+    }
+
+    private func updateLeagueSwitcher() {
+        navigationItem.rightBarButtonItem = LeagueSwitcherBarButton.make()
     }
 
     private func configurePlainBarButtonAppearance(_ appearance: UIBarButtonItemAppearance, font: UIFont, color: UIColor) {
@@ -423,31 +437,37 @@ class ScheduleViewController: UIViewController {
 
     private enum ScheduleStatusPriority: Int {
         case live = 0
-        case delayedOrSuspended = 1
-        case scheduled = 2
-        case final = 3
+        case scheduled = 1
+        case final = 2
+        case other = 3
     }
 
-    private enum LiveProgressHalf: Int {
-        case end = 0
-        case bottom = 1
-        case middle = 2
-        case top = 3
-        case unknown = 4
-    }
+    private func sortedGames(_ games: [LeagueGame]) -> [LeagueGame] {
+        // Keyed by each game's own stamped league (not the ambient `provider`) so a league
+        // switch mid-fetch can't mismatch a game against the wrong favorites list.
+        var favoritesByLeague: [League: [String]] = [:]
+        func favoriteIndex(_ game: LeagueGame) -> Int? {
+            let favoriteIds = favoritesByLeague[game.league] ?? {
+                let ids = FavoritesService.shared.getFavoriteTeamIDs(for: game.league)
+                favoritesByLeague[game.league] = ids
+                return ids
+            }()
+            return favoriteIds.firstIndex { $0 == game.awayTeamID || $0 == game.homeTeamID }
+        }
 
-    private func sortedGames(_ games: [ScheduleGame]) -> [ScheduleGame] {
-        let favoriteIds = FavoritesService.shared.getFavoriteTeamIds()
-        
+        func statusPriority(_ game: LeagueGame) -> ScheduleStatusPriority {
+            switch game.status {
+            case .live: return .live
+            case .scheduled: return .scheduled
+            case .final: return .final
+            case .other: return .other
+            }
+        }
+
         return games.sorted { lhs, rhs in
-            let lhsAwayId = lhs.teams.away.team.id ?? 0
-            let lhsHomeId = lhs.teams.home.team.id ?? 0
-            let rhsAwayId = rhs.teams.away.team.id ?? 0
-            let rhsHomeId = rhs.teams.home.team.id ?? 0
-            
-            let lhsFavoriteIndex = favoriteIds.firstIndex { $0 == lhsAwayId || $0 == lhsHomeId }
-            let rhsFavoriteIndex = favoriteIds.firstIndex { $0 == rhsAwayId || $0 == rhsHomeId }
-            
+            let lhsFavoriteIndex = favoriteIndex(lhs)
+            let rhsFavoriteIndex = favoriteIndex(rhs)
+
             if let lIndex = lhsFavoriteIndex, let rIndex = rhsFavoriteIndex {
                 if lIndex != rIndex { return lIndex < rIndex }
             } else if lhsFavoriteIndex != nil {
@@ -456,103 +476,26 @@ class ScheduleViewController: UIViewController {
                 return false
             }
 
-            let lhsStart = scheduleDate(from: lhs.gameDate)
-            let rhsStart = scheduleDate(from: rhs.gameDate)
-            if lhsStart != rhsStart { return lhsStart < rhsStart }
+            if lhs.startDate != rhs.startDate { return lhs.startDate < rhs.startDate }
 
-            let lhsStatus = statusPriority(for: lhs)
-            let rhsStatus = statusPriority(for: rhs)
+            let lhsStatus = statusPriority(lhs)
+            let rhsStatus = statusPriority(rhs)
             if lhsStatus != rhsStatus { return lhsStatus.rawValue < rhsStatus.rawValue }
 
-            if lhsStatus == .live {
-                let lhsProgress = liveProgress(for: lhs)
-                let rhsProgress = liveProgress(for: rhs)
-                if lhsProgress.inning != rhsProgress.inning { return lhsProgress.inning > rhsProgress.inning }
-                if lhsProgress.half != rhsProgress.half { return lhsProgress.half.rawValue < rhsProgress.half.rawValue }
+            if lhsStatus == .live, lhs.currentInning != rhs.currentInning {
+                return (lhs.currentInning ?? 0) > (rhs.currentInning ?? 0)
             }
 
-            let lhsHome = lhs.teams.home.team.name ?? ""
-            let rhsHome = rhs.teams.home.team.name ?? ""
-            let nameOrder = lhsHome.localizedCaseInsensitiveCompare(rhsHome)
+            let nameOrder = lhs.homeTeamName.localizedCaseInsensitiveCompare(rhs.homeTeamName)
             if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
 
-            return lhs.gamePk < rhs.gamePk
+            return lhs.id < rhs.id
         }
     }
 
-    private func isFavoriteGame(_ game: ScheduleGame) -> Bool {
-        FavoritesService.shared.isFavorite(teamId: game.teams.away.team.id ?? 0) ||
-        FavoritesService.shared.isFavorite(teamId: game.teams.home.team.id ?? 0)
-    }
-
-    private func scheduleDate(from isoDate: String) -> Date {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: isoDate) {
-            return date
-        }
-
-        let fallbackFormatter = ISO8601DateFormatter()
-        fallbackFormatter.formatOptions = [.withInternetDateTime]
-        return fallbackFormatter.date(from: isoDate) ?? .distantFuture
-    }
-
-    private func statusPriority(for game: ScheduleGame) -> ScheduleStatusPriority {
-        let detailedState = game.status.detailedState.lowercased()
-        let statusCode = game.status.statusCode?.lowercased() ?? ""
-
-        if isLiveState(detailedState) {
-            return .live
-        }
-
-        if detailedState.contains("delay") || detailedState.contains("suspend") || detailedState.contains("postpon") {
-            return .delayedOrSuspended
-        }
-
-        if detailedState == "final" ||
-            detailedState == "game over" ||
-            detailedState == "completed early" ||
-            statusCode == "f" ||
-            statusCode == "o" {
-            return .final
-        }
-
-        return .scheduled
-    }
-
-    private func isLiveState(_ detailedState: String) -> Bool {
-        detailedState == "in progress" ||
-        detailedState.hasPrefix("top ") ||
-        detailedState.hasPrefix("bottom ") ||
-        detailedState.hasPrefix("middle ") ||
-        detailedState.hasPrefix("mid ") ||
-        detailedState.hasPrefix("end ")
-    }
-
-    private func liveProgress(for game: ScheduleGame) -> (inning: Int, half: LiveProgressHalf) {
-        let detailedState = game.status.detailedState.lowercased()
-        let inning = inningNumber(from: detailedState)
-        let half: LiveProgressHalf
-
-        if detailedState.hasPrefix("end ") {
-            half = .end
-        } else if detailedState.hasPrefix("bottom ") {
-            half = .bottom
-        } else if detailedState.hasPrefix("middle ") || detailedState.hasPrefix("mid ") {
-            half = .middle
-        } else if detailedState.hasPrefix("top ") {
-            half = .top
-        } else {
-            half = .unknown
-        }
-
-        return (inning, half)
-    }
-
-    private func inningNumber(from detailedState: String) -> Int {
-        let digits = detailedState.compactMap(\.wholeNumberValue)
-        guard !digits.isEmpty else { return 0 }
-        return digits.reduce(0) { ($0 * 10) + $1 }
+    private func isFavoriteGame(_ game: LeagueGame) -> Bool {
+        FavoritesService.shared.isFavorite(teamID: game.awayTeamID, league: game.league) ||
+        FavoritesService.shared.isFavorite(teamID: game.homeTeamID, league: game.league)
     }
 
     private func loadSchedule(for date: Date, triggerAutoEntry: Bool = false) {
@@ -574,9 +517,10 @@ class ScheduleViewController: UIViewController {
         errorContainer.isHidden = true
         noGamesLabel.isHidden = true
 
+        let provider = self.provider
         loadTask = Task {
             do {
-                let games = sortedGames(try await GameService.shared.fetchSchedule(for: date))
+                let games = sortedGames(try await provider.fetchSchedule(date: date))
                 guard !Task.isCancelled else { return }
                 self.currentGames = games
                 self.loadingIndicator.stopAnimating()
@@ -639,12 +583,13 @@ class ScheduleViewController: UIViewController {
 
     func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
         let game = currentGames[indexPath.item]
-        let awayId = game.teams.away.team.id ?? 0
-        let homeId = game.teams.home.team.id ?? 0
-        let awayName = game.teams.away.team.name ?? "Away Team"
-        let homeName = game.teams.home.team.name ?? "Home Team"
-        let awayIsFav = FavoritesService.shared.isFavorite(teamId: awayId)
-        let homeIsFav = FavoritesService.shared.isFavorite(teamId: homeId)
+        let league = game.league
+        let awayId = game.awayTeamID
+        let homeId = game.homeTeamID
+        let awayName = game.awayTeamName
+        let homeName = game.homeTeamName
+        let awayIsFav = FavoritesService.shared.isFavorite(teamID: awayId, league: league)
+        let homeIsFav = FavoritesService.shared.isFavorite(teamID: homeId, league: league)
 
         return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
             let awayAction = UIAction(
@@ -655,7 +600,7 @@ class ScheduleViewController: UIViewController {
                 let feedback = UISelectionFeedbackGenerator()
                 feedback.prepare()
                 feedback.selectionChanged()
-                FavoritesService.shared.toggleFavorite(teamId: awayId)
+                FavoritesService.shared.toggleFavorite(teamID: awayId, league: league)
                 self?.loadSchedule(for: self?.currentDate ?? Date())
             }
 
@@ -667,7 +612,7 @@ class ScheduleViewController: UIViewController {
                 let feedback = UISelectionFeedbackGenerator()
                 feedback.prepare()
                 feedback.selectionChanged()
-                FavoritesService.shared.toggleFavorite(teamId: homeId)
+                FavoritesService.shared.toggleFavorite(teamID: homeId, league: league)
                 self?.loadSchedule(for: self?.currentDate ?? Date())
             }
 
@@ -695,7 +640,7 @@ extension ScheduleViewController: UICollectionViewDataSource, UICollectionViewDe
     
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         let game = currentGames[indexPath.item]
-        let detailVC = GameDetailViewController(gamePk: game.gamePk, games: currentGames)
+        let detailVC = GameDetailViewController(game: game)
         detailVC.hidesBottomBarWhenPushed = true
         navigationController?.pushViewController(detailVC, animated: true)
     }
@@ -719,24 +664,21 @@ private extension ScheduleViewController {
         }
 
         let autoEnterGames = currentGames.filter { game in
-            let detailedState = game.status.detailedState.lowercased()
-            guard isLiveState(detailedState) else { return false }
-            
-            let awayId = game.teams.away.team.id ?? 0
-            let homeId = game.teams.home.team.id ?? 0
-            
-            let awayAuto = FavoritesService.shared.isFavorite(teamId: awayId) && FavoritesService.shared.isAutoEnterEnabled(for: awayId)
-            let homeAuto = FavoritesService.shared.isFavorite(teamId: homeId) && FavoritesService.shared.isAutoEnterEnabled(for: homeId)
-            
+            guard game.status.isLive else { return false }
+
+            let league = game.league
+            let awayAuto = FavoritesService.shared.isFavorite(teamID: game.awayTeamID, league: league) && FavoritesService.shared.isAutoEnterEnabled(teamID: game.awayTeamID, league: league)
+            let homeAuto = FavoritesService.shared.isFavorite(teamID: game.homeTeamID, league: league) && FavoritesService.shared.isAutoEnterEnabled(teamID: game.homeTeamID, league: league)
+
             return awayAuto || homeAuto
         }
 
         if let gameToEnter = autoEnterGames.first {
             hasAttemptedAutoEntry = true
-            
-            let detailVC = GameDetailViewController(gamePk: gameToEnter.gamePk, games: currentGames)
+
+            let detailVC = GameDetailViewController(game: gameToEnter)
             detailVC.hidesBottomBarWhenPushed = true
-            
+
             navigationController?.pushViewController(detailVC, animated: true)
         }
     }

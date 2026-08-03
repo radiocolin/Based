@@ -49,7 +49,7 @@ class PlayerDetailViewController: UIViewController {
         super.init(nibName: nil, bundle: nil)
     }
 
-    init(playerId: Int, fullName: String, position: String) {
+    init(playerId: String, fullName: String, position: String) {
         let batter = ScorecardBatter(id: playerId, fullName: fullName, abbreviation: "", position: position, jerseyNumber: nil, battingOrderSlot: nil, inningEntered: nil, inningExited: nil)
         self.subject = .batter(batter, nil)
         super.init(nibName: nil, bundle: nil)
@@ -80,7 +80,7 @@ class PlayerDetailViewController: UIViewController {
     }
 
 
-    private var playerID: Int {
+    private var playerID: String {
         switch subject {
         case let .batter(batter, _):
             return batter.id
@@ -348,14 +348,17 @@ class PlayerDetailViewController: UIViewController {
     private func fetchPlayerInfo() {
         Task {
             do {
-                let info = try await GameService.shared.fetchPlayerInfo(playerId: playerID)
+                guard let numericId = Int(playerID) else {
+                    throw NSError(domain: "PlayerDetailViewController", code: 400, userInfo: [NSLocalizedDescriptionKey: "Non-MLB player id"])
+                }
+                let info = try await GameService.shared.fetchPlayerInfo(playerId: numericId)
                 self.playerInfo = info
                 await MainActor.run {
                     self.updateWithPlayerInfo(info)
                 }
             } catch {
                 await MainActor.run {
-                    self.showSeasonStatsError()
+                    self.hideSeasonStats()
                 }
             }
         }
@@ -418,7 +421,7 @@ class PlayerDetailViewController: UIViewController {
             .compactMap({ $0.splits?.first(where: { $0.stat?.avg != nil || $0.stat?.ops != nil || $0.stat?.rbi != nil }) })
             .first,
               let stats = split.stat else {
-            showSeasonStatsError()
+            hideSeasonStats()
             return
         }
         let season = split.season.map { "\($0) season" } ?? "Season"
@@ -441,7 +444,7 @@ class PlayerDetailViewController: UIViewController {
             .compactMap({ $0.splits?.first(where: { $0.stat?.era != nil || $0.stat?.inningsPitched != nil || $0.stat?.wins != nil }) })
             .first,
               let stats = split.stat else {
-            showSeasonStatsError()
+            hideSeasonStats()
             return
         }
         let season = split.season.map { "\($0) season" } ?? "Season"
@@ -458,24 +461,15 @@ class PlayerDetailViewController: UIViewController {
         )
     }
 
-    private func showSeasonStatsError() {
+    /// No "Stats unavailable" placeholder box — if there's genuinely no season data, the whole
+    /// section (title + box) collapses out of the stack layout instead of showing an empty shell.
+    private func hideSeasonStats() {
         loadingIndicator.stopAnimating()
+        loadingIndicator.removeFromSuperview()
         seasonStatsContentView?.removeFromSuperview()
-
-        let errorLabel = UILabel()
-        errorLabel.text = "Stats unavailable"
-        errorLabel.font = AppFont.patrick(16, textStyle: .body, compatibleWith: traitCollection)
-        errorLabel.textColor = pencilColor.withAlphaComponent(0.7)
-        errorLabel.textAlignment = .center
-        errorLabel.translatesAutoresizingMaskIntoConstraints = false
-        errorLabel.adjustsFontForContentSizeCategory = true
-        seasonStatsContainer.addSubview(errorLabel)
-        seasonStatsContentView = errorLabel
-
-        NSLayoutConstraint.activate([
-            errorLabel.centerXAnchor.constraint(equalTo: seasonStatsContainer.centerXAnchor),
-            errorLabel.centerYAnchor.constraint(equalTo: seasonStatsContainer.centerYAnchor)
-        ])
+        seasonStatsContentView = nil
+        seasonTitleLabel.isHidden = true
+        seasonStatsContainer.isHidden = true
     }
 
     private func drawPencilLines() {

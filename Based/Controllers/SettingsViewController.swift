@@ -1,11 +1,17 @@
 import UIKit
 
+private struct FavoriteTeamRef: Equatable {
+    let id: String
+    let league: League
+}
+
 class SettingsViewController: UIViewController {
-    
+
     private let tableView = UITableView(frame: .zero, style: .insetGrouped)
-    private var favoriteTeamIds: [Int] = []
-    private var teamMap: [Int: String] = [:]
-    
+    private var favoriteRefs: [FavoriteTeamRef] = []
+    private var teamNames: [League: [String: String]] = [:]
+    private var availableTeamsByLeague: [League: [LeagueTeam]] = [:]
+
     private let appearanceOptions = ThemeService.Theme.allCases
     private let mlbTeams = [
         "Arizona Diamondbacks", "Atlanta Braves", "Baltimore Orioles", "Boston Red Sox",
@@ -70,8 +76,8 @@ class SettingsViewController: UIViewController {
         ])
     }
 
-    private func favoriteTeamName(for id: Int) -> String {
-        teamMap[id] ?? "Team \(id)"
+    private func favoriteTeamName(for ref: FavoriteTeamRef) -> String {
+        teamNames[ref.league]?[ref.id] ?? "Team \(ref.id)"
     }
     
     private func setupNavigationBar() {
@@ -95,26 +101,32 @@ class SettingsViewController: UIViewController {
     }
     
     private func loadData() {
-        favoriteTeamIds = FavoritesService.shared.getFavoriteTeamIds()
-        
-        Task {
-            do {
-                let teams = try await MLBAPIClient.shared.fetchTeams()
-                await MainActor.run {
-                    self.teamMap = Dictionary(uniqueKeysWithValues: teams.compactMap { team in
-                        guard let id = team.id, let name = team.name else { return nil }
-                        return (id, name)
-                    })
-                    self.tableView.reloadData()
+        reloadFavoriteRefs()
+
+        for league in League.allCases {
+            Task {
+                do {
+                    let teams = try await LeagueRegistry.shared.provider(for: league).fetchTeams()
+                    await MainActor.run {
+                        self.availableTeamsByLeague[league] = teams
+                        self.teamNames[league] = Dictionary(uniqueKeysWithValues: teams.map { ($0.id, $0.name) })
+                        self.tableView.reloadData()
+                    }
+                } catch {
+                    print("Error fetching \(league.rawValue) teams: \(error)")
                 }
-            } catch {
-                print("Error fetching teams: \(error)")
             }
         }
     }
-    
+
+    private func reloadFavoriteRefs() {
+        favoriteRefs = League.allCases.flatMap { league in
+            FavoritesService.shared.getFavoriteTeamIDs(for: league).map { FavoriteTeamRef(id: $0, league: league) }
+        }
+    }
+
     @objc private func favoritesDidChange() {
-        favoriteTeamIds = FavoritesService.shared.getFavoriteTeamIds()
+        reloadFavoriteRefs()
         tableView.reloadData()
     }
     
@@ -126,7 +138,7 @@ class SettingsViewController: UIViewController {
         setupNavigationBar()
         tableView.reloadData()
     }
-    
+
     private func presentColorPicker() {
         let picker = UIColorPickerViewController()
         picker.delegate = self
@@ -206,25 +218,25 @@ class SettingsViewController: UIViewController {
     }
 
     private func presentFavoriteTeamSelector() {
-        let sorted = teamMap.sorted { $0.value < $1.value }
-        let options = sorted.compactMap { id, name -> SettingsSelectionOption? in
-            guard !favoriteTeamIds.contains(id) else { return nil }
-            return SettingsSelectionOption(title: name) { [weak self] in
-                FavoritesService.shared.toggleFavorite(teamId: id)
-                self?.dismiss(animated: true)
+        let sections: [SettingsSelectionSection] = League.allCases.compactMap { league in
+            let teams = (availableTeamsByLeague[league] ?? []).sorted { $0.name < $1.name }
+            let options = teams.compactMap { team -> SettingsSelectionOption? in
+                guard !favoriteRefs.contains(FavoriteTeamRef(id: team.id, league: league)) else { return nil }
+                return SettingsSelectionOption(title: team.name) { [weak self] in
+                    FavoritesService.shared.toggleFavorite(teamID: team.id, league: league)
+                    self?.dismiss(animated: true)
+                }
             }
+            guard !options.isEmpty else { return nil }
+            return SettingsSelectionSection(title: league.displayName, options: options)
         }
-
-        let sections = [
-            SettingsSelectionSection(title: nil, options: options)
-        ]
 
         presentSelectionSheet(title: "Add Favorite Team", sections: sections)
     }
 
-    private func presentFavoriteTeamOptions(teamId: Int) {
-        let teamName = favoriteTeamName(for: teamId)
-        let isAutoEnter = FavoritesService.shared.isAutoEnterEnabled(for: teamId)
+    private func presentFavoriteTeamOptions(ref: FavoriteTeamRef) {
+        let teamName = favoriteTeamName(for: ref)
+        let isAutoEnter = FavoritesService.shared.isAutoEnterEnabled(teamID: ref.id, league: ref.league)
 
         let sections = [
             SettingsSelectionSection(
@@ -235,14 +247,14 @@ class SettingsViewController: UIViewController {
                         showToggle: true,
                         isToggleOn: isAutoEnter,
                         toggleAction: { isOn in
-                            FavoritesService.shared.setAutoEnterEnabled(isOn, for: teamId)
+                            FavoritesService.shared.setAutoEnterEnabled(isOn, teamID: ref.id, league: ref.league)
                         }
                     ),
                     SettingsSelectionOption(
                         title: "Remove favorite",
                         isDestructive: true,
                         action: { [weak self] in
-                            FavoritesService.shared.toggleFavorite(teamId: teamId)
+                            FavoritesService.shared.toggleFavorite(teamID: ref.id, league: ref.league)
                             self?.dismiss(animated: true)
                         }
                     )
@@ -281,7 +293,7 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         switch section {
         case 0: return 3 // Appearance + Tint Color + Compact Scorecard
-        case 1: return favoriteTeamIds.count + 1 // Favorites + Add row
+        case 1: return favoriteRefs.count + 1 // Favorites + Add row
         case 2: return 2 // Wheelie, Away Message
         case 3: return 1 // Attribution
         default: return 0
@@ -555,11 +567,11 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
             }
 
         case 1:
-            if indexPath.row < favoriteTeamIds.count {
-                let teamId = favoriteTeamIds[indexPath.row]
-                let teamName = favoriteTeamName(for: teamId)
+            if indexPath.row < favoriteRefs.count {
+                let ref = favoriteRefs[indexPath.row]
+                let teamName = favoriteTeamName(for: ref)
                 cell.textLabel?.text = teamName
-                cell.detailTextLabel?.text = nil
+                cell.detailTextLabel?.text = ref.league.displayName
 
                 let config = UIImage.SymbolConfiguration(pointSize: 14, weight: .medium)
                 let ellipsisImg = UIImage(systemName: "ellipsis", withConfiguration: config)
@@ -574,7 +586,9 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
                 cell.showsReorderControl = true
                 cell.selectionStyle = .default
             } else {
-                let hasAvailableTeams = teamMap.keys.contains { !favoriteTeamIds.contains($0) }
+                let hasAvailableTeams = League.allCases.contains { league in
+                    (availableTeamsByLeague[league] ?? []).contains { !favoriteRefs.contains(FavoriteTeamRef(id: $0.id, league: league)) }
+                }
                 cell.textLabel?.text = hasAvailableTeams ? "Add Favorite Team" : "All Teams Added"
                 cell.detailTextLabel?.text = nil
                 cell.accessoryType = hasAvailableTeams ? .disclosureIndicator : .none
@@ -602,19 +616,23 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
     }
 
     func tableView(_ tableView: UITableView, canMoveRowAt indexPath: IndexPath) -> Bool {
-        return indexPath.section == 1 && indexPath.row < favoriteTeamIds.count
+        return indexPath.section == 1 && indexPath.row < favoriteRefs.count
     }
 
     func tableView(_ tableView: UITableView, moveRowAt sourceIndexPath: IndexPath, to destinationIndexPath: IndexPath) {
         guard sourceIndexPath.section == 1, destinationIndexPath.section == 1,
-              sourceIndexPath.row < favoriteTeamIds.count, destinationIndexPath.row < favoriteTeamIds.count else {
+              sourceIndexPath.row < favoriteRefs.count, destinationIndexPath.row < favoriteRefs.count else {
             tableView.reloadData()
             return
         }
-        
-        let movedId = favoriteTeamIds.remove(at: sourceIndexPath.row)
-        favoriteTeamIds.insert(movedId, at: destinationIndexPath.row)
-        FavoritesService.shared.setFavoriteTeamIds(favoriteTeamIds)
+
+        let moved = favoriteRefs.remove(at: sourceIndexPath.row)
+        favoriteRefs.insert(moved, at: destinationIndexPath.row)
+
+        for league in League.allCases {
+            let orderedIDs = favoriteRefs.filter { $0.league == league }.map { $0.id }
+            FavoritesService.shared.setFavoriteTeamIDs(orderedIDs, league: league)
+        }
     }
     
     func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
@@ -689,10 +707,12 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
             presentTintSelector()
         } else if indexPath.section == 0 && indexPath.row == 2 {
             return
-        } else if indexPath.section == 1 && indexPath.row < favoriteTeamIds.count {
-            presentFavoriteTeamOptions(teamId: favoriteTeamIds[indexPath.row])
-        } else if indexPath.section == 1 && indexPath.row == favoriteTeamIds.count
-            && teamMap.keys.contains(where: { !favoriteTeamIds.contains($0) }) {
+        } else if indexPath.section == 1 && indexPath.row < favoriteRefs.count {
+            presentFavoriteTeamOptions(ref: favoriteRefs[indexPath.row])
+        } else if indexPath.section == 1 && indexPath.row == favoriteRefs.count
+            && League.allCases.contains(where: { league in
+                (availableTeamsByLeague[league] ?? []).contains { !favoriteRefs.contains(FavoriteTeamRef(id: $0.id, league: league)) }
+            }) {
             presentFavoriteTeamSelector()
         } else if indexPath.section == 2 {
             let urlString: String

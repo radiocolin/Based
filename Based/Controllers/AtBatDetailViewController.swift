@@ -80,6 +80,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         } else {
             pitchTrackView.configure(with: [])
         }
+        updatePitchTrackVisibility()
         atBatGraphicView.configure(with: event, accentColor: self.accentColor)
         pitchesTableView.reloadData()
         updatePitchesTableHeight()
@@ -209,6 +210,7 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
             pitchTrackView.configure(with: pitches)
         }
         containerView.addSubview(pitchTrackView)
+        updatePitchTrackVisibility()
 
         pitchesTableView.backgroundColor = .clear
         pitchesTableView.separatorStyle = .none
@@ -424,19 +426,33 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         ]
     }
 
+    /// WPBL's pitch data never includes location (x/z) — the strike-zone box has nothing
+    /// meaningful to plot in that case, so it's removed from layout entirely rather than shown
+    /// empty (PitchTrackView itself already skips drawing dots with no x/z; this hides the box).
+    private var hasPitchLocationData: Bool {
+        event.pitches?.contains { $0.x != nil && $0.z != nil } ?? false
+    }
+
+    private func updatePitchTrackVisibility() {
+        let sideColumnWidth: CGFloat = 160
+        let show = hasPitchLocationData
+        pitchTrackView.isHidden = !show
+        pitchTrackWidthConstraint?.constant = show ? sideColumnWidth : 0
+        pitchTrackHeightConstraint?.constant = show ? 180 : 0
+    }
+
     private func applyTypography() {
         batterLabel.font = AppFont.permanent(32, textStyle: .title1, compatibleWith: traitCollection)
         inningLabel.font = AppFont.ibmPlexCondensed(15, textStyle: .headline, compatibleWith: traitCollection)
         inningLabel.textColor = pencilColor.withAlphaComponent(0.75)
         descriptionLabel.font = AppFont.patrick(18, textStyle: .body, compatibleWith: traitCollection)
         pitchSequenceHeaderLabel.font = AppFont.ibmPlexCondensed(16, textStyle: .headline, compatibleWith: traitCollection)
-        
+
         let sideColumnWidth: CGFloat = 160
         atBatGraphicWidthConstraint?.constant = sideColumnWidth
         atBatGraphicHeightConstraint?.constant = sideColumnWidth
-        pitchTrackWidthConstraint?.constant = sideColumnWidth
-        pitchTrackHeightConstraint?.constant = 180
-        
+        updatePitchTrackVisibility()
+
         applyInningHeader()
         applyPitcherHeader()
         updatePitchesTableHeight()

@@ -7,6 +7,10 @@ struct ScorecardData: Codable, Sendable, Equatable {
     let lineups: Lineups
     let pitchers: ScorecardPitchers
     let innings: [ScorecardInning]
+    /// The league's standard game length (MLB: 9, WPBL: 7) — the grid always shows at least
+    /// this many columns even for a shortened game, but never forces extra empty columns beyond
+    /// what a league actually plays a full game as.
+    let scheduledInnings: Int
     let timeline: [AtBatEvent]
     let liveCurrentAtBat: AtBatEvent?
     let advisories: [String]
@@ -15,7 +19,7 @@ struct ScorecardData: Codable, Sendable, Equatable {
     let gameDate: String?
     let currentInning: Int?
     let isTopInning: Bool?
-    let currentBatterId: Int?
+    let currentBatterId: String?
 }
 
 struct GameInfoItem: Codable, Sendable, Equatable {
@@ -34,7 +38,7 @@ struct ScorecardPitchers: Codable, Sendable, Equatable {
 }
 
 struct ScorecardPitcher: Codable, Sendable, Equatable {
-    let id: Int
+    let id: String
     let fullName: String
     let stats: String
     let ip: String
@@ -57,8 +61,8 @@ struct ScorecardInning: Codable, Sendable, Equatable {
     let away: [AtBatEvent]
     let homeRuns: Int?
     let awayRuns: Int?
-    let homeScoringPlayerIds: [Int]
-    let awayScoringPlayerIds: [Int]
+    let homeScoringPlayerIds: [String]
+    let awayScoringPlayerIds: [String]
 }
 
 // MARK: - Column Layout (batting-around support)
@@ -145,7 +149,7 @@ extension ScorecardData {
         return inningEvents + [liveCurrentAtBat]
     }
 
-    func calculatePlayerStats(for batterId: Int, isHome: Bool) -> PlayerGameStats {
+    func calculatePlayerStats(for batterId: String, isHome: Bool) -> PlayerGameStats {
         var atBats = 0, hits = 0, runs = 0, rbi = 0, walks = 0, strikeouts = 0
         for inning in innings {
             let events = isHome ? inning.home : inning.away

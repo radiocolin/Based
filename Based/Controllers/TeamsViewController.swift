@@ -3,53 +3,19 @@ import TipKit
 
 class TeamsViewController: UITableViewController {
 
-    private struct TeamEntry {
-        let id: Int
-        let name: String
-    }
+    private var provider: LeagueProvider { LeagueRegistry.shared.provider(for: LeagueSelectionStore.shared.selectedLeague) }
 
-    private var favoriteTeams: [TeamEntry] = []
-    private var otherTeams: [TeamEntry] = []
+    private var allTeams: [LeagueTeam] = []
+    private var favoriteTeams: [LeagueTeam] = []
+    private var otherTeams: [LeagueTeam] = []
     private var pencilColor: UIColor { AppColors.pencil }
     private var isLoading = false
-    private var teamRecords: [Int: (record: LeagueRecord, division: String)] = [:]
+    private var teamRecords: [String: (wins: Int, losses: Int, division: String?)] = [:]
+    private var teamsTask: Task<Void, Never>?
     private var standingsTask: Task<Void, Never>?
 
     private let favoriteTeamTip = FavoriteTeamTip()
     private var tipObservationTask: Task<Void, Never>?
-
-    private static let allTeams: [TeamEntry] = [
-        TeamEntry(id: 109, name: "Arizona Diamondbacks"),
-        TeamEntry(id: 144, name: "Atlanta Braves"),
-        TeamEntry(id: 110, name: "Baltimore Orioles"),
-        TeamEntry(id: 111, name: "Boston Red Sox"),
-        TeamEntry(id: 112, name: "Chicago Cubs"),
-        TeamEntry(id: 145, name: "Chicago White Sox"),
-        TeamEntry(id: 113, name: "Cincinnati Reds"),
-        TeamEntry(id: 114, name: "Cleveland Guardians"),
-        TeamEntry(id: 115, name: "Colorado Rockies"),
-        TeamEntry(id: 116, name: "Detroit Tigers"),
-        TeamEntry(id: 117, name: "Houston Astros"),
-        TeamEntry(id: 118, name: "Kansas City Royals"),
-        TeamEntry(id: 108, name: "Los Angeles Angels"),
-        TeamEntry(id: 119, name: "Los Angeles Dodgers"),
-        TeamEntry(id: 146, name: "Miami Marlins"),
-        TeamEntry(id: 158, name: "Milwaukee Brewers"),
-        TeamEntry(id: 142, name: "Minnesota Twins"),
-        TeamEntry(id: 121, name: "New York Mets"),
-        TeamEntry(id: 147, name: "New York Yankees"),
-        TeamEntry(id: 133, name: "Athletics"),
-        TeamEntry(id: 143, name: "Philadelphia Phillies"),
-        TeamEntry(id: 134, name: "Pittsburgh Pirates"),
-        TeamEntry(id: 135, name: "San Diego Padres"),
-        TeamEntry(id: 137, name: "San Francisco Giants"),
-        TeamEntry(id: 136, name: "Seattle Mariners"),
-        TeamEntry(id: 138, name: "St. Louis Cardinals"),
-        TeamEntry(id: 139, name: "Tampa Bay Rays"),
-        TeamEntry(id: 140, name: "Texas Rangers"),
-        TeamEntry(id: 141, name: "Toronto Blue Jays"),
-        TeamEntry(id: 120, name: "Washington Nationals"),
-    ]
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -60,13 +26,14 @@ class TeamsViewController: UITableViewController {
 
         NotificationCenter.default.addObserver(self, selector: #selector(favoritesChanged), name: FavoritesService.favoritesDidChangeNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(tintDidChange), name: TintService.tintDidChangeNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(leagueSelectionChanged), name: LeagueSelectionStore.selectionDidChangeNotification, object: nil)
 
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: TeamsViewController, _) in
             self.setupNavigationBar()
             self.tableView.reloadData()
         }
 
-        reloadTeams()
+        loadTeams()
         setupNavigationBar()
         loadStandings()
     }
@@ -74,7 +41,7 @@ class TeamsViewController: UITableViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         setupNavigationBar()
-        reloadTeams()
+        applyFavoritesFilter()
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -127,7 +94,7 @@ class TeamsViewController: UITableViewController {
     }
 
     @objc private func favoritesChanged() {
-        reloadTeams()
+        applyFavoritesFilter()
     }
 
     @objc private func tintDidChange() {
@@ -135,7 +102,15 @@ class TeamsViewController: UITableViewController {
         tableView.reloadData()
     }
 
+    @objc private func leagueSelectionChanged() {
+        setupNavigationBar()
+        teamRecords = [:]
+        loadTeams()
+        loadStandings()
+    }
+
     private func setupNavigationBar() {
+        navigationItem.rightBarButtonItem = LeagueSwitcherBarButton.make()
         let titleFont = BarAppearanceSupport.titleFont(for: traitCollection)
         let buttonFont = BarAppearanceSupport.buttonFont(for: traitCollection)
         let appearance = UINavigationBarAppearance()
@@ -158,16 +133,19 @@ class TeamsViewController: UITableViewController {
     private func loadStandings() {
         standingsTask?.cancel()
         standingsTask = Task {
-            let season = Calendar.current.component(.year, from: Date())
-            guard let records = try? await MLBAPIClient.shared.fetchStandings(season: season) else { return }
-            var map: [Int: (record: LeagueRecord, division: String)] = [:]
-            for standing in records {
-                let divName = standing.division.name?
-                    .replacingOccurrences(of: "American League ", with: "AL ")
-                    .replacingOccurrences(of: "National League ", with: "NL ") ?? ""
-                for team in standing.teamRecords {
-                    if let id = team.team.id {
-                        map[id] = (team.leagueRecord, divName)
+            guard let sections = try? await provider.fetchStandings() else { return }
+            var map: [String: (wins: Int, losses: Int, division: String?)] = [:]
+            for section in sections {
+                let leagueShort = (section.title ?? "")
+                    .replacingOccurrences(of: "American League", with: "AL")
+                    .replacingOccurrences(of: "National League", with: "NL")
+                var currentDivision: String?
+                for row in section.rows {
+                    switch row {
+                    case .subHeader(let name):
+                        currentDivision = leagueShort.isEmpty ? name : "\(leagueShort) \(name)"
+                    case .team(let team):
+                        map[team.teamID] = (team.wins, team.losses, currentDivision)
                     }
                 }
             }
@@ -177,17 +155,30 @@ class TeamsViewController: UITableViewController {
         }
     }
 
-    private func reloadTeams() {
-        let favoriteIds = FavoritesService.shared.getFavoriteTeamIds()
-        let all = Self.allTeams
+    private func loadTeams() {
+        teamsTask?.cancel()
+        teamsTask = Task {
+            guard let teams = try? await provider.fetchTeams() else { return }
+            guard !Task.isCancelled else { return }
+            allTeams = teams
+            applyFavoritesFilter()
+        }
+    }
 
-        favoriteTeams = all.filter { favoriteIds.contains($0.id) }
+    private func applyFavoritesFilter() {
+        let league = provider.league
+        let favoriteIds = FavoritesService.shared.getFavoriteTeamIDs(for: league)
+        func isFavorite(_ team: LeagueTeam) -> Bool {
+            favoriteIds.contains(team.id)
+        }
+
+        favoriteTeams = allTeams.filter(isFavorite)
             .sorted { a, b in
                 let ai = favoriteIds.firstIndex(of: a.id) ?? Int.max
                 let bi = favoriteIds.firstIndex(of: b.id) ?? Int.max
                 return ai < bi
             }
-        otherTeams = all.filter { !favoriteIds.contains($0.id) }
+        otherTeams = allTeams.filter { !isFavorite($0) }
 
         tableView.reloadData()
     }
@@ -268,18 +259,20 @@ class TeamsViewController: UITableViewController {
 
         if let info = teamRecords[team.id] {
             let detailAttr = NSMutableAttributedString()
-            let recordText = "\(info.record.wins)-\(info.record.losses)"
+            let recordText = "\(info.wins)-\(info.losses)"
             let recordAttrs: [NSAttributedString.Key: Any] = [
                 .font: AppFont.patrick(15, textStyle: .subheadline, compatibleWith: traitCollection),
                 .foregroundColor: pencilColor
             ]
             detailAttr.append(NSAttributedString(string: recordText, attributes: recordAttrs))
 
-            let divAttrs: [NSAttributedString.Key: Any] = [
-                .font: AppFont.ibmPlexCondensed(12, textStyle: .caption1, compatibleWith: traitCollection),
-                .foregroundColor: pencilColor.withAlphaComponent(0.45)
-            ]
-            detailAttr.append(NSAttributedString(string: "  \(info.division)", attributes: divAttrs))
+            if let division = info.division, !division.isEmpty {
+                let divAttrs: [NSAttributedString.Key: Any] = [
+                    .font: AppFont.ibmPlexCondensed(12, textStyle: .caption1, compatibleWith: traitCollection),
+                    .foregroundColor: pencilColor.withAlphaComponent(0.45)
+                ]
+                detailAttr.append(NSAttributedString(string: "  \(division)", attributes: divAttrs))
+            }
 
             config.attributedText = nil
             config.secondaryAttributedText = detailAttr
@@ -305,14 +298,20 @@ class TeamsViewController: UITableViewController {
 
         navigationItem.backBarButtonItem = UIBarButtonItem(title: "Teams", style: .plain, target: nil, action: nil)
 
-        let scheduleVC = TeamScheduleViewController(teamId: team.id, teamName: team.name)
-        navigationController?.pushViewController(scheduleVC, animated: true)
+        if provider.league == .mlb, let teamId = Int(team.id) {
+            let scheduleVC = TeamScheduleViewController(teamId: teamId, teamName: team.name)
+            navigationController?.pushViewController(scheduleVC, animated: true)
+        } else {
+            let detailVC = LeagueTeamDetailViewController(teamID: team.id, teamName: team.name, league: provider.league)
+            navigationController?.pushViewController(detailVC, animated: true)
+        }
     }
 
     override func tableView(_ tableView: UITableView, contextMenuConfigurationForRowAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
         let team = teamEntry(for: indexPath)
-        let isFavorite = FavoritesService.shared.isFavorite(teamId: team.id)
-        
+        let league = provider.league
+        let isFavorite = FavoritesService.shared.isFavorite(teamID: team.id, league: league)
+
         return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in
             let favoriteAction = UIAction(
                 title: isFavorite ? "Remove from Favorites" : "Add to Favorites",
@@ -321,9 +320,9 @@ class TeamsViewController: UITableViewController {
                 let feedback = UISelectionFeedbackGenerator()
                 feedback.prepare()
                 feedback.selectionChanged()
-                FavoritesService.shared.toggleFavorite(teamId: team.id)
+                FavoritesService.shared.toggleFavorite(teamID: team.id, league: league)
             }
-            
+
             return UIMenu(title: team.name, children: [favoriteAction])
         }
     }
@@ -335,7 +334,7 @@ class TeamsViewController: UITableViewController {
         favoriteTeamTip.invalidate(reason: .actionPerformed)
     }
 
-    private func teamEntry(for indexPath: IndexPath) -> TeamEntry {
+    private func teamEntry(for indexPath: IndexPath) -> LeagueTeam {
         if hasFavorites {
             return indexPath.section == 0 ? favoriteTeams[indexPath.row] : otherTeams[indexPath.row]
         }

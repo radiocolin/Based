@@ -269,6 +269,7 @@ class GameHeaderView: UIView {
         homeInningLabels.removeAll()
 
         var previousTrailing = inningsContentView.leadingAnchor
+        var firstHeader: UILabel?
         for inning in 1...count {
             let header = createHeaderLabel(text: "\(inning)")
             let away = createLabel(text: "", font: bodyFont, size: 18)
@@ -284,7 +285,20 @@ class GameHeaderView: UIView {
             [header, away, home].forEach { inningsContentView.addSubview($0) }
             let headerWidthConstraint: NSLayoutConstraint
             if count <= 9 {
-                headerWidthConstraint = header.widthAnchor.constraint(equalTo: inningsScrollView.frameLayoutGuide.widthAnchor, multiplier: 1 / CGFloat(count))
+                // Only the first header ties its width to frameLayoutGuide via a 1/N multiplier;
+                // the rest match that header's width by equality. Giving every header its own
+                // independent 1/N-multiplier constraint is redundant with the content view's
+                // width == frameLayoutGuide.width constraint below, and since 1/N (e.g. 1/7)
+                // isn't exactly representable in floating point, N of those redundant fractional
+                // constraints summed can miss the required-priority total by an epsilon — Auto
+                // Layout reports that as "unsatisfiable constraints" even though the system is
+                // mathematically consistent.
+                if let firstHeader {
+                    headerWidthConstraint = header.widthAnchor.constraint(equalTo: firstHeader.widthAnchor)
+                } else {
+                    headerWidthConstraint = header.widthAnchor.constraint(equalTo: inningsScrollView.frameLayoutGuide.widthAnchor, multiplier: 1 / CGFloat(count))
+                    firstHeader = header
+                }
             } else {
                 headerWidthConstraint = header.widthAnchor.constraint(equalToConstant: inningWidth)
                 inningWidthConstraints.append(headerWidthConstraint)
@@ -418,7 +432,8 @@ class GameHeaderView: UIView {
         let awayColor = TeamColorProvider.color(for: awayActual)
         let homeColor = TeamColorProvider.color(for: homeActual)
         let zeroColor = pencilColor.withAlphaComponent(0.7)
-        let inningCount = max(9, linescore.innings?.count ?? 0)
+        let scheduledInnings = linescore.scheduledInnings ?? 9
+        let inningCount = max(scheduledInnings, linescore.innings?.count ?? 0)
 
         if inningHeaders.count != inningCount {
             rebuildInningColumns(count: inningCount)
@@ -435,7 +450,7 @@ class GameHeaderView: UIView {
 
         setNeedsLayout()
         layoutIfNeeded()
-        if inningCount > 9 {
+        if inningCount > scheduledInnings {
             let maxOffset = max(0, inningsScrollView.contentSize.width - inningsScrollView.bounds.width)
             inningsScrollView.setContentOffset(CGPoint(x: maxOffset, y: 0), animated: false)
         } else {

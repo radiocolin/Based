@@ -1135,7 +1135,7 @@ final class ScorecardImageGenerator {
         }
     }
 
-    private func drawAtBatEvents(in cellRect: CGRect, bId: Int, col: Int, isHome: Bool, data: ScorecardData, layout: ColumnLayout, ctx: CGContext) {
+    private func drawAtBatEvents(in cellRect: CGRect, bId: String, col: Int, isHome: Bool, data: ScorecardData, layout: ColumnLayout, ctx: CGContext) {
         if let (inningNum, subIndex) = layout.inningInfo(forColumn: col) {
             let allEvents = data.events(inningNum: inningNum, isHomeBatting: isHome)
             let batterEvents = allEvents.filter { $0.batterId == bId }

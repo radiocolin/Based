@@ -20,6 +20,7 @@ enum GameFooterContent {
         container.axis = .vertical
         container.spacing = 2
 
+        var flatIndex = 0
         for (groupIndex, group) in visibleGroups.enumerated() {
             let titleLabel = UILabel()
             titleLabel.text = group.title
@@ -63,10 +64,11 @@ enum GameFooterContent {
                 row.isAccessibilityElement = true
                 if let target, let action {
                     row.isUserInteractionEnabled = true
-                    row.tag = pitcher.id
+                    row.tag = flatIndex
                     let tap = UITapGestureRecognizer(target: target, action: action)
                     row.addGestureRecognizer(tap)
                 }
+                flatIndex += 1
 
                 let nameLabel = UILabel()
                 nameLabel.text = pitcher.fullName

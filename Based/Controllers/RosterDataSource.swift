@@ -157,6 +157,12 @@ class RosterPlayerCell: UITableViewCell {
         positionLabel.text = entry.position?.name
     }
 
+    func configure(with player: LeagueRosterPlayer) {
+        nameLabel.text = player.fullName
+        numberLabel.text = player.uniformNumber
+        positionLabel.text = player.position
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         let b = contentView.bounds

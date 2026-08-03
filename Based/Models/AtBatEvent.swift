@@ -4,10 +4,10 @@ import Foundation
 
 struct AtBatEvent: Codable, Sendable, Equatable {
     let atBatIndex: Int?
-    let batterId: Int
+    let batterId: String
     let batterName: String
     let pinchRunnerName: String?
-    let pitcherId: Int
+    let pitcherId: String
     let pitcherName: String
     let previousPitcherName: String?
     let inning: Int

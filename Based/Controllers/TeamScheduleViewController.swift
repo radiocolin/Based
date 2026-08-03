@@ -40,14 +40,14 @@ class TeamScheduleViewController: UIViewController {
 
     private func setupDataSourceCallbacks() {
         scheduleDataSource.onGameSelected = { [weak self] game in
-            let detailVC = GameDetailViewController(gamePk: game.gamePk, games: [game])
+            let detailVC = GameDetailViewController(game: MLBLeagueProvider.makeLeagueGame(game))
             detailVC.hidesBottomBarWhenPushed = true
             self?.navigationController?.pushViewController(detailVC, animated: true)
         }
         
         rosterDataSource.onPlayerSelected = { [weak self] player in
             guard let playerId = player.person?.id, let fullName = player.person?.fullName else { return }
-            let playerVC = PlayerDetailViewController(playerId: playerId, fullName: fullName, position: player.position?.name ?? "")
+            let playerVC = PlayerDetailViewController(playerId: String(playerId), fullName: fullName, position: player.position?.name ?? "")
             self?.present(playerVC, animated: true)
         }
     }

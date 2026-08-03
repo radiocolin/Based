@@ -8,7 +8,7 @@ struct Lineups: Codable, Sendable, Equatable {
 }
 
 struct ScorecardBatter: Codable, Identifiable, Sendable, Equatable {
-    let id: Int
+    let id: String
     let fullName: String
     let abbreviation: String
     let position: String

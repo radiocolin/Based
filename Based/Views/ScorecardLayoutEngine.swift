@@ -12,7 +12,7 @@ class ScorecardLayoutEngine {
         }
         
         let lineup = isHomeTeam ? data.lineups.home : data.lineups.away
-        let inningCount = max(data.innings.count, 9)
+        let inningCount = max(data.innings.count, data.scheduledInnings)
         var layouts: [InningColumnLayout] = []
         var runningColumn = 0
         
@@ -61,7 +61,7 @@ class ScorecardLayoutEngine {
         }
 
         let lineup = isHomeTeam ? data.lineups.home : data.lineups.away
-        let inningCount = max(data.innings.count, 9)
+        let inningCount = max(data.innings.count, data.scheduledInnings)
 
         var allEvents: [(event: AtBatEvent, inning: Int)] = []
         for i in 1...inningCount {
@@ -120,7 +120,7 @@ class ScorecardLayoutEngine {
     }
 
     func compactPlateAppearancesBySlot(data: ScorecardData, lineup: [ScorecardBatter], isHomeTeam: Bool) -> [Int: [Int: AtBatEvent]] {
-        let inningCount = max(data.innings.count, 9)
+        let inningCount = max(data.innings.count, data.scheduledInnings)
         let slotByBatterID = Dictionary(uniqueKeysWithValues: lineup.compactMap { batter in
             batter.battingOrderSlot.map { (batter.id, $0) }
         })
