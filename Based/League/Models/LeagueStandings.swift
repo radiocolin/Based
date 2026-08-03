@@ -18,10 +18,14 @@ struct StandingsTeamRow: Identifiable, Sendable {
     let id: String
     let teamID: String
     let teamName: String
+    /// Division rank ("1", "2", ...) in division mode; "L" (leader) or wildcard slot number in wildcard mode.
+    let rank: String
     let wins: Int
     let losses: Int
     let winPercentage: String
     let gamesBack: String?
+    let wildCardGamesBack: String?
+    let lastTen: String?
     let streak: String?
     let runDifferential: Int?
 }

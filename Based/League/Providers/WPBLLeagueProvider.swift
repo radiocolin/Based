@@ -5,11 +5,13 @@ import Foundation
 /// end-to-end while M2 wires up the MLB path.
 final class WPBLLeagueProvider: LeagueProvider {
     let league: League = .wpbl
+    let supportsWildcardStandings = false
 
     func fetchSchedule(date: Date) async throws -> [LeagueGame] { [] }
     func fetchTeamSchedule(teamID: String) async throws -> [LeagueGame] { [] }
     func fetchTeams() async throws -> [LeagueTeam] { [] }
     func fetchStandings() async throws -> [StandingsSection] { [] }
+    func fetchWildcardStandings() async throws -> [StandingsSection] { [] }
     func fetchRoster(teamID: String) async throws -> [LeagueRosterPlayer] { [] }
     func fetchPlayerSeasonStats(playerID: String) async throws -> PlayerSeasonStats? { nil }
 
