@@ -6,8 +6,16 @@ final class WPBLLeagueProvider: LeagueProvider {
 
     private let client = WPBLAPIClient.shared
 
+    /// WPBL's /v1/games occasionally includes placeholder entries with no teams assigned yet
+    /// (home_team_id/away_team_id both "", presto_data.teams both null) — not TBD-flagged
+    /// (presto_data.tba is false on them too), just genuinely empty. Filter those out everywhere
+    /// rather than showing an unusable blank game card.
+    private func wellFormedGames() async throws -> [WPBLGame] {
+        try await client.fetchGames().filter { !$0.homeTeamId.isEmpty && !$0.awayTeamId.isEmpty }
+    }
+
     func fetchSchedule(date: Date) async throws -> [LeagueGame] {
-        try await client.fetchGames()
+        try await wellFormedGames()
             .filter { game in
                 guard let start = Self.parseISODate(game.scheduledStart) else { return false }
                 return Calendar.current.isDate(start, inSameDayAs: date)
@@ -16,7 +24,7 @@ final class WPBLLeagueProvider: LeagueProvider {
     }
 
     func fetchTeamSchedule(teamID: String) async throws -> [LeagueGame] {
-        try await client.fetchGames()
+        try await wellFormedGames()
             .filter { $0.homeTeamId == teamID || $0.awayTeamId == teamID }
             .map(Self.makeLeagueGame)
     }
@@ -30,7 +38,7 @@ final class WPBLLeagueProvider: LeagueProvider {
     /// Always derived from completed games' scores — /v1/teams' own wins/losses/record fields
     /// are demonstrated stale (reported 0-0 even after real games completed, per WPBL.md).
     func fetchStandings() async throws -> [StandingsSection] {
-        async let gamesTask = client.fetchGames()
+        async let gamesTask = wellFormedGames()
         async let teamsTask = client.fetchTeams()
         let (games, teams) = try await (gamesTask, teamsTask)
 
@@ -149,11 +157,8 @@ final class WPBLLeagueProvider: LeagueProvider {
         )
     }
 
-    /// Live/game-detail polling is M4 scope (needs GamePollingService's gamePk widened to a
-    /// generic identifier first, and WPBLGameDataSource built alongside GameDetailViewController's
-    /// injected-data-source rewiring).
     func makeGameDetailDataSource(gameID: String) -> GameDetailDataSource {
-        fatalError("WPBLLeagueProvider.makeGameDetailDataSource not yet implemented (see M4)")
+        WPBLGameDataSource(gameID: gameID)
     }
 
     // MARK: - Mapping
@@ -169,7 +174,10 @@ final class WPBLLeagueProvider: LeagueProvider {
             startDate: parseISODate(game.scheduledStart) ?? Date(),
             status: mapStatus(game.status),
             homeScore: game.state.homeScore,
-            awayScore: game.state.awayScore
+            awayScore: game.state.awayScore,
+            venue: game.venue.isEmpty ? nil : game.venue,
+            currentInning: nil,
+            scheduledInnings: nil
         )
     }
 

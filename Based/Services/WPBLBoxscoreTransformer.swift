@@ -75,6 +75,7 @@ struct WPBLBoxscoreTransformer {
             lineups: Lineups(home: buildLineup(team: homeTeam), away: buildLineup(team: awayTeam)),
             pitchers: ScorecardPitchers(home: buildPitchers(team: homeTeam), away: buildPitchers(team: awayTeam)),
             innings: innings,
+            scheduledInnings: 7,
             timeline: Array(chronologicalEvents.reversed()),
             liveCurrentAtBat: nil,
             advisories: [],

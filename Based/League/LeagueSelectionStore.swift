@@ -1,8 +1,11 @@
 import Foundation
 
 /// Persisted "what league am I looking at right now" + "which leagues has this user added."
-/// MLB is always in `activeLeagues` and can't be removed — a fresh install has exactly one
-/// league, so the league switcher UI stays structurally absent until a second one is added.
+/// A fresh install has exactly one league (MLB), so the league switcher UI stays structurally
+/// absent until a second one is added. No single league is permanently pinned — any league can
+/// be removed as long as it isn't the one currently selected and isn't the last one remaining
+/// (you can always deselect MLB once you've switched your current view to something else, but
+/// at least one league must always be active and selected).
 final class LeagueSelectionStore: Sendable {
     static let shared = LeagueSelectionStore()
 
@@ -23,6 +26,9 @@ final class LeagueSelectionStore: Sendable {
         }
         set {
             defaults.set(newValue.rawValue, forKey: selectedLeagueKey)
+            if !activeLeagues.contains(newValue) {
+                addLeague(newValue)
+            }
             NotificationCenter.default.post(name: Self.selectionDidChangeNotification, object: nil)
         }
     }
@@ -30,22 +36,15 @@ final class LeagueSelectionStore: Sendable {
     var activeLeagues: [League] {
         get {
             let stored = (defaults.stringArray(forKey: activeLeaguesKey) ?? []).compactMap(League.init(rawValue:))
-            var leagues = stored.isEmpty ? [League.default] : stored
-            if !leagues.contains(.default) {
-                leagues.insert(.default, at: 0)
-            }
-            return leagues
+            return stored.isEmpty ? [League.default] : stored
         }
         set {
-            var leagues = newValue
-            if !leagues.contains(.default) {
-                leagues.insert(.default, at: 0)
-            }
+            let leagues = newValue.isEmpty ? [League.default] : newValue
             defaults.set(leagues.map(\.rawValue), forKey: activeLeaguesKey)
-            if !leagues.contains(selectedLeague) {
-                selectedLeague = .default
-            }
             NotificationCenter.default.post(name: Self.selectionDidChangeNotification, object: nil)
+            if !leagues.contains(selectedLeague) {
+                selectedLeague = leagues[0]
+            }
         }
     }
 
@@ -54,8 +53,10 @@ final class LeagueSelectionStore: Sendable {
         activeLeagues += [league]
     }
 
+    /// No-op if this is the currently selected league (switch away first) or the only remaining
+    /// active league.
     func removeLeague(_ league: League) {
-        guard league != .default else { return }
+        guard league != selectedLeague, activeLeagues.count > 1 else { return }
         activeLeagues = activeLeagues.filter { $0 != league }
     }
 }

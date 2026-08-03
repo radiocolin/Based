@@ -88,8 +88,18 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private let visibleSegmentedTopInset: CGFloat = 8
     private let hiddenSegmentedTopInset: CGFloat = -48
 
-    init(gamePk: Int, games: [ScheduleGame]) {
-        self.viewModel = GameDetailViewModel(gamePk: gamePk, games: games)
+    init(game: LeagueGame) {
+        let provider = LeagueRegistry.shared.provider(for: game.league)
+        let dataSource = provider.makeGameDetailDataSource(gameID: game.id)
+        self.viewModel = GameDetailViewModel(
+            gameID: game.id,
+            awayTeamID: game.awayTeamID,
+            homeTeamID: game.homeTeamID,
+            awayTeamName: game.awayTeamName,
+            homeTeamName: game.homeTeamName,
+            isInitiallyLive: game.status.isLive,
+            dataSource: dataSource
+        )
         super.init(nibName: nil, bundle: nil)
     }
     
@@ -853,9 +863,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
     private func updateUI(with snapshot: LiveGameSnapshot, wasLive: Bool) {
         let linescore = snapshot.linescore
         let gameData = snapshot.gameData
-        let game = viewModel.currentGames.first(where: { $0.gamePk == viewModel.gamePk })
-        let awayName = game?.teams.away.team.name ?? "Away"
-        let homeName = game?.teams.home.team.name ?? "Home"
+        let awayName = viewModel.initialAwayTeamName
+        let homeName = viewModel.initialHomeTeamName
 
         updateTeamSegmentedControlTitles()
 
@@ -863,8 +872,8 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         let livePitches = snapshot.currentAtBat?.pitches
 
         let isFinal = snapshot.phase == .final
-        let awayId = game?.teams.away.team.id
-        let homeId = game?.teams.home.team.id
+        let awayId = Int(viewModel.awayTeamID)
+        let homeId = Int(viewModel.homeTeamID)
         gameHeaderView.configure(with: linescore, awayNameOverride: awayName, homeNameOverride: homeName, awayId: awayId, homeId: homeId, isFinal: isFinal)
         currentStateView.configure(with: linescore, pitches: livePitches, gameData: gameData, hasActiveAtBat: hasCurrentAtBat)
         timelineView.configureLiveState(linescore: linescore, pitches: livePitches, gameData: gameData, hasActiveAtBat: hasCurrentAtBat)

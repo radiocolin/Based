@@ -8,7 +8,7 @@ class StandingsViewController: UIViewController, UITableViewDataSource, UITableV
         case wildcard = 1
     }
 
-    private let provider: LeagueProvider = LeagueRegistry.shared.provider(for: LeagueSelectionStore.shared.selectedLeague)
+    private var provider: LeagueProvider { LeagueRegistry.shared.provider(for: LeagueSelectionStore.shared.selectedLeague) }
 
     private var currentMode: StandingsMode = .regularSeason
     private var sections: [StandingsSection] = []
@@ -39,6 +39,7 @@ class StandingsViewController: UIViewController, UITableViewDataSource, UITableV
         applyModeAvailability()
 
         NotificationCenter.default.addObserver(self, selector: #selector(tintDidChange), name: TintService.tintDidChangeNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(leagueSelectionChanged), name: LeagueSelectionStore.selectionDidChangeNotification, object: nil)
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: StandingsViewController, _) in
             self.setupNavigationBar()
             self.updateSegmentedControlStyle()
@@ -100,6 +101,13 @@ class StandingsViewController: UIViewController, UITableViewDataSource, UITableV
         updateSegmentedControlStyle()
         segmentedOverlay.setNeedsLayout()
         tableView.reloadData()
+    }
+
+    @objc private func leagueSelectionChanged() {
+        setupNavigationBar()
+        applyModeAvailability()
+        cachedSections = [:]
+        loadStandings()
     }
 
     deinit {
@@ -170,15 +178,26 @@ class StandingsViewController: UIViewController, UITableViewDataSource, UITableV
     }
 
     /// Leagues without a wild-card race (WPBL) never show the Division/Wildcard toggle at all —
-    /// not just an empty second tab.
+    /// not just an empty second tab. Bidirectional and idempotent so switching leagues back and
+    /// forth (via the nav-bar switcher) restores the toggle correctly, not just hides it once.
     private func applyModeAvailability() {
-        guard !provider.supportsWildcardStandings else { return }
-        segmentedControl.isHidden = true
-        segmentedOverlay.isHidden = true
-        tableViewTopConstraint.isActive = false
-        tableViewTopConstraint = tableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8)
-        tableViewTopConstraint.isActive = true
-        currentMode = .regularSeason
+        if provider.supportsWildcardStandings {
+            guard segmentedControl.isHidden else { return }
+            segmentedControl.isHidden = false
+            segmentedOverlay.isHidden = false
+            tableViewTopConstraint.isActive = false
+            tableViewTopConstraint = tableView.topAnchor.constraint(equalTo: segmentedControl.bottomAnchor, constant: 8)
+            tableViewTopConstraint.isActive = true
+        } else {
+            guard !segmentedControl.isHidden else { return }
+            segmentedControl.isHidden = true
+            segmentedOverlay.isHidden = true
+            currentMode = .regularSeason
+            segmentedControl.selectedSegmentIndex = 0
+            tableViewTopConstraint.isActive = false
+            tableViewTopConstraint = tableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8)
+            tableViewTopConstraint.isActive = true
+        }
     }
 
     private func setupLoadingViews() {
@@ -213,6 +232,7 @@ class StandingsViewController: UIViewController, UITableViewDataSource, UITableV
     }
 
     private func setupNavigationBar() {
+        navigationItem.rightBarButtonItem = LeagueSwitcherBarButton.make()
         let titleFont = BarAppearanceSupport.titleFont(for: traitCollection)
         let buttonFont = BarAppearanceSupport.buttonFont(for: traitCollection)
         let appearance = UINavigationBarAppearance()

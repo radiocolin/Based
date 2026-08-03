@@ -110,7 +110,9 @@ final class MLBLeagueProvider: LeagueProvider {
 
     // MARK: - Mapping
 
-    private static func makeLeagueGame(_ game: ScheduleGame) -> LeagueGame {
+    /// Internal (not private) — also used by call sites that still work in terms of ScheduleGame
+    /// directly (e.g. TeamScheduleViewController) to construct a LeagueGame for GameDetailViewController.
+    static func makeLeagueGame(_ game: ScheduleGame) -> LeagueGame {
         let isoFormatter = ISO8601DateFormatter()
         isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let fallbackFormatter = ISO8601DateFormatter()
@@ -126,7 +128,10 @@ final class MLBLeagueProvider: LeagueProvider {
             startDate: startDate,
             status: mapStatus(game.status.detailedState),
             homeScore: game.teams.home.score,
-            awayScore: game.teams.away.score
+            awayScore: game.teams.away.score,
+            venue: game.venue?.name,
+            currentInning: game.linescore?.currentInning,
+            scheduledInnings: game.linescore?.scheduledInnings
         )
     }
 

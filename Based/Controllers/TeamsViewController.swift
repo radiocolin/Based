@@ -3,7 +3,7 @@ import TipKit
 
 class TeamsViewController: UITableViewController {
 
-    private let provider: LeagueProvider = LeagueRegistry.shared.provider(for: LeagueSelectionStore.shared.selectedLeague)
+    private var provider: LeagueProvider { LeagueRegistry.shared.provider(for: LeagueSelectionStore.shared.selectedLeague) }
 
     private var allTeams: [LeagueTeam] = []
     private var favoriteTeams: [LeagueTeam] = []
@@ -26,6 +26,7 @@ class TeamsViewController: UITableViewController {
 
         NotificationCenter.default.addObserver(self, selector: #selector(favoritesChanged), name: FavoritesService.favoritesDidChangeNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(tintDidChange), name: TintService.tintDidChangeNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(leagueSelectionChanged), name: LeagueSelectionStore.selectionDidChangeNotification, object: nil)
 
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: TeamsViewController, _) in
             self.setupNavigationBar()
@@ -101,7 +102,15 @@ class TeamsViewController: UITableViewController {
         tableView.reloadData()
     }
 
+    @objc private func leagueSelectionChanged() {
+        setupNavigationBar()
+        teamRecords = [:]
+        loadTeams()
+        loadStandings()
+    }
+
     private func setupNavigationBar() {
+        navigationItem.rightBarButtonItem = LeagueSwitcherBarButton.make()
         let titleFont = BarAppearanceSupport.titleFont(for: traitCollection)
         let buttonFont = BarAppearanceSupport.buttonFont(for: traitCollection)
         let appearance = UINavigationBarAppearance()

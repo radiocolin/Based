@@ -3,7 +3,7 @@ import Network
 import OSLog
 
 protocol GamePollingServiceDelegate: AnyObject {
-    func pollingService(_ service: GamePollingService, shouldPerformUpdateFor gamePk: Int, sessionID: UUID) async throws
+    func pollingService(_ service: GamePollingService, shouldPerformUpdateFor gamePk: String, sessionID: UUID) async throws
     func pollingService(_ service: GamePollingService, didUpdateRTT rtt: TimeInterval)
     func pollingService(_ service: GamePollingService, didChangeConnectivity connected: Bool)
 }
@@ -37,7 +37,7 @@ class GamePollingService {
     private let mediumPregameThreshold: TimeInterval = 90 * 60
     private let nearPregameThreshold: TimeInterval = 30 * 60
 
-    func start(gamePk: Int, scheduledStartTime: Date?) {
+    func start(gamePk: String, scheduledStartTime: Date?) {
         stop()
         pollingSessionID = UUID()
         self.scheduledStartTime = scheduledStartTime
@@ -118,7 +118,7 @@ class GamePollingService {
         isBackgrounded = true
     }
 
-    func willEnterForeground(gamePk: Int) {
+    func willEnterForeground(gamePk: String) {
         isBackgrounded = false
         let sessionID = pollingSessionID
         Task {
@@ -138,7 +138,7 @@ class GamePollingService {
         delegate?.pollingService(self, didUpdateRTT: recentRTT)
     }
 
-    private func calculatePollingInterval(gamePk: Int) -> TimeInterval {
+    private func calculatePollingInterval(gamePk: String) -> TimeInterval {
         let base = basePollingInterval()
         let interval = consecutiveErrors > 0 ? min(base * pow(2.0, Double(consecutiveErrors - 1)), maxBackoffInterval) : base
         logPollingIntervalIfNeeded(interval, base: base)

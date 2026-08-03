@@ -59,6 +59,7 @@ struct ScorecardDataTransformer {
             lineups: lineups,
             pitchers: pitchers,
             innings: scorecardInnings,
+            scheduledInnings: linescore?.scheduledInnings ?? 9,
             timeline: timeline,
             liveCurrentAtBat: liveCurrentAtBat,
             advisories: Array(advisories.prefix(3)),

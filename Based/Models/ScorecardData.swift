@@ -7,6 +7,10 @@ struct ScorecardData: Codable, Sendable, Equatable {
     let lineups: Lineups
     let pitchers: ScorecardPitchers
     let innings: [ScorecardInning]
+    /// The league's standard game length (MLB: 9, WPBL: 7) — the grid always shows at least
+    /// this many columns even for a shortened game, but never forces extra empty columns beyond
+    /// what a league actually plays a full game as.
+    let scheduledInnings: Int
     let timeline: [AtBatEvent]
     let liveCurrentAtBat: AtBatEvent?
     let advisories: [String]

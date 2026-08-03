@@ -40,7 +40,7 @@ class TeamScheduleViewController: UIViewController {
 
     private func setupDataSourceCallbacks() {
         scheduleDataSource.onGameSelected = { [weak self] game in
-            let detailVC = GameDetailViewController(gamePk: game.gamePk, games: [game])
+            let detailVC = GameDetailViewController(game: MLBLeagueProvider.makeLeagueGame(game))
             detailVC.hidesBottomBarWhenPushed = true
             self?.navigationController?.pushViewController(detailVC, animated: true)
         }

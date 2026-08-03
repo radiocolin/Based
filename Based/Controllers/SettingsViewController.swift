@@ -37,6 +37,7 @@ class SettingsViewController: UIViewController {
         NotificationCenter.default.addObserver(self, selector: #selector(favoritesDidChange), name: FavoritesService.favoritesDidChangeNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(themeDidChange), name: ThemeService.themeDidChangeNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(tintDidChange), name: TintService.tintDidChangeNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(leagueSelectionChanged), name: LeagueSelectionStore.selectionDidChangeNotification, object: nil)
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self, UITraitUserInterfaceStyle.self]) { (self: SettingsViewController, _) in
             self.setupNavigationBar()
             self.tableView.reloadData()
@@ -126,6 +127,10 @@ class SettingsViewController: UIViewController {
         setupNavigationBar()
         tableView.reloadData()
     }
+
+    @objc private func leagueSelectionChanged() {
+        tableView.reloadData()
+    }
     
     private func presentColorPicker() {
         let picker = UIColorPickerViewController()
@@ -205,6 +210,31 @@ class SettingsViewController: UIViewController {
         presentSelectionSheet(title: "Tint Color", sections: sections)
     }
 
+    private func presentLeagueSelector() {
+        let store = LeagueSelectionStore.shared
+        let active = store.activeLeagues
+        let selected = store.selectedLeague
+        let options = League.allCases.map { league -> SettingsSelectionOption in
+            let isActive = active.contains(league)
+            let isCurrentSelection = league == selected
+            return SettingsSelectionOption(
+                title: league.fullName,
+                isSelected: isActive,
+                accessibilityValue: isCurrentSelection ? "Currently viewing" : (isActive ? "Selected" : nil)
+            ) { [weak self] in
+                guard !isCurrentSelection else { return }
+                if isActive {
+                    store.removeLeague(league)
+                } else {
+                    store.addLeague(league)
+                }
+                self?.dismiss(animated: true)
+            }
+        }
+
+        presentSelectionSheet(title: "Leagues", sections: [SettingsSelectionSection(title: nil, options: options)])
+    }
+
     private func presentFavoriteTeamSelector() {
         let sorted = teamMap.sorted { $0.value < $1.value }
         let options = sorted.compactMap { id, name -> SettingsSelectionOption? in
@@ -280,7 +310,7 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         switch section {
-        case 0: return 3 // Appearance + Tint Color + Compact Scorecard
+        case 0: return 4 // Appearance + Tint Color + Compact Scorecard + Leagues
         case 1: return favoriteTeamIds.count + 1 // Favorites + Add row
         case 2: return 2 // Wheelie, Away Message
         case 3: return 1 // Attribution
@@ -528,6 +558,22 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
                 cell.accessibilityLabel = "Compact scorecard"
                 cell.accessibilityValue = toggle.isOn ? "On" : "Off"
                 cell.accessibilityHint = "Only start a new column when the batting order returns to the start."
+            } else if indexPath.row == 3 {
+                let activeLeagues = LeagueSelectionStore.shared.activeLeagues
+                let summary = activeLeagues.map(\.displayName).joined(separator: ", ")
+                cell.textLabel?.text = "Leagues"
+                cell.detailTextLabel?.text = summary
+
+                let config = UIImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+                let ellipsisImg = UIImage(systemName: "ellipsis", withConfiguration: config)
+                let ellipsisView = UIImageView(image: ellipsisImg)
+                ellipsisView.tintColor = AppColors.pencil.withAlphaComponent(0.6)
+                cell.accessoryView = ellipsisView
+                cell.editingAccessoryView = ellipsisView
+
+                cell.accessibilityLabel = "Leagues"
+                cell.accessibilityValue = summary
+                cell.accessibilityHint = "Double tap to add or remove leagues."
             } else {
                 let currentTint = TintService.shared.tintColor
                 var currentTeamName: String?
@@ -689,6 +735,8 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
             presentTintSelector()
         } else if indexPath.section == 0 && indexPath.row == 2 {
             return
+        } else if indexPath.section == 0 && indexPath.row == 3 {
+            presentLeagueSelector()
         } else if indexPath.section == 1 && indexPath.row < favoriteTeamIds.count {
             presentFavoriteTeamOptions(teamId: favoriteTeamIds[indexPath.row])
         } else if indexPath.section == 1 && indexPath.row == favoriteTeamIds.count

@@ -243,7 +243,7 @@ extension GamePickerView: UICollectionViewDataSource, UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: GameCardCell.reuseIdentifier, for: indexPath) as! GameCardCell
         let game = games[indexPath.item]
-        cell.configure(with: game, isSelected: game.gamePk == selectedGamePk)
+        cell.configure(with: MLBLeagueProvider.makeLeagueGame(game), isSelected: game.gamePk == selectedGamePk)
         return cell
     }
 
@@ -314,7 +314,7 @@ class GameCardCell: UICollectionViewCell {
     private let linesLayer = CAShapeLayer()
     private let highlighterLayer = CAShapeLayer()
     private var winningTeamLabel: UILabel?
-    private var gamePk: Int = 0
+    private var jitterSeed: Int = 0
 
     private let paperColor = AppColors.paper
     private var selectedColor: UIColor { AppColors.selected }
@@ -438,35 +438,21 @@ class GameCardCell: UICollectionViewCell {
         ])
     }
 
-    func configure(with game: ScheduleGame, isSelected: Bool) {
-        let awayName = game.teams.away.team.name ?? "AWAY"
-        let homeName = game.teams.home.team.name ?? "HOME"
+    func configure(with game: LeagueGame, isSelected: Bool) {
+        awayLabel.text = abbreviation(for: game.awayTeamName)
+        homeLabel.text = abbreviation(for: game.homeTeamName)
 
-        awayLabel.text = abbreviation(for: awayName)
-        homeLabel.text = abbreviation(for: homeName)
-        
-        awayLabel.textColor = TeamColorProvider.color(for: awayName)
-        homeLabel.textColor = TeamColorProvider.color(for: homeName)
+        awayLabel.textColor = TeamColorProvider.color(for: game.awayTeamName)
+        homeLabel.textColor = TeamColorProvider.color(for: game.homeTeamName)
 
-        // Scores
-        if let s = game.teams.away.score {
-            awayScoreLabel.text = "\(s)"
-        } else {
-            awayScoreLabel.text = ""
-        }
-        if let s = game.teams.home.score {
-            homeScoreLabel.text = "\(s)"
-        } else {
-            homeScoreLabel.text = ""
-        }
-        
-        self.gamePk = game.gamePk
+        awayScoreLabel.text = game.awayScore.map { "\($0)" } ?? ""
+        homeScoreLabel.text = game.homeScore.map { "\($0)" } ?? ""
+
+        self.jitterSeed = abs(game.id.hashValue)
 
         // Winning Team Highlight
-        let state = game.status.detailedState
-        let isFinal = ["Final", "Game Over", "Completed Early"].contains(state)
         winningTeamLabel = nil
-        if isFinal, let awayS = game.teams.away.score, let homeS = game.teams.home.score {
+        if game.status.isFinal, let awayS = game.awayScore, let homeS = game.homeScore {
             if awayS > homeS {
                 winningTeamLabel = awayLabel
             } else if homeS > awayS {
@@ -485,7 +471,7 @@ class GameCardCell: UICollectionViewCell {
 
         // Status & Venue
         statusLabel.text = formatStatus(game)
-        venueLabel.text = game.venue?.name ?? ""
+        venueLabel.text = game.venue ?? ""
 
         // Selection state
         contentView.backgroundColor = isSelected ? selectedColor : paperColor
@@ -502,30 +488,17 @@ class GameCardCell: UICollectionViewCell {
         return map[teamName] ?? String(teamName.prefix(3)).uppercased()
     }
 
-    private func formatStatus(_ game: ScheduleGame) -> String {
-        let state = game.status.detailedState
-        switch state {
-        case "Final", "Game Over", "Completed Early":
-            if let currentInning = game.linescore?.currentInning,
-               currentInning > (game.linescore?.scheduledInnings ?? 9) {
+    private func formatStatus(_ game: LeagueGame) -> String {
+        switch game.status {
+        case .final:
+            if let currentInning = game.currentInning, currentInning > (game.scheduledInnings ?? 9) {
                 return "FINAL/\(currentInning)"
             }
             return "FINAL"
-        case "In Progress": return "LIVE"
-        case "Scheduled", "Pre-Game": return formatGameTime(game.gameDate)
-        default: return state.uppercased()
+        case .live: return "LIVE"
+        case .scheduled: return formatTime(game.startDate)
+        case .other(let text): return text.uppercased()
         }
-    }
-
-    private func formatGameTime(_ isoDate: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let date = formatter.date(from: isoDate) else {
-            let basic = ISO8601DateFormatter()
-            guard let date = basic.date(from: isoDate) else { return "" }
-            return formatTime(date)
-        }
-        return formatTime(date)
     }
 
     private func formatTime(_ date: Date) -> String {
@@ -552,7 +525,7 @@ class GameCardCell: UICollectionViewCell {
             let highlightPath = UIBezierPath()
             let midY = label.frame.midY
 
-            let seed = CGFloat(gamePk % 100) / 100.0
+            let seed = CGFloat(jitterSeed % 100) / 100.0
             let verticalShift = (seed - 0.5) * 4.0
             let tilt = (seed - 0.5) * 3.0
 
