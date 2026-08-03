@@ -47,7 +47,7 @@ class TeamScheduleViewController: UIViewController {
         
         rosterDataSource.onPlayerSelected = { [weak self] player in
             guard let playerId = player.person?.id, let fullName = player.person?.fullName else { return }
-            let playerVC = PlayerDetailViewController(playerId: playerId, fullName: fullName, position: player.position?.name ?? "")
+            let playerVC = PlayerDetailViewController(playerId: String(playerId), fullName: fullName, position: player.position?.name ?? "")
             self?.present(playerVC, animated: true)
         }
     }

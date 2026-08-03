@@ -50,7 +50,10 @@ class TimelineView: UIView {
     private var umpires: [ScorecardUmpire] = []
     private var gameInfoItems: [GameInfoItem] = []
     private var weather: Weather?
-    private var footerPitchersByID: [Int: ScorecardPitcher] = [:]
+    /// Indexed the same way GameFooterContent.makePitcherSection assigns row.tag: a flat running
+    /// count across all groups in (away, home) order. UIView.tag is Int-only, so this avoids
+    /// needing a hashable-but-opaque player id (WPBL ids aren't integers) as the lookup key.
+    private var footerPitchers: [ScorecardPitcher] = []
     
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -246,7 +249,7 @@ class TimelineView: UIView {
         self.weather = weather
         self.awayTeamName = teams.away.name ?? "Away"
         self.homeTeamName = teams.home.name ?? "Home"
-        self.footerPitchersByID = Dictionary(uniqueKeysWithValues: (pitchers.away + pitchers.home).map { ($0.id, $0) })
+        self.footerPitchers = pitchers.away + pitchers.home
         rebuildFooter()
     }
     
@@ -339,7 +342,8 @@ class TimelineView: UIView {
     
     @objc private func handlePitcherTap(_ gesture: UITapGestureRecognizer) {
         guard let view = gesture.view else { return }
-        guard let pitcher = footerPitchersByID[view.tag] else { return }
+        guard footerPitchers.indices.contains(view.tag) else { return }
+        let pitcher = footerPitchers[view.tag]
         delegate?.didSelectTimelinePitcher(pitcher)
     }
 }

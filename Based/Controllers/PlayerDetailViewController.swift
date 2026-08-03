@@ -49,7 +49,7 @@ class PlayerDetailViewController: UIViewController {
         super.init(nibName: nil, bundle: nil)
     }
 
-    init(playerId: Int, fullName: String, position: String) {
+    init(playerId: String, fullName: String, position: String) {
         let batter = ScorecardBatter(id: playerId, fullName: fullName, abbreviation: "", position: position, jerseyNumber: nil, battingOrderSlot: nil, inningEntered: nil, inningExited: nil)
         self.subject = .batter(batter, nil)
         super.init(nibName: nil, bundle: nil)
@@ -80,7 +80,7 @@ class PlayerDetailViewController: UIViewController {
     }
 
 
-    private var playerID: Int {
+    private var playerID: String {
         switch subject {
         case let .batter(batter, _):
             return batter.id
@@ -348,7 +348,10 @@ class PlayerDetailViewController: UIViewController {
     private func fetchPlayerInfo() {
         Task {
             do {
-                let info = try await GameService.shared.fetchPlayerInfo(playerId: playerID)
+                guard let numericId = Int(playerID) else {
+                    throw NSError(domain: "PlayerDetailViewController", code: 400, userInfo: [NSLocalizedDescriptionKey: "Non-MLB player id"])
+                }
+                let info = try await GameService.shared.fetchPlayerInfo(playerId: numericId)
                 self.playerInfo = info
                 await MainActor.run {
                     self.updateWithPlayerInfo(info)

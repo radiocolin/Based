@@ -67,7 +67,7 @@ struct ScorecardDataTransformer {
             gameDate: gameDate,
             currentInning: linescore?.currentInning ?? activePlay?.about?.inning,
             isTopInning: linescore?.isTopInning ?? activePlay?.about?.isTopInning,
-            currentBatterId: linescore?.offense?.batter?.id ?? activePlay?.matchup?.batter?.id
+            currentBatterId: (linescore?.offense?.batter?.id ?? activePlay?.matchup?.batter?.id).map(String.init)
         )
     }
 
@@ -169,9 +169,9 @@ struct ScorecardDataTransformer {
     ) -> [ScorecardInning] {
         var scorecardInnings: [ScorecardInning] = []
         let linescoreInnings = linescore?.innings ?? []
-        var awayLastPitcherId: Int?
+        var awayLastPitcherId: String?
         var awayLastPitcherName: String?
-        var homeLastPitcherId: Int?
+        var homeLastPitcherId: String?
         var homeLastPitcherName: String?
 
         for i in 1...maxInning {
@@ -228,9 +228,9 @@ struct ScorecardDataTransformer {
     ) -> [AtBatEvent] {
         let filteredPlays = allPlays.filter { shouldIncludePlayInScorecard($0, includeLive: false) }
         
-        var awayLastPitcherId: Int?
+        var awayLastPitcherId: String?
         var awayLastPitcherName: String?
-        var homeLastPitcherId: Int?
+        var homeLastPitcherId: String?
         var homeLastPitcherName: String?
         
         let timelineEvents = filteredPlays.map { play -> AtBatEvent in
@@ -288,20 +288,21 @@ struct ScorecardDataTransformer {
             playIndex: currentIndex,
             playerNameMap: playerNameMap,
             playerNumberMap: playerNumberMap,
-            lastPitcherId: previousPlay?.matchup?.pitcher?.id,
+            lastPitcherId: previousPlay?.matchup?.pitcher?.id.map(String.init),
             lastPitcherName: previousPlay?.matchup?.pitcher?.fullName
         )
     }
 
-    private static func scoringPlayerIds(from plays: [Play]) -> [Int] {
-        var scoringIds: [Int] = []
+    private static func scoringPlayerIds(from plays: [Play]) -> [String] {
+        var scoringIds: [String] = []
         for play in plays {
             for runner in play.runners ?? [] {
                 guard let runnerId = runner.details?.runner?.id else { continue }
                 let endBase = runner.movement?.end?.lowercased()
                 let didScore = endBase == "score" || endBase == "home" || runner.details?.isScoringEvent == true
-                if didScore, !scoringIds.contains(runnerId) {
-                    scoringIds.append(runnerId)
+                let idString = String(runnerId)
+                if didScore, !scoringIds.contains(idString) {
+                    scoringIds.append(idString)
                 }
             }
         }
@@ -313,9 +314,9 @@ struct ScorecardDataTransformer {
         allPlays: [Play],
         playerNameMap: [Int: String],
         playerNumberMap: [Int: String],
-        initialPitcherId: Int?,
+        initialPitcherId: String?,
         initialPitcherName: String?
-    ) -> (events: [AtBatEvent], lastPitcherId: Int?, lastPitcherName: String?) {
+    ) -> (events: [AtBatEvent], lastPitcherId: String?, lastPitcherName: String?) {
         var events: [AtBatEvent] = []
         var placedRunnerIds = Set<Int>()
         var currentLastPitcherId = initialPitcherId
@@ -384,12 +385,12 @@ struct ScorecardDataTransformer {
         playIndex: Int,
         playerNameMap: [Int: String],
         playerNumberMap: [Int: String],
-        lastPitcherId: Int?,
+        lastPitcherId: String?,
         lastPitcherName: String?
     ) -> AtBatEvent {
         let inning = seedPlay.about?.inning ?? 1
         let isTop = seedPlay.about?.isTopInning ?? true
-        let pitcherId = seedPlay.matchup?.pitcher?.id ?? 0
+        let pitcherId = String(seedPlay.matchup?.pitcher?.id ?? 0)
         let pitcherName = seedPlay.matchup?.pitcher?.fullName ?? "Unknown"
         let isPitchingChange = lastPitcherId != nil && pitcherId != lastPitcherId
         let previousPitcherName = isPitchingChange ? lastPitcherName : nil
@@ -473,7 +474,7 @@ struct ScorecardDataTransformer {
 
         return AtBatEvent(
             atBatIndex: seedPlay.about?.atBatIndex,
-            batterId: runnerId,
+            batterId: String(runnerId),
             batterName: runnerName,
             pinchRunnerName: state.pinchRunnerName,
             pitcherId: pitcherId,
@@ -500,7 +501,7 @@ struct ScorecardDataTransformer {
         playIndex: Int,
         playerNameMap: [Int: String],
         playerNumberMap: [Int: String],
-        lastPitcherId: Int?,
+        lastPitcherId: String?,
         lastPitcherName: String?
     ) -> AtBatEvent {
         let pitches = (play.playEvents ?? []).filter { $0.isPitch == true }.enumerated().map { (index, event) in
@@ -521,7 +522,7 @@ struct ScorecardDataTransformer {
 
         let batterId = play.matchup?.batter?.id ?? 0
         let batterName = play.matchup?.batter?.fullName ?? "Unknown"
-        let pitcherId = play.matchup?.pitcher?.id ?? 0
+        let pitcherId = String(play.matchup?.pitcher?.id ?? 0)
         let pitcherName = play.matchup?.pitcher?.fullName ?? "Unknown"
         let inning = play.about?.inning ?? 1
         let isTop = play.about?.isTopInning ?? true
@@ -634,7 +635,7 @@ struct ScorecardDataTransformer {
 
         return AtBatEvent(
             atBatIndex: play.about?.atBatIndex,
-            batterId: batterId,
+            batterId: String(batterId),
             batterName: batterName,
             pinchRunnerName: state.pinchRunnerName,
             pitcherId: pitcherId,
@@ -827,7 +828,7 @@ struct ScorecardDataTransformer {
         if suffixes.contains(abbreviation) && components.count >= 2 { abbreviation = "\(components[components.count - 2]) \(abbreviation)" }
         let battingSlot = battingOrderSlot(for: player, fallbackIds: team?.battingOrder, playerId: id)
         return ScorecardBatter(
-            id: id,
+            id: String(id),
             fullName: name,
             abbreviation: abbreviation,
             position: player.position?.abbreviation ?? "",
@@ -842,7 +843,7 @@ struct ScorecardDataTransformer {
         guard let player = findPlayer(in: team, id: id), let person = player.person else { return nil }
         let stats = player.stats?.pitching
         let ip = stats?.inningsPitched ?? "0.0", h = stats?.hits ?? 0, er = stats?.runs ?? 0, bb = stats?.baseOnBalls ?? 0, k = stats?.strikeOuts ?? 0, r = stats?.runs ?? 0
-        return ScorecardPitcher(id: id, fullName: person.fullName ?? "Unknown", stats: "\(ip) IP, \(h) H, \(er) ER, \(bb) BB, \(k) K", ip: ip, h: h, r: r, er: er, bb: bb, k: k)
+        return ScorecardPitcher(id: String(id), fullName: person.fullName ?? "Unknown", stats: "\(ip) IP, \(h) H, \(er) ER, \(bb) BB, \(k) K", ip: ip, h: h, r: r, er: er, bb: bb, k: k)
     }
 
     private static func getParticipation(for playerId: Int, allPlays: [Play]) -> (entered: Int?, exited: Int?) {

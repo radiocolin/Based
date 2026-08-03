@@ -954,14 +954,14 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         
         let inning = scorecard.currentInning ?? 1
         let currentIsTop = scorecard.isTopInning ?? true
-        let batterId = scorecard.currentBatterId ?? 0
+        let batterId = scorecard.currentBatterId ?? ""
         let newKey = "\(inning)-\(currentIsTop)-\(batterId)"
-        
+
         if isFirstLoad {
             if viewModel.isGameLive {
                 syncWithActiveAtBat()
             }
-        } else if viewModel.isGameLive && newKey != viewModel.lastActiveAtBatKey && batterId != 0 {
+        } else if viewModel.isGameLive && newKey != viewModel.lastActiveAtBatKey && !batterId.isEmpty {
             // Auto-scroll only if viewing the team at bat
             let viewingBattingTeam = (currentIsTop && teamSegmentedControl.selectedSegmentIndex == 0) ||
                                      (!currentIsTop && teamSegmentedControl.selectedSegmentIndex == 1)
@@ -1345,7 +1345,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         }
     }
 
-    private func scorecardBatter(for id: Int, fallbackName: String) -> ScorecardBatter {
+    private func scorecardBatter(for id: String, fallbackName: String) -> ScorecardBatter {
         if let scorecard = viewModel.currentScorecard {
             if let batter = (scorecard.lineups.home + scorecard.lineups.away).first(where: { $0.id == id }) {
                 return batter
@@ -1365,7 +1365,7 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
         )
     }
 
-    private func scorecardPitcher(for id: Int, fallbackName: String) -> ScorecardPitcher {
+    private func scorecardPitcher(for id: String, fallbackName: String) -> ScorecardPitcher {
         if let scorecard = viewModel.currentScorecard {
             if let pitcher = (scorecard.pitchers.home + scorecard.pitchers.away).first(where: { $0.id == id }) {
                 return pitcher
@@ -1381,8 +1381,10 @@ class GameDetailViewController: UIViewController, ScorecardViewDelegate, GameUpd
 
     @objc private func handlePitcherNameTap(_ gesture: UITapGestureRecognizer) {
         guard let view = gesture.view else { return }
-        guard let pitcher = viewModel.currentPitchers.first(where: { $0.id == view.tag }) else { return }
-        presentPitcherDetail(for: pitcher)
+        // row.tag is a flat index into the single "PITCHERS" group passed to
+        // makePitcherSection in updatePitcherList — matches viewModel.currentPitchers 1:1.
+        guard viewModel.currentPitchers.indices.contains(view.tag) else { return }
+        presentPitcherDetail(for: viewModel.currentPitchers[view.tag])
     }
 
     private func calculatePlayerStats(for batter: ScorecardBatter) -> PlayerGameStats {
