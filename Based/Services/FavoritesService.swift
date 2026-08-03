@@ -104,6 +104,15 @@ final class FavoritesService: Sendable {
         return defaults.stringArray(forKey: favoritesKey(for: league)) ?? []
     }
 
+    func setFavoriteTeamIDs(_ ids: [String], league: League) {
+        if league == .mlb {
+            setFavoriteTeamIds(ids.compactMap(Int.init))
+            return
+        }
+        defaults.set(ids, forKey: favoritesKey(for: league))
+        NotificationCenter.default.post(name: Self.favoritesDidChangeNotification, object: nil)
+    }
+
     func isAutoEnterEnabled(teamID: String, league: League) -> Bool {
         if league == .mlb, let intID = Int(teamID) { return isAutoEnterEnabled(for: intID) }
         let autoEnters = defaults.stringArray(forKey: autoEnterKey(for: league)) ?? []

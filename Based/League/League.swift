@@ -18,6 +18,6 @@ enum League: String, CaseIterable, Codable, Sendable {
         }
     }
 
-    /// The league every fresh install starts on. Always present in `LeagueSelectionStore.activeLeagues` and cannot be removed.
+    /// The league every fresh install starts on.
     static let `default`: League = .mlb
 }
