@@ -35,16 +35,17 @@ struct TeamColorProvider {
         "Toronto Blue Jays": UIColor(red: 0.05, green: 0.31, blue: 0.62, alpha: 1.0),
         "Washington Nationals": UIColor(red: 0.67, green: 0.04, blue: 0.16, alpha: 1.0),
 
-        // WPBL — sourced from each team's official colors per Wikipedia's infobox (color1 hex),
-        // not guessed: Boston Hunters #00281F/#F4801B/#FDF9D6, Los Angeles Queens
-        // #000000/#B09067/#FFFFFF, New York Heights #091C47/#68C4E9/#FFFFFF, San Francisco
-        // Firebells #2D1748/#FF2100/#8B73B1.
-        "Boston Hunters": UIColor(red: 0.0, green: 0.157, blue: 0.122, alpha: 1.0),
-        // Queens' primary is literal black — like the White Sox above, using their secondary
-        // (gold) instead of a near-black primary that reads as indistinguishable from default ink.
-        "Los Angeles Queens": UIColor(red: 0.690, green: 0.565, blue: 0.404, alpha: 1.0),
-        "New York Heights": UIColor(red: 0.035, green: 0.110, blue: 0.278, alpha: 1.0),
-        "San Francisco Firebells": UIColor(red: 0.176, green: 0.090, blue: 0.282, alpha: 1.0),
+        // WPBL — sourced from each team's official colors per Wikipedia's infobox (verified via
+        // raw wikitext hex codes, not guessed): Boston Hunters #00281F/#F4801B/#FDF9D6, Los
+        // Angeles Queens #000000/#B09067/#FFFFFF, New York Heights #091C47/#68C4E9/#FFFFFF, San
+        // Francisco Firebells #2D1748/#FF2100/#8B73B1. Each team below uses whichever of its own
+        // official colors reads best as an app accent — the vivid secondary over a near-black or
+        // near-navy primary that barely distinguishes itself from default ink, mirroring how the
+        // White Sox/Pirates/Padres entries above already substitute a livelier real team color.
+        "Boston Hunters": UIColor(red: 0.957, green: 0.502, blue: 0.106, alpha: 1.0), // orange
+        "Los Angeles Queens": UIColor(red: 0.690, green: 0.565, blue: 0.404, alpha: 1.0), // gold (primary is black)
+        "New York Heights": UIColor(red: 0.408, green: 0.769, blue: 0.914, alpha: 1.0), // light blue
+        "San Francisco Firebells": UIColor(red: 1.0, green: 0.129, blue: 0.0, alpha: 1.0), // red
     ]
 
     // A few teams still need stronger dark-mode lifts than the shared algorithm provides.
