@@ -443,12 +443,16 @@ class ScheduleViewController: UIViewController {
     }
 
     private func sortedGames(_ games: [LeagueGame]) -> [LeagueGame] {
-        let favoriteIds = FavoritesService.shared.getFavoriteTeamIds()
-
+        // Keyed by each game's own stamped league (not the ambient `provider`) so a league
+        // switch mid-fetch can't mismatch a game against the wrong favorites list.
+        var favoritesByLeague: [League: [String]] = [:]
         func favoriteIndex(_ game: LeagueGame) -> Int? {
-            let awayId = Int(game.awayTeamID)
-            let homeId = Int(game.homeTeamID)
-            return favoriteIds.firstIndex { $0 == awayId || $0 == homeId }
+            let favoriteIds = favoritesByLeague[game.league] ?? {
+                let ids = FavoritesService.shared.getFavoriteTeamIDs(for: game.league)
+                favoritesByLeague[game.league] = ids
+                return ids
+            }()
+            return favoriteIds.firstIndex { $0 == game.awayTeamID || $0 == game.homeTeamID }
         }
 
         func statusPriority(_ game: LeagueGame) -> ScheduleStatusPriority {
@@ -490,8 +494,8 @@ class ScheduleViewController: UIViewController {
     }
 
     private func isFavoriteGame(_ game: LeagueGame) -> Bool {
-        (Int(game.awayTeamID).map { FavoritesService.shared.isFavorite(teamId: $0) } ?? false) ||
-        (Int(game.homeTeamID).map { FavoritesService.shared.isFavorite(teamId: $0) } ?? false)
+        FavoritesService.shared.isFavorite(teamID: game.awayTeamID, league: game.league) ||
+        FavoritesService.shared.isFavorite(teamID: game.homeTeamID, league: game.league)
     }
 
     private func loadSchedule(for date: Date, triggerAutoEntry: Bool = false) {
@@ -579,13 +583,13 @@ class ScheduleViewController: UIViewController {
 
     func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
         let game = currentGames[indexPath.item]
-        // Favoriting is MLB-only for now (FavoritesService isn't league-scoped yet) — no menu
-        // for a league whose team ids don't resolve to Int rather than a broken/no-op one.
-        guard let awayId = Int(game.awayTeamID), let homeId = Int(game.homeTeamID) else { return nil }
+        let league = game.league
+        let awayId = game.awayTeamID
+        let homeId = game.homeTeamID
         let awayName = game.awayTeamName
         let homeName = game.homeTeamName
-        let awayIsFav = FavoritesService.shared.isFavorite(teamId: awayId)
-        let homeIsFav = FavoritesService.shared.isFavorite(teamId: homeId)
+        let awayIsFav = FavoritesService.shared.isFavorite(teamID: awayId, league: league)
+        let homeIsFav = FavoritesService.shared.isFavorite(teamID: homeId, league: league)
 
         return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
             let awayAction = UIAction(
@@ -596,7 +600,7 @@ class ScheduleViewController: UIViewController {
                 let feedback = UISelectionFeedbackGenerator()
                 feedback.prepare()
                 feedback.selectionChanged()
-                FavoritesService.shared.toggleFavorite(teamId: awayId)
+                FavoritesService.shared.toggleFavorite(teamID: awayId, league: league)
                 self?.loadSchedule(for: self?.currentDate ?? Date())
             }
 
@@ -608,7 +612,7 @@ class ScheduleViewController: UIViewController {
                 let feedback = UISelectionFeedbackGenerator()
                 feedback.prepare()
                 feedback.selectionChanged()
-                FavoritesService.shared.toggleFavorite(teamId: homeId)
+                FavoritesService.shared.toggleFavorite(teamID: homeId, league: league)
                 self?.loadSchedule(for: self?.currentDate ?? Date())
             }
 
@@ -662,10 +666,9 @@ private extension ScheduleViewController {
         let autoEnterGames = currentGames.filter { game in
             guard game.status.isLive else { return false }
 
-            guard let awayId = Int(game.awayTeamID), let homeId = Int(game.homeTeamID) else { return false }
-
-            let awayAuto = FavoritesService.shared.isFavorite(teamId: awayId) && FavoritesService.shared.isAutoEnterEnabled(for: awayId)
-            let homeAuto = FavoritesService.shared.isFavorite(teamId: homeId) && FavoritesService.shared.isAutoEnterEnabled(for: homeId)
+            let league = game.league
+            let awayAuto = FavoritesService.shared.isFavorite(teamID: game.awayTeamID, league: league) && FavoritesService.shared.isAutoEnterEnabled(teamID: game.awayTeamID, league: league)
+            let homeAuto = FavoritesService.shared.isFavorite(teamID: game.homeTeamID, league: league) && FavoritesService.shared.isAutoEnterEnabled(teamID: game.homeTeamID, league: league)
 
             return awayAuto || homeAuto
         }

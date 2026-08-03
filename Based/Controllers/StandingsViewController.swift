@@ -401,11 +401,10 @@ class StandingsViewController: UIViewController, UITableViewDataSource, UITableV
 
     func tableView(_ tableView: UITableView, contextMenuConfigurationForRowAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
         let row = sections[indexPath.section].rows[indexPath.row]
-        guard case .team(let teamRow) = row, let teamId = Int(teamRow.teamID) else {
-            return nil
-        }
+        guard case .team(let teamRow) = row else { return nil }
 
-        let isFavorite = FavoritesService.shared.isFavorite(teamId: teamId)
+        let league = provider.league
+        let isFavorite = FavoritesService.shared.isFavorite(teamID: teamRow.teamID, league: league)
         let teamName = teamRow.teamName
 
         return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in
@@ -416,7 +415,7 @@ class StandingsViewController: UIViewController, UITableViewDataSource, UITableV
                 let feedback = UISelectionFeedbackGenerator()
                 feedback.prepare()
                 feedback.selectionChanged()
-                FavoritesService.shared.toggleFavorite(teamId: teamId)
+                FavoritesService.shared.toggleFavorite(teamID: teamRow.teamID, league: league)
             }
 
             return UIMenu(title: teamName, children: [favoriteAction])

@@ -31,22 +31,34 @@ final class WPBLGameDataSource: GameDetailDataSource, GamePollingServiceDelegate
 
     func fetchPlayerInfo(playerID: String) async throws -> PlayerInfo {
         let player = try await client.fetchPlayer(playerID: playerID)
+
+        // WPBL's API reports unpopulated bio fields as "" rather than omitting them (see
+        // WPBL.md) — PlayerInfo's consumers (PlayerDetailViewController.updateBioInfo) use
+        // `if let` to decide what to render, which only hides a field if it's actually nil, not
+        // just empty. Normalize here so blank fields disappear now and any that do get
+        // populated later show up automatically with no further changes.
+        func nonEmpty(_ value: String?) -> String? {
+            guard let value, !value.isEmpty else { return nil }
+            return value
+        }
+
+        let position = nonEmpty(player.position)
         return PlayerInfo(
             id: nil,
             fullName: "\(player.firstName) \(player.lastName)",
             firstName: player.firstName,
             lastName: player.lastName,
-            primaryNumber: player.uniform.isEmpty ? nil : player.uniform,
+            primaryNumber: nonEmpty(player.uniform),
             birthDate: nil,
             currentAge: nil,
             birthCity: nil,
             birthCountry: nil,
-            height: player.bio?.height ?? player.height,
+            height: nonEmpty(player.bio?.height) ?? nonEmpty(player.height),
             weight: nil,
-            primaryPosition: Position(code: nil, name: nil, type: nil, abbreviation: player.position),
-            batSide: HandSide(code: player.bio?.bats, description: nil),
-            pitchHand: HandSide(code: player.bio?.throwsHand, description: nil),
-            currentTeam: TeamInfo(id: nil, name: nil),
+            primaryPosition: position.map { Position(code: nil, name: $0, type: nil, abbreviation: $0) },
+            batSide: nonEmpty(player.bio?.bats).map { HandSide(code: $0, description: nil) },
+            pitchHand: nonEmpty(player.bio?.throwsHand).map { HandSide(code: $0, description: nil) },
+            currentTeam: nil,
             stats: nil
         )
     }

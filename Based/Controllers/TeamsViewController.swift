@@ -166,16 +166,16 @@ class TeamsViewController: UITableViewController {
     }
 
     private func applyFavoritesFilter() {
-        let favoriteIds = FavoritesService.shared.getFavoriteTeamIds()
+        let league = provider.league
+        let favoriteIds = FavoritesService.shared.getFavoriteTeamIDs(for: league)
         func isFavorite(_ team: LeagueTeam) -> Bool {
-            guard let id = Int(team.id) else { return false }
-            return favoriteIds.contains(id)
+            favoriteIds.contains(team.id)
         }
 
         favoriteTeams = allTeams.filter(isFavorite)
             .sorted { a, b in
-                let ai = Int(a.id).flatMap { favoriteIds.firstIndex(of: $0) } ?? Int.max
-                let bi = Int(b.id).flatMap { favoriteIds.firstIndex(of: $0) } ?? Int.max
+                let ai = favoriteIds.firstIndex(of: a.id) ?? Int.max
+                let bi = favoriteIds.firstIndex(of: b.id) ?? Int.max
                 return ai < bi
             }
         otherTeams = allTeams.filter { !isFavorite($0) }
@@ -305,8 +305,8 @@ class TeamsViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, contextMenuConfigurationForRowAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
         let team = teamEntry(for: indexPath)
-        guard let teamId = Int(team.id) else { return nil }
-        let isFavorite = FavoritesService.shared.isFavorite(teamId: teamId)
+        let league = provider.league
+        let isFavorite = FavoritesService.shared.isFavorite(teamID: team.id, league: league)
 
         return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in
             let favoriteAction = UIAction(
@@ -316,7 +316,7 @@ class TeamsViewController: UITableViewController {
                 let feedback = UISelectionFeedbackGenerator()
                 feedback.prepare()
                 feedback.selectionChanged()
-                FavoritesService.shared.toggleFavorite(teamId: teamId)
+                FavoritesService.shared.toggleFavorite(teamID: team.id, league: league)
             }
 
             return UIMenu(title: team.name, children: [favoriteAction])
