@@ -10,6 +10,17 @@ class HighlightsPickerViewController: UIViewController {
     private let selectedStyle: UIUserInterfaceStyle
 
     private let tableView = UITableView(frame: .zero, style: .plain)
+    private let emptyStateLabel: UILabel = {
+        let label = UILabel()
+        label.text = "No plays to choose from yet.\nCheck back once the game is underway."
+        label.font = UIFont(name: AppFont.patrickHand, size: 20) ?? .systemFont(ofSize: 20)
+        label.textColor = AppColors.pencil.withAlphaComponent(0.55)
+        label.textAlignment = .center
+        label.numberOfLines = 0
+        label.isHidden = true
+        label.translatesAutoresizingMaskIntoConstraints = false
+        return label
+    }()
     private var groups: [InningGroup] = []
     private var selectedPaths: Set<IndexPath> = []
     private var awayAccentColor: UIColor = AppColors.pencil
@@ -36,6 +47,8 @@ class HighlightsPickerViewController: UIViewController {
         setupNavBar()
         setupTable()
         groups = InningGroup.build(from: scorecard.timeline)
+        emptyStateLabel.isHidden = !groups.isEmpty
+        tableView.isHidden = groups.isEmpty
         tableView.reloadData()
         updateNavTitle()
     }
@@ -78,6 +91,14 @@ class HighlightsPickerViewController: UIViewController {
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+
+        view.addSubview(emptyStateLabel)
+        NSLayoutConstraint.activate([
+            emptyStateLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            emptyStateLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            emptyStateLabel.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 32),
+            emptyStateLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -32),
         ])
     }
 
@@ -128,9 +149,22 @@ extension HighlightsPickerViewController: UITableViewDataSource, UITableViewDele
         let event = group.events[indexPath.row]
         let accentColor = group.isTop ? awayAccentColor : homeAccentColor
         cell.configure(with: event, accentColor: accentColor)
-        cell.accessoryType = selectedPaths.contains(indexPath) ? .checkmark : .none
         cell.tintColor = accentColor
+        applySelectionState(to: cell, at: indexPath)
         return cell
+    }
+
+    /// TimelineCell's own `configure(with:)` sets an accessibilityHint aimed at its normal
+    /// read-only context ("Double tap for at-bat details") — here a tap selects the play for the
+    /// highlights card instead, so both the hint and selection state need overriding after
+    /// configure() runs.
+    private func applySelectionState(to cell: TimelineCell, at indexPath: IndexPath) {
+        let isSelected = selectedPaths.contains(indexPath)
+        cell.accessoryType = isSelected ? .checkmark : .none
+        cell.accessibilityValue = isSelected ? "Selected" : nil
+        cell.accessibilityHint = isSelected
+            ? "Double tap to remove this play from your highlights selection."
+            : "Double tap to add this play to your highlights selection."
     }
 
     func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
@@ -183,8 +217,8 @@ extension HighlightsPickerViewController: UITableViewDataSource, UITableViewDele
             }
             selectedPaths.insert(indexPath)
         }
-        if let cell = tableView.cellForRow(at: indexPath) {
-            cell.accessoryType = selectedPaths.contains(indexPath) ? .checkmark : .none
+        if let cell = tableView.cellForRow(at: indexPath) as? TimelineCell {
+            applySelectionState(to: cell, at: indexPath)
         }
         updateNavTitle()
     }
