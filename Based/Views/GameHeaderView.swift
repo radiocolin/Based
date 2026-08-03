@@ -418,7 +418,8 @@ class GameHeaderView: UIView {
         let awayColor = TeamColorProvider.color(for: awayActual)
         let homeColor = TeamColorProvider.color(for: homeActual)
         let zeroColor = pencilColor.withAlphaComponent(0.7)
-        let inningCount = max(9, linescore.innings?.count ?? 0)
+        let scheduledInnings = linescore.scheduledInnings ?? 9
+        let inningCount = max(scheduledInnings, linescore.innings?.count ?? 0)
 
         if inningHeaders.count != inningCount {
             rebuildInningColumns(count: inningCount)
@@ -435,7 +436,7 @@ class GameHeaderView: UIView {
 
         setNeedsLayout()
         layoutIfNeeded()
-        if inningCount > 9 {
+        if inningCount > scheduledInnings {
             let maxOffset = max(0, inningsScrollView.contentSize.width - inningsScrollView.bounds.width)
             inningsScrollView.setContentOffset(CGPoint(x: maxOffset, y: 0), animated: false)
         } else {

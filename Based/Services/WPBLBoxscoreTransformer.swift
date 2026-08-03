@@ -349,13 +349,33 @@ struct WPBLBoxscoreTransformer {
         return positionWordToNumber[token]
     }
 
+    /// WPBL's raw description text is already clean for recognized pitch types ("Foul", "Ball",
+    /// "Swinging strike"), with two exceptions confirmed against two full completed games'
+    /// worth of data (not guessed):
+    /// - type "unknown" comes back as the literal, unhelpful "Unknown pitch code" (WPBL's own
+    ///   backend doesn't recognize the code either, e.g. "K" — shown as a plain generic pitch
+    ///   instead of exposing that internal-sounding text).
+    /// - code "P" is labeled "pitchout" by the API, but is *always* the last pitch of an at-bat
+    ///   that ends in a batted-ball outcome (a hit or a ball-in-play out) — never once a real
+    ///   pitchout across every occurrence in both games. WPBL's own type/description are simply
+    ///   wrong for this code; it means the ball was put in play.
+    /// outcome/description are set to the same value so PitchCell's "only show a subtitle when
+    /// it differs" logic collapses to one clean line instead of duplicating it.
     private static func buildPitchEvents(_ events: [WPBLPitchEvent]?) -> [PitchEvent]? {
         guard let events, !events.isEmpty else { return nil }
         return events.enumerated().map { index, event in
-            PitchEvent(
+            let label: String
+            if event.code == "P" {
+                label = "In Play"
+            } else if event.type == "unknown" {
+                label = "Pitch"
+            } else {
+                label = event.description
+            }
+            return PitchEvent(
                 pitchNumber: index + 1,
-                description: event.description,
-                outcome: event.type,
+                description: label,
+                outcome: label,
                 speed: nil,
                 pitchType: nil,
                 balls: nil,

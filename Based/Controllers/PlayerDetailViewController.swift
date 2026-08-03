@@ -358,7 +358,7 @@ class PlayerDetailViewController: UIViewController {
                 }
             } catch {
                 await MainActor.run {
-                    self.showSeasonStatsError()
+                    self.hideSeasonStats()
                 }
             }
         }
@@ -421,7 +421,7 @@ class PlayerDetailViewController: UIViewController {
             .compactMap({ $0.splits?.first(where: { $0.stat?.avg != nil || $0.stat?.ops != nil || $0.stat?.rbi != nil }) })
             .first,
               let stats = split.stat else {
-            showSeasonStatsError()
+            hideSeasonStats()
             return
         }
         let season = split.season.map { "\($0) season" } ?? "Season"
@@ -444,7 +444,7 @@ class PlayerDetailViewController: UIViewController {
             .compactMap({ $0.splits?.first(where: { $0.stat?.era != nil || $0.stat?.inningsPitched != nil || $0.stat?.wins != nil }) })
             .first,
               let stats = split.stat else {
-            showSeasonStatsError()
+            hideSeasonStats()
             return
         }
         let season = split.season.map { "\($0) season" } ?? "Season"
@@ -461,24 +461,15 @@ class PlayerDetailViewController: UIViewController {
         )
     }
 
-    private func showSeasonStatsError() {
+    /// No "Stats unavailable" placeholder box — if there's genuinely no season data, the whole
+    /// section (title + box) collapses out of the stack layout instead of showing an empty shell.
+    private func hideSeasonStats() {
         loadingIndicator.stopAnimating()
+        loadingIndicator.removeFromSuperview()
         seasonStatsContentView?.removeFromSuperview()
-
-        let errorLabel = UILabel()
-        errorLabel.text = "Stats unavailable"
-        errorLabel.font = AppFont.patrick(16, textStyle: .body, compatibleWith: traitCollection)
-        errorLabel.textColor = pencilColor.withAlphaComponent(0.7)
-        errorLabel.textAlignment = .center
-        errorLabel.translatesAutoresizingMaskIntoConstraints = false
-        errorLabel.adjustsFontForContentSizeCategory = true
-        seasonStatsContainer.addSubview(errorLabel)
-        seasonStatsContentView = errorLabel
-
-        NSLayoutConstraint.activate([
-            errorLabel.centerXAnchor.constraint(equalTo: seasonStatsContainer.centerXAnchor),
-            errorLabel.centerYAnchor.constraint(equalTo: seasonStatsContainer.centerYAnchor)
-        ])
+        seasonStatsContentView = nil
+        seasonTitleLabel.isHidden = true
+        seasonStatsContainer.isHidden = true
     }
 
     private func drawPencilLines() {
