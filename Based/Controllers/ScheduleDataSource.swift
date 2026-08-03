@@ -430,6 +430,97 @@ class TeamGameCell: UITableViewCell {
         ])
     }
     
+    /// League-agnostic overload for leagues without MLB's richer ScheduleGame shape (delays,
+    /// reschedules, linescore detail) — WPBL's LeagueGame only carries what its feed actually has.
+    func configure(with game: LeagueGame, teamID: String, isNextGame: Bool, isSeriesStart: Bool) {
+        configureHeader(isSeriesStart: isSeriesStart)
+
+        let isHome = game.homeTeamID == teamID
+        let opponent = isHome ? game.awayTeamName : game.homeTeamName
+        let prefix = isHome ? "vs" : "@"
+        let gameDate = game.startDate
+
+        configureOpponent(opponent, prefix: prefix)
+        configureLeagueDetail(game: game, gameDate: gameDate)
+
+        backgroundColor = isNextGame ? AppColors.selected : AppColors.paper
+
+        configureLeagueStatus(game: game, gameDate: gameDate, isHome: isHome, isNextGame: isNextGame, pc: pencilColor)
+        configureLeagueAccessibility(prefix: prefix, opponent: opponent, game: game)
+    }
+
+    private func configureLeagueDetail(game: LeagueGame, gameDate: Date) {
+        let df = DateFormatter()
+        df.dateFormat = "EEE, MMM d"
+        let dateStr = df.string(from: gameDate)
+        let detailFont = AppFont.ibmPlexCondensed(15, textStyle: .subheadline)
+        let detail = NSMutableAttributedString(
+            string: dateStr,
+            attributes: [.font: detailFont, .foregroundColor: pencilColor.withAlphaComponent(0.6)]
+        )
+        if let venue = game.venue {
+            detail.append(NSAttributedString(
+                string: " · \(venue)",
+                attributes: [.font: detailFont, .foregroundColor: pencilColor.withAlphaComponent(0.35)]
+            ))
+        }
+        detailLabel.attributedText = detail
+    }
+
+    private func configureLeagueStatus(game: LeagueGame, gameDate: Date, isHome: Bool, isNextGame: Bool, pc: UIColor) {
+        switch game.status {
+        case .final:
+            let teamScore = (isHome ? game.homeScore : game.awayScore) ?? 0
+            let opponentScore = (isHome ? game.awayScore : game.homeScore) ?? 0
+            let won = teamScore > opponentScore
+            let wl = won ? "W" : (teamScore < opponentScore ? "L" : "T")
+            if let currentInning = game.currentInning, currentInning > (game.scheduledInnings ?? 9) {
+                rightLabel.text = "\(wl)/\(currentInning) \(teamScore)-\(opponentScore)"
+            } else {
+                rightLabel.text = "\(wl) \(teamScore)-\(opponentScore)"
+            }
+            rightLabel.textColor = won ? .systemGreen : .systemRed
+            opponentLabel.alpha = 0.7
+            detailLabel.alpha = 0.7
+            statusBadge.text = ""
+        case .live:
+            let teamScore = (isHome ? game.homeScore : game.awayScore) ?? 0
+            let opponentScore = (isHome ? game.awayScore : game.homeScore) ?? 0
+            rightLabel.text = "\(teamScore)-\(opponentScore)"
+            rightLabel.textColor = pc
+            statusBadge.text = "LIVE"
+            statusBadge.textColor = .systemRed
+            opponentLabel.alpha = 1.0
+            detailLabel.alpha = 1.0
+        case .scheduled, .other:
+            let tf = DateFormatter()
+            tf.dateFormat = "h:mm a"
+            rightLabel.text = tf.string(from: gameDate)
+            rightLabel.textColor = pc.withAlphaComponent(0.5)
+            statusBadge.text = isNextGame ? "NEXT" : ""
+            statusBadge.textColor = .systemRed
+            opponentLabel.alpha = 1.0
+            detailLabel.alpha = 1.0
+        }
+    }
+
+    private func configureLeagueAccessibility(prefix: String, opponent: String, game: LeagueGame) {
+        isAccessibilityElement = true
+        accessibilityTraits = .button
+        let spokenOpponent = "\(prefix) \(opponent)"
+        var statusPrefix = ""
+        if statusBadge.text == "NEXT" { statusPrefix = "Next game," }
+        else if statusBadge.text == "LIVE" { statusPrefix = "Live now," }
+        let detailVO = detailLabel.attributedText?.string.replacingOccurrences(of: " · ", with: ", ") ?? ""
+
+        accessibilityLabel = AccessibilitySupport.joined([
+            statusPrefix,
+            spokenOpponent,
+            rightLabel.text,
+            detailVO
+        ])
+    }
+
     private func parseDate(_ isoDate: String) -> Date {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]

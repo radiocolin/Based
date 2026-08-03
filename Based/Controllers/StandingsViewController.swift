@@ -390,10 +390,14 @@ class StandingsViewController: UIViewController, UITableViewDataSource, UITableV
 
         switch row {
         case .team(let teamRow):
-            guard let teamId = Int(teamRow.teamID) else { return }
             navigationItem.backBarButtonItem = UIBarButtonItem(title: "Standings", style: .plain, target: nil, action: nil)
-            let scheduleVC = TeamScheduleViewController(teamId: teamId, teamName: teamRow.teamName)
-            navigationController?.pushViewController(scheduleVC, animated: true)
+            if provider.league == .mlb, let teamId = Int(teamRow.teamID) {
+                let scheduleVC = TeamScheduleViewController(teamId: teamId, teamName: teamRow.teamName)
+                navigationController?.pushViewController(scheduleVC, animated: true)
+            } else {
+                let detailVC = LeagueTeamDetailViewController(teamID: teamRow.teamID, teamName: teamRow.teamName, league: provider.league)
+                navigationController?.pushViewController(detailVC, animated: true)
+            }
         case .subHeader:
             break
         }

@@ -295,12 +295,16 @@ class TeamsViewController: UITableViewController {
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         let team = teamEntry(for: indexPath)
-        guard let teamId = Int(team.id) else { return }
 
         navigationItem.backBarButtonItem = UIBarButtonItem(title: "Teams", style: .plain, target: nil, action: nil)
 
-        let scheduleVC = TeamScheduleViewController(teamId: teamId, teamName: team.name)
-        navigationController?.pushViewController(scheduleVC, animated: true)
+        if provider.league == .mlb, let teamId = Int(team.id) {
+            let scheduleVC = TeamScheduleViewController(teamId: teamId, teamName: team.name)
+            navigationController?.pushViewController(scheduleVC, animated: true)
+        } else {
+            let detailVC = LeagueTeamDetailViewController(teamID: team.id, teamName: team.name, league: provider.league)
+            navigationController?.pushViewController(detailVC, animated: true)
+        }
     }
 
     override func tableView(_ tableView: UITableView, contextMenuConfigurationForRowAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
