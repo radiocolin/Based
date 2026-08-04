@@ -254,46 +254,45 @@ final class ScorecardImageGenerator {
         homeColor.setFill()
         ctx.fill(CGRect(x: rect.minX + halfWidth, y: rect.minY, width: halfWidth, height: barHeight))
 
-        let atFont = UIFont(name: AppFont.patrickHand, size: 18) ?? .systemFont(ofSize: 18)
         let dateFont = UIFont(name: AppFont.patrickHand, size: 20) ?? .systemFont(ofSize: 20)
 
-        // Team name font shrinks to fit — same overflow class as the batter name (see
-        // highlightsFittedNameFont): a fixed 36pt is normally plenty, but a long team name
-        // combined with a 3-digit score has no other safety net against running off both edges
-        // of the card (it's center-aligned, so overflow isn't even confined to one side).
-        func teamLine(_ name: String, runs: Int, color: UIColor) -> (NSAttributedString, UIFont) {
+        // A justified two-row table — team name left-aligned, score right-aligned to the same
+        // column on both rows — instead of the score just trailing the name inline. Inline
+        // put the two scores at whatever X the (differently-wide) team names happened to end at,
+        // so "11" and "3" landed nowhere near each other; a real scoreboard aligns the numbers.
+        let gap: CGFloat = 14
+        func fittedTeamFont(longestName: String, widestScore: String) -> UIFont {
             var size: CGFloat = 36
-            var font = UIFont(name: AppFont.permanentMarker, size: size) ?? .systemFont(ofSize: size, weight: .bold)
-            let text = hasScore ? "\(name.uppercased())  \(runs)" : name.uppercased()
             while size > 20 {
-                font = UIFont(name: AppFont.permanentMarker, size: size) ?? .systemFont(ofSize: size, weight: .bold)
-                if (text as NSString).size(withAttributes: [.font: font]).width <= rect.width { break }
+                let font = UIFont(name: AppFont.permanentMarker, size: size) ?? .systemFont(ofSize: size, weight: .bold)
+                let nameWidth = (longestName.uppercased() as NSString).size(withAttributes: [.font: font]).width
+                let scoreWidth = hasScore ? (widestScore as NSString).size(withAttributes: [.font: font]).width : 0
+                if nameWidth + (hasScore ? gap + scoreWidth : 0) <= rect.width { return font }
                 size -= 1
             }
-            let line = NSMutableAttributedString(string: name.uppercased(), attributes: [.font: font, .foregroundColor: color])
-            if hasScore {
-                line.append(NSAttributedString(string: "  \(runs)", attributes: [.font: font, .foregroundColor: color]))
-            }
-            return (line, font)
+            return UIFont(name: AppFont.permanentMarker, size: 20) ?? .systemFont(ofSize: 20, weight: .bold)
         }
-        let (awayLine, _) = teamLine(awayName, runs: awayRuns, color: awayColor)
-        let (homeLine, _) = teamLine(homeName, runs: homeRuns, color: homeColor)
+        let longestName = awayName.count >= homeName.count ? awayName : homeName
+        let widestScoreText = String(max(awayRuns, homeRuns))
+        let teamFont = fittedTeamFont(longestName: longestName, widestScore: widestScoreText)
+        let teamAttrs = { (color: UIColor) in [NSAttributedString.Key.font: teamFont, .foregroundColor: color] }
 
-        let awaySize = awayLine.size()
-        let homeSize = homeLine.size()
-        let atSize = ("at" as NSString).size(withAttributes: [.font: atFont])
+        let rowHeight = ceil(teamFont.lineHeight)
+        let rowGap: CGFloat = 6
+        let awayY = rect.minY + barHeight + 10
+        let homeY = awayY + rowHeight + rowGap
 
-        let teamTop = rect.minY + barHeight + 10
-        awayLine.draw(at: CGPoint(x: rect.midX - awaySize.width / 2, y: teamTop))
-
-        let atY = teamTop + awaySize.height - 4
-        NSAttributedString(
-            string: "at",
-            attributes: [.font: atFont, .foregroundColor: config.pencilColor.withAlphaComponent(0.55)]
-        ).draw(at: CGPoint(x: rect.midX - atSize.width / 2, y: atY))
-
-        let homeY = atY + atSize.height - 2
-        homeLine.draw(at: CGPoint(x: rect.midX - homeSize.width / 2, y: homeY))
+        func drawRow(name: String, runs: Int, color: UIColor, y: CGFloat) {
+            (name.uppercased() as NSString).draw(at: CGPoint(x: rect.minX, y: y), withAttributes: teamAttrs(color))
+            if hasScore {
+                let scoreText = "\(runs)"
+                let scoreAttrs = teamAttrs(color)
+                let scoreWidth = (scoreText as NSString).size(withAttributes: scoreAttrs).width
+                (scoreText as NSString).draw(at: CGPoint(x: rect.maxX - scoreWidth, y: y), withAttributes: scoreAttrs)
+            }
+        }
+        drawRow(name: awayName, runs: awayRuns, color: awayColor, y: awayY)
+        drawRow(name: homeName, runs: homeRuns, color: homeColor, y: homeY)
 
         if let date = highlightsDateString(scorecard: scorecard) {
             let dateAttrs: [NSAttributedString.Key: Any] = [
@@ -301,7 +300,7 @@ final class ScorecardImageGenerator {
                 .foregroundColor: config.pencilColor.withAlphaComponent(0.7)
             ]
             let dSize = (date as NSString).size(withAttributes: dateAttrs)
-            let dateY = homeY + homeSize.height - 4
+            let dateY = homeY + rowHeight + 2
             NSAttributedString(string: date, attributes: dateAttrs)
                 .draw(at: CGPoint(x: rect.midX - dSize.width / 2, y: dateY))
         }
@@ -545,6 +544,10 @@ final class ScorecardImageGenerator {
     private func drawHighlightsPlayRow(in rect: CGRect, event: AtBatEvent, scorecard: ScorecardData, sizes: HighlightsRowSizes, ctx: CGContext) {
         let accent = scorecard.teamAccentColor(for: event)
 
+        // Tried a faint full-row color wash here to reinforce team identity a second way — at an
+        // opacity subtle enough not to fight the text, red (SF) and orange (BOS) both flattened
+        // into the same pale pink and stopped reading as different teams at all, which is worse
+        // than no wash. Reverted; the accent bar + pill are doing that job well on their own.
         let barWidth: CGFloat = 5
         ctx.setFillColor(accent.cgColor)
         ctx.fill(CGRect(x: rect.minX, y: rect.minY, width: barWidth, height: rect.height))
@@ -615,9 +618,36 @@ final class ScorecardImageGenerator {
         // treatment would be (see HighlightsRowSizes) so the base paths are worth including.
         if dSide > 20 {
             let diamondRect = CGRect(x: contentRect.minX, y: contentRect.midY - dSide / 2, width: dSide, height: dSide)
+            if event.result.isHomeRun {
+                drawHomeRunSparkle(around: diamondRect, color: accent, ctx: ctx)
+            }
             let resultFontSize = min(72, max(20, dSide * 0.4))
             drawAtBatCell(in: diamondRect, event: event, accentColor: accent, resultFontSize: resultFontSize, ctx: ctx)
         }
+    }
+
+    /// A soft color halo behind the diamond, home runs only — the one outcome almost everyone
+    /// recognizes as a big moment regardless of baseball literacy, so it's worth a little extra
+    /// visual energy without re-ranking which plays the user already chose to feature (every row
+    /// still gets equal size/treatment otherwise). An earlier attempt used thin radiating sparkle
+    /// lines; at a subtlety that didn't fight the diamond they read as scratches, not a flourish,
+    /// and rays near the card's left edge clipped past the available space entirely — a soft
+    /// concentric glow reads unambiguously as "special" at a glance and can't clip since it's
+    /// bounded by its own radius, not thin lines escaping outward.
+    private func drawHomeRunSparkle(around diamondRect: CGRect, color: UIColor, ctx: CGContext) {
+        let center = CGPoint(x: diamondRect.midX, y: diamondRect.midY)
+        let haloR = diamondRect.width * 0.72
+        let steps = 5
+        ctx.saveGState()
+        for i in stride(from: steps, to: 0, by: -1) {
+            let t = CGFloat(i) / CGFloat(steps)
+            let r = haloR * t
+            let alpha = 0.10 * (1 - t) + 0.02
+            let circle = UIBezierPath(arcCenter: center, radius: r, startAngle: 0, endAngle: .pi * 2, clockwise: true)
+            color.withAlphaComponent(alpha).setFill()
+            circle.fill()
+        }
+        ctx.restoreGState()
     }
 
     private func actualColumnWidth(layout: ColumnLayout) -> CGFloat {
@@ -1542,17 +1572,24 @@ final class ScorecardImageGenerator {
                 context: nil
             )
         }
-        let cAttrs: [NSAttributedString.Key: Any] = [.font: config.legibilityFont, .foregroundColor: diamondColor.withAlphaComponent(0.7)]
-        if event.balls > 0 { NSAttributedString(string: "\(event.balls)B", attributes: cAttrs).draw(at: CGPoint(x: rect.minX + 2, y: rect.minY + 2)) }
+        // Ball/strike/out corner counts scale with the diamond, not a fixed 12pt — that was fine
+        // for the ~40pt diamonds in the main scorecard grid this function was written for, but
+        // reads as nearly invisible on the highlights card's much larger diamonds (up to ~280pt).
+        // The 12pt floor keeps the main scorecard's small cells exactly as they were.
+        let cornerFontSize = max(12, min(dRect.width, dRect.height) * 0.09)
+        let cornerFont = UIFont(name: AppFont.patrickHand, size: cornerFontSize) ?? .systemFont(ofSize: cornerFontSize, weight: .medium)
+        let cInset = max(2, cornerFontSize * 0.18)
+        let cAttrs: [NSAttributedString.Key: Any] = [.font: cornerFont, .foregroundColor: diamondColor.withAlphaComponent(0.7)]
+        if event.balls > 0 { NSAttributedString(string: "\(event.balls)B", attributes: cAttrs).draw(at: CGPoint(x: rect.minX + cInset, y: rect.minY + cInset)) }
         if event.strikes > 0 {
             let sText = "\(event.strikes)S"
             let sSize = (sText as NSString).size(withAttributes: cAttrs)
-            NSAttributedString(string: sText, attributes: cAttrs).draw(at: CGPoint(x: rect.maxX - sSize.width - 2, y: rect.minY + 2))
+            NSAttributedString(string: sText, attributes: cAttrs).draw(at: CGPoint(x: rect.maxX - sSize.width - cInset, y: rect.minY + cInset))
         }
         if event.outs > 0 {
             let oText = "\(event.outs)"
             let oSize = (oText as NSString).size(withAttributes: cAttrs)
-            NSAttributedString(string: oText, attributes: cAttrs).draw(at: CGPoint(x: rect.maxX - oSize.width - 2, y: rect.maxY - oSize.height - 2))
+            NSAttributedString(string: oText, attributes: cAttrs).draw(at: CGPoint(x: rect.maxX - oSize.width - cInset, y: rect.maxY - oSize.height - cInset))
         }
         if let annotations = event.bases.annotations {
             drawAnnotations(annotations, in: rect, diamondRect: dRect, color: diamondColor)
@@ -1561,7 +1598,9 @@ final class ScorecardImageGenerator {
 
     private func drawAnnotations(_ annotations: [BaseAnnotation], in rect: CGRect, diamondRect dRect: CGRect, color: UIColor) {
         let color = color.withAlphaComponent(0.85)
-        let font = UIFont(name: AppFont.patrickHand, size: 10) ?? .systemFont(ofSize: 10, weight: .medium)
+        // Same diamond-relative scaling as the corner ball/strike/out counts, same reasoning.
+        let annotationFontSize = max(10, min(dRect.width, dRect.height) * 0.075)
+        let font = UIFont(name: AppFont.patrickHand, size: annotationFontSize) ?? .systemFont(ofSize: annotationFontSize, weight: .medium)
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.alignment = .center
         paragraphStyle.lineBreakMode = .byWordWrapping
