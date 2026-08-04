@@ -47,18 +47,6 @@ class ScorecardExportViewController: UIViewController {
 
     private var imageButton: UIButton?
     private var pdfButton: UIButton?
-    private var choosePlaysButton: UIButton?
-    private let previewPlaceholderLabel: UILabel = {
-        let l = UILabel()
-        l.text = "Pick plays to preview\nyour highlights card"
-        l.font = UIFont(name: AppFont.patrickHand, size: 20) ?? .systemFont(ofSize: 20)
-        l.textColor = AppColors.pencil.withAlphaComponent(0.55)
-        l.textAlignment = .center
-        l.numberOfLines = 0
-        l.isHidden = true
-        l.translatesAutoresizingMaskIntoConstraints = false
-        return l
-    }()
 
     private enum AppearanceOption: Int, CaseIterable {
         case light = 0
@@ -162,7 +150,6 @@ class ScorecardExportViewController: UIViewController {
         let previewContainer = UIView()
         previewContainer.translatesAutoresizingMaskIntoConstraints = false
         previewContainer.addSubview(previewImageView)
-        previewContainer.addSubview(previewPlaceholderLabel)
 
         contentStack.addArrangedSubview(previewContainer)
         contentStack.addArrangedSubview(makeSectionHeader("APPEARANCE"))
@@ -192,11 +179,6 @@ class ScorecardExportViewController: UIViewController {
             previewImageView.widthAnchor.constraint(lessThanOrEqualTo: previewContainer.widthAnchor),
             previewImageView.bottomAnchor.constraint(equalTo: previewContainer.bottomAnchor),
 
-            previewPlaceholderLabel.centerXAnchor.constraint(equalTo: previewImageView.centerXAnchor),
-            previewPlaceholderLabel.centerYAnchor.constraint(equalTo: previewImageView.centerYAnchor),
-            previewPlaceholderLabel.leadingAnchor.constraint(greaterThanOrEqualTo: previewImageView.leadingAnchor, constant: 20),
-            previewPlaceholderLabel.trailingAnchor.constraint(lessThanOrEqualTo: previewImageView.trailingAnchor, constant: -20),
-
             buttonStack.heightAnchor.constraint(equalToConstant: 50),
         ])
 
@@ -207,7 +189,7 @@ class ScorecardExportViewController: UIViewController {
     }
 
     private func previewAspectMultiplier() -> CGFloat {
-        612.0 / 792.0
+        selectedMode.isHomeRunGrid ? (1280.0 / 720.0) : (612.0 / 792.0)
     }
 
     private func applyPreviewAspectMultiplier() {
@@ -321,16 +303,7 @@ class ScorecardExportViewController: UIViewController {
         selectedMode = mode
         updateCheckmarks()
         applyPreviewAspectMultiplier()
-        updateModeChrome()
         refreshPreview()
-    }
-
-    private func updateModeChrome() {
-        let isHighlights = selectedMode.isHighlights
-        imageButton?.isHidden = isHighlights
-        pdfButton?.isHidden = isHighlights
-        choosePlaysButton?.isHidden = !isHighlights
-        previewPlaceholderLabel.isHidden = !isHighlights
     }
 
     @objc private func appearanceRowTapped(_ gesture: UITapGestureRecognizer) {
@@ -367,18 +340,12 @@ class ScorecardExportViewController: UIViewController {
         let pdfBtn = makeExportButton(title: "Save PDF", icon: "doc.richtext")
         pdfBtn.addTarget(self, action: #selector(sharePDFTapped), for: .touchUpInside)
 
-        let chooseBtn = makeExportButton(title: "Choose Plays", icon: "chevron.right")
-        chooseBtn.addTarget(self, action: #selector(choosePlaysTapped), for: .touchUpInside)
-
-        exportButtons = [imageBtn, pdfBtn, chooseBtn]
+        exportButtons = [imageBtn, pdfBtn]
         imageButton = imageBtn
         pdfButton = pdfBtn
-        choosePlaysButton = chooseBtn
 
         buttonStack.addArrangedSubview(imageBtn)
         buttonStack.addArrangedSubview(pdfBtn)
-        buttonStack.addArrangedSubview(chooseBtn)
-        updateModeChrome()
     }
 
     private func makeExportButton(title: String, icon: String) -> UIButton {
@@ -406,14 +373,16 @@ class ScorecardExportViewController: UIViewController {
 
     private func refreshPreview() {
         previewTask?.cancel()
-        if selectedMode.isHighlights {
-            previewImageView.image = nil
-            return
-        }
         let style = selectedStyle
+        let isHomeRunGrid = selectedMode.isHomeRunGrid
         previewTask = Task {
             let generator = ScorecardImageGenerator()
-            let image = await generator.generate(scorecard: scorecard, linescore: linescore, options: selectedMode, userInterfaceStyle: style)
+            let image: UIImage
+            if isHomeRunGrid {
+                image = await generator.generateHomeRunGrid(scorecard: scorecard, linescore: linescore, userInterfaceStyle: style)
+            } else {
+                image = await generator.generate(scorecard: scorecard, linescore: linescore, options: selectedMode, userInterfaceStyle: style)
+            }
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 self.previewImageView.image = image
@@ -425,14 +394,12 @@ class ScorecardExportViewController: UIViewController {
         dismiss(animated: true)
     }
 
-    @objc private func choosePlaysTapped() {
-        let picker = HighlightsPickerViewController(scorecard: scorecard, linescore: linescore, style: selectedStyle)
-        navigationController?.pushViewController(picker, animated: true)
-    }
-
     @objc private func shareImageTapped() {
         exportWith { generator, sc, ls, mode, style in
-            await generator.generate(scorecard: sc, linescore: ls, options: mode, userInterfaceStyle: style)
+            if mode.isHomeRunGrid {
+                return await generator.generateHomeRunGrid(scorecard: sc, linescore: ls, userInterfaceStyle: style)
+            }
+            return await generator.generate(scorecard: sc, linescore: ls, options: mode, userInterfaceStyle: style)
         } present: { image in
             let awayName = self.scorecard.teams.away.name ?? "Away"
             let homeName = self.scorecard.teams.home.name ?? "Home"
@@ -444,7 +411,10 @@ class ScorecardExportViewController: UIViewController {
 
     @objc private func sharePDFTapped() {
         exportWith { generator, sc, ls, mode, style in
-            await generator.generatePDF(scorecard: sc, linescore: ls, options: mode, userInterfaceStyle: style)
+            if mode.isHomeRunGrid {
+                return await generator.generateHomeRunGridPDF(scorecard: sc, linescore: ls, userInterfaceStyle: style)
+            }
+            return await generator.generatePDF(scorecard: sc, linescore: ls, options: mode, userInterfaceStyle: style)
         } present: { data in
             let awayName = self.scorecard.teams.away.name ?? "Away"
             let homeName = self.scorecard.teams.home.name ?? "Home"

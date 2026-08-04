@@ -6,14 +6,14 @@ enum ScorecardExportMode: Int, CaseIterable {
     case blank = 0
     case summary = 1
     case full = 2
-    case highlights = 3
+    case homeRunGrid = 3
 
     var title: String {
         switch self {
         case .blank: return "Blank Scorecard"
         case .summary: return "Game Summary"
         case .full: return "Full Scorecard"
-        case .highlights: return "Highlights"
+        case .homeRunGrid: return "Home Run Grid"
         }
     }
 
@@ -22,17 +22,19 @@ enum ScorecardExportMode: Int, CaseIterable {
         case .blank: return "Structure and labels only — fill in by hand"
         case .summary: return "Score, lineups, game info, and umpires"
         case .full: return "Complete scorecard with play-by-play"
-        case .highlights: return "Pick up to 6 plays for a 9:16 share card"
+        case .homeRunGrid: return "Both lineups, condensed, home runs lit up — 9:16"
         }
     }
 
-    var showScoreboard: Bool { rawValue >= Self.summary.rawValue && self != .highlights }
-    var showGameInfo: Bool { rawValue >= Self.summary.rawValue && self != .highlights }
-    var showLineup: Bool { rawValue >= Self.summary.rawValue && self != .highlights }
-    var showAtBatResults: Bool { rawValue >= Self.full.rawValue && self != .highlights }
-    var showPitchers: Bool { rawValue >= Self.full.rawValue && self != .highlights }
-    var showUmpires: Bool { rawValue >= Self.summary.rawValue && self != .highlights }
-    var isHighlights: Bool { self == .highlights }
+    /// Home Run Grid renders through its own dedicated pipeline (`generateHomeRunGrid`),
+    /// not the shared landscape layout these flags describe.
+    var showScoreboard: Bool { rawValue >= Self.summary.rawValue && self != .homeRunGrid }
+    var showGameInfo: Bool { rawValue >= Self.summary.rawValue && self != .homeRunGrid }
+    var showLineup: Bool { rawValue >= Self.summary.rawValue && self != .homeRunGrid }
+    var showAtBatResults: Bool { rawValue >= Self.full.rawValue && self != .homeRunGrid }
+    var showPitchers: Bool { rawValue >= Self.full.rawValue && self != .homeRunGrid }
+    var showUmpires: Bool { rawValue >= Self.summary.rawValue && self != .homeRunGrid }
+    var isHomeRunGrid: Bool { self == .homeRunGrid }
 }
 
 final class ScorecardImageGenerator {
@@ -159,85 +161,6 @@ final class ScorecardImageGenerator {
 
     // MARK: - Highlights Card (9:16 portrait, user-picked plays)
 
-    private enum Highlights {
-        static let pageWidth: CGFloat = 720
-        static let pageHeight: CGFloat = 1280
-        static let outerPadding: CGFloat = 28
-        static let headerHeight: CGFloat = 150
-        static let attributionHeight: CGFloat = 20
-        static let cellGap: CGFloat = 12
-        static let maxPlays: Int = 6
-    }
-
-    func generateHighlights(scorecard: ScorecardData, linescore: Linescore?, plays: [AtBatEvent], userInterfaceStyle: UIUserInterfaceStyle = .unspecified) async -> UIImage {
-        let pdfData = await generateHighlightsPDF(scorecard: scorecard, linescore: linescore, plays: plays, userInterfaceStyle: userInterfaceStyle)
-        guard let provider = CGDataProvider(data: pdfData as CFData),
-              let pdf = CGPDFDocument(provider),
-              let page = pdf.page(at: 1) else {
-            return UIImage()
-        }
-        let pageRect = page.getBoxRect(.mediaBox)
-        let scale: CGFloat = 4
-        let size = CGSize(width: pageRect.width * scale, height: pageRect.height * scale)
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        let renderer = UIGraphicsImageRenderer(size: size, format: format)
-        return renderer.image { context in
-            withTraitStyle(userInterfaceStyle) {
-                let ctx = context.cgContext
-                self.config.paperColor.setFill()
-                ctx.fill(CGRect(origin: .zero, size: size))
-                ctx.translateBy(x: 0, y: size.height)
-                ctx.scaleBy(x: scale, y: -scale)
-                ctx.drawPDFPage(page)
-            }
-        }
-    }
-
-    func generateHighlightsPDF(scorecard: ScorecardData, linescore: Linescore?, plays: [AtBatEvent], userInterfaceStyle: UIUserInterfaceStyle = .unspecified) async -> Data {
-        let pageRect = CGRect(x: 0, y: 0, width: Highlights.pageWidth, height: Highlights.pageHeight)
-        let renderer = UIGraphicsPDFRenderer(bounds: pageRect)
-        return renderer.pdfData { context in
-            withTraitStyle(userInterfaceStyle) {
-                context.beginPage()
-                let ctx = context.cgContext
-                self.config.paperColor.setFill()
-                ctx.fill(pageRect)
-                self.drawHighlightsCard(in: pageRect, scorecard: scorecard, linescore: linescore, plays: plays, ctx: ctx)
-            }
-        }
-    }
-
-    private func drawHighlightsCard(in pageRect: CGRect, scorecard: ScorecardData, linescore: Linescore?, plays: [AtBatEvent], ctx: CGContext) {
-        let contentRect = pageRect.insetBy(dx: Highlights.outerPadding, dy: Highlights.outerPadding)
-
-        let headerRect = CGRect(x: contentRect.minX, y: contentRect.minY, width: contentRect.width, height: Highlights.headerHeight)
-        drawHighlightsHeader(in: headerRect, scorecard: scorecard, linescore: linescore, ctx: ctx)
-
-        let attributionY = pageRect.maxY - Highlights.outerPadding - Highlights.attributionHeight
-        let gridY = headerRect.maxY + Highlights.cellGap
-        let gridRect = CGRect(
-            x: contentRect.minX,
-            y: gridY,
-            width: contentRect.width,
-            height: attributionY - gridY - Highlights.cellGap
-        )
-        drawHighlightsGrid(in: gridRect, plays: plays, scorecard: scorecard, ctx: ctx)
-
-        let attrFont = UIFont(name: AppFont.ibmPlexBold, size: 14) ?? .systemFont(ofSize: 14, weight: .bold)
-        let attrAttrs: [NSAttributedString.Key: Any] = [
-            .font: attrFont,
-            .foregroundColor: config.pencilColor.withAlphaComponent(0.45),
-            .kern: 4.0
-        ]
-        let attrText = "BASED"
-        let aSize = (attrText as NSString).size(withAttributes: attrAttrs)
-        NSAttributedString(string: attrText, attributes: attrAttrs).draw(at: CGPoint(
-            x: pageRect.midX - aSize.width / 2,
-            y: attributionY + (Highlights.attributionHeight - aSize.height) / 2
-        ))
-    }
-
     private func drawHighlightsHeader(in rect: CGRect, scorecard: ScorecardData, linescore: Linescore?, ctx: CGContext) {
         let awayName = scorecard.teams.away.name ?? "Away"
         let homeName = scorecard.teams.home.name ?? "Home"
@@ -329,80 +252,14 @@ final class ScorecardImageGenerator {
     /// leaving it blank) and more/longer plays render smaller — always filling the card exactly,
     /// never overflowing it. Leftover space becomes gap between rows (capped) plus equal top/
     /// bottom padding, rather than dead air trapped inside a single row.
-    private func drawHighlightsGrid(in rect: CGRect, plays: [AtBatEvent], scorecard: ScorecardData, ctx: CGContext) {
-        let capped = Array(plays.prefix(Highlights.maxPlays))
-        guard !capped.isEmpty else { return }
-        let count = capped.count
-        let minGap: CGFloat = 14
-        let maxGap: CGFloat = 44
-
-        func naturalHeights(at scale: CGFloat) -> [CGFloat] {
-            let sizes = HighlightsRowSizes(scale: scale)
-            return capped.map { highlightsNaturalRowHeight(for: $0, cardWidth: rect.width, scorecard: scorecard, sizes: sizes) }
-        }
-
-        let targetRows = rect.height - CGFloat(count - 1) * minGap
-        var lo: CGFloat = 0.6, hi: CGFloat = 2.6
-        for _ in 0..<20 {
-            let mid = (lo + hi) / 2
-            if naturalHeights(at: mid).reduce(0, +) > targetRows { hi = mid } else { lo = mid }
-        }
-        let scale = min(2.6, max(0.6, lo))
-        let sizes = HighlightsRowSizes(scale: scale)
-        let heights = naturalHeights(at: scale)
-        let naturalTotal = heights.reduce(0, +)
-        let leftover = max(0, rect.height - CGFloat(count - 1) * minGap - naturalTotal)
-        let gap = min(maxGap, minGap + leftover / CGFloat(max(1, count - 1)))
-        let usedTotal = naturalTotal + CGFloat(count - 1) * gap
-        let topPad = max(0, (rect.height - usedTotal) / 2)
-
-        var y = rect.minY + topPad
-        for (i, event) in capped.enumerated() {
-            let h = heights[i]
-            let rowRect = CGRect(x: rect.minX, y: y, width: rect.width, height: h)
-            drawHighlightsPlayRow(in: rowRect, event: event, scorecard: scorecard, sizes: sizes, ctx: ctx)
-            y += h + gap
-        }
-    }
 
     /// The one set of font/glyph sizes shared by every row on a given card, at a given scale
     /// factor found by drawHighlightsGrid's search. Base sizes were tuned by eye against real
     /// WPBL and MLB games at 1-6 plays.
-    private struct HighlightsRowSizes {
-        let diamondSide: CGFloat
-        let metaSize: CGFloat
-        let nameSize: CGFloat
-        let descSize: CGFloat
-
-        init(scale: CGFloat) {
-            diamondSide = 108 * scale
-            // Capped independently of `scale`, unlike the other sizes: this is a compact label
-            // ("TOP 1 · DOUBLE · VS. PADGHAM"), not hero text, and letting it grow all the way to
-            // a 1-play card's ~2.6x scale made it wide enough to wrap — which silently clipped
-            // the pitcher's name, since its height budget assumed a single line.
-            metaSize = min(22, 15 * scale)
-            nameSize = 30 * scale
-            descSize = 20 * scale
-        }
-    }
 
     /// "TOP 1 · DOUBLE · VS. PADGHAM" — half/inning, plain-English result, and the pitcher, all on
     /// one compact meta line. Shared by the height estimate and the actual draw so they can never
     /// disagree about what text is being measured.
-    private func highlightsMetaText(for event: AtBatEvent) -> String {
-        var parts = ["\(event.isTop ? "TOP" : "BOT") \(event.inning)"]
-        let resultLabel = highlightsResultLabel(for: event.result)
-        if !resultLabel.isEmpty { parts.append(resultLabel.uppercased()) }
-        parts.append("vs. \(event.pitcherName)".uppercased())
-        return parts.joined(separator: "  \u{00B7}  ")
-    }
-
-    private struct HighlightsMetaLayout {
-        let pillRect: CGRect
-        let pillText: String
-        let textRect: CGRect
-        var height: CGFloat { max(pillRect.height, textRect.height) }
-    }
 
     /// Lays out the meta line — team pill + "TOP 1 · DOUBLE · VS. PADGHAM" — relative to a local
     /// (0,0) origin. Both highlightsNaturalRowHeight and drawHighlightsPlayRow call this *same*
@@ -415,31 +272,6 @@ final class ScorecardImageGenerator {
     /// the card, and division rivals sharing a primary color (e.g. Nationals/Braves, both red)
     /// make that signal genuinely ambiguous — plus color alone never works for colorblind readers.
     /// The team code makes "who did this" legible independent of hue.
-    private func highlightsMetaLayout(for event: AtBatEvent, scorecard: ScorecardData, metaFont: UIFont, accent: UIColor, maxWidth: CGFloat) -> HighlightsMetaLayout {
-        let teamName = event.isTop ? scorecard.teams.away.name : scorecard.teams.home.name
-        let pillText = teamAbbreviation(for: teamName ?? "")
-        let pillFont = UIFont(name: AppFont.ibmPlexBold, size: metaFont.pointSize * 0.82) ?? metaFont
-        let pillAttrs: [NSAttributedString.Key: Any] = [.font: pillFont, .kern: 0.5]
-        let pillTextSize = (pillText as NSString).size(withAttributes: pillAttrs)
-        let pillPaddingH = max(4, pillFont.pointSize * 0.5)
-        let pillHeight = ceil(pillTextSize.height + pillFont.pointSize * 0.36)
-        let pillWidth = ceil(pillTextSize.width + pillPaddingH * 2)
-        let pillRect = CGRect(x: 0, y: 0, width: pillWidth, height: pillHeight)
-
-        let gap: CGFloat = 8
-        let metaText = highlightsMetaText(for: event)
-        let metaAttrs: [NSAttributedString.Key: Any] = [.font: metaFont, .foregroundColor: accent, .kern: 1.0]
-        let textMaxWidth = max(20, maxWidth - pillWidth - gap)
-        let bounds = (metaText as NSString).boundingRect(
-            with: CGSize(width: textMaxWidth, height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: metaAttrs,
-            context: nil
-        )
-        let textRect = CGRect(x: pillWidth + gap, y: 0, width: textMaxWidth, height: ceil(bounds.height))
-
-        return HighlightsMetaLayout(pillRect: pillRect, pillText: pillText, textRect: textRect)
-    }
 
     /// Shrinks the batter-name font (preserving family/weight) until `name` fits on one line
     /// within `maxWidth`, down to a floor. The name is drawn with a plain single-line `.draw(at:)`
@@ -449,90 +281,19 @@ final class ScorecardImageGenerator {
     /// at a large scale (few plays selected) can exceed the text column's width and run off the
     /// edge of the card entirely if not explicitly fitted. Called identically by the height
     /// estimate and the draw call so they can't disagree about the resulting size.
-    private func highlightsFittedNameFont(for name: String, baseSize: CGFloat, maxWidth: CGFloat, minSize: CGFloat = 16) -> UIFont {
-        var size = baseSize
-        while size > minSize {
-            let font = UIFont(name: AppFont.permanentMarker, size: size) ?? .systemFont(ofSize: size, weight: .bold)
-            if (name as NSString).size(withAttributes: [.font: font]).width <= maxWidth { return font }
-            size -= 1
-        }
-        return UIFont(name: AppFont.permanentMarker, size: minSize) ?? .systemFont(ofSize: minSize, weight: .bold)
-    }
 
     /// How tall a row needs to be at these sizes to fit its meta line, batter name, and full
     /// description without truncation. Mirrors drawHighlightsPlayRow's own layout math exactly —
     /// both derive positions from the same `sizes` struct — so the estimate here always matches
     /// what actually gets drawn.
-    private func highlightsNaturalRowHeight(for event: AtBatEvent, cardWidth: CGFloat, scorecard: ScorecardData, sizes: HighlightsRowSizes) -> CGFloat {
-        let barWidth: CGFloat = 5
-        let contentWidth = cardWidth - barWidth - 18
-        let dSide = min(sizes.diamondSide, contentWidth * 0.46)
-        let textWidth = contentWidth - dSide - 20
-
-        let metaFont = UIFont(name: AppFont.ibmPlexBold, size: sizes.metaSize) ?? .systemFont(ofSize: sizes.metaSize, weight: .bold)
-        let descFont = UIFont(name: AppFont.patrickHand, size: sizes.descSize) ?? .systemFont(ofSize: sizes.descSize)
-
-        let metaLayout = highlightsMetaLayout(for: event, scorecard: scorecard, metaFont: metaFont, accent: .clear, maxWidth: textWidth)
-        let displayName = batterDisplayName(for: event, scorecard: scorecard)
-        let nameFont = highlightsFittedNameFont(for: displayName, baseSize: sizes.nameSize, maxWidth: textWidth)
-        let nameHeight = ceil(nameFont.lineHeight)
-        let descBounds = (event.description as NSString).boundingRect(
-            with: CGSize(width: textWidth, height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: [.font: descFont],
-            context: nil
-        )
-
-        let textNeeded = metaLayout.height + 2 + nameHeight + 4 + ceil(descBounds.height)
-        return max(textNeeded, dSide)
-    }
 
     /// The scorecard's own lineup abbreviation (last name, suffix-aware — same field the grid's
     /// column headers use), falling back to the last word of the full name for a batter who
     /// isn't in the starting lineup (a pinch hitter, say).
-    private func batterDisplayName(for event: AtBatEvent, scorecard: ScorecardData) -> String {
-        let lineup = scorecard.lineups.away + scorecard.lineups.home
-        if let batter = lineup.first(where: { $0.id == event.batterId }) {
-            return batter.abbreviation
-        }
-        return event.batterName.components(separatedBy: " ").last ?? event.batterName
-    }
 
     /// ScorecardResult.displayText ("1B", "F8", "GIDP") is scorecard notation, the right call for
     /// the dense batter/inning grid where a literate reader expects it. A highlights card is built
     /// to be understood by anyone scrolling past it, so the headline uses plain English instead.
-    private func highlightsResultLabel(for result: ScorecardResult) -> String {
-        switch result {
-        case .single: return "Single"
-        case .double: return "Double"
-        case .triple: return "Triple"
-        case .homeRun: return "Home Run"
-        case .walk: return "Walk"
-        case .intentionalWalk: return "Intentional Walk"
-        case .hitByPitch: return "Hit By Pitch"
-        case .strikeoutSwinging, .strikeoutLooking: return "Strikeout"
-        case .flyout: return "Flyout"
-        case .popout: return "Pop Out"
-        case .lineout: return "Lineout"
-        case .groundout: return "Groundout"
-        case .forceOut: return "Force Out"
-        case .fieldersChoice: return "Fielder's Choice"
-        case .doublePlay: return "Double Play"
-        case .triplePlay: return "Triple Play"
-        case .sacFly: return "Sac Fly"
-        case .sacBunt: return "Sac Bunt"
-        case .fieldError: return "Error"
-        case .stolenBase: return "Stolen Base"
-        case .caughtStealing: return "Caught Stealing"
-        case .pickoff: return "Pickoff"
-        case .balk: return "Balk"
-        case .wildPitch: return "Wild Pitch"
-        case .passedBall: return "Passed Ball"
-        case .live, .runnerOnly, .empty: return ""
-        case .other(let text): return text.capitalized
-        }
-    }
-
 
     /// Small diamond badge on the left, everything else stacked in a full-width text column on
     /// the right — the same "icon beside unlimited-line text" shape as the in-app TimelineCell
@@ -541,90 +302,6 @@ final class ScorecardImageGenerator {
     /// size) for a single bold result code and a "did this score" fill — a supporting glyph, not
     /// the dominant element competing with text for space. `sizes` is shared across every row on
     /// the card (see drawHighlightsGrid); `rect.height` is only used to vertically center content.
-    private func drawHighlightsPlayRow(in rect: CGRect, event: AtBatEvent, scorecard: ScorecardData, sizes: HighlightsRowSizes, ctx: CGContext) {
-        let accent = scorecard.teamAccentColor(for: event)
-
-        // Tried a faint full-row color wash here to reinforce team identity a second way — at an
-        // opacity subtle enough not to fight the text, red (SF) and orange (BOS) both flattened
-        // into the same pale pink and stopped reading as different teams at all, which is worse
-        // than no wash. Reverted; the accent bar + pill are doing that job well on their own.
-        let barWidth: CGFloat = 5
-        ctx.setFillColor(accent.cgColor)
-        ctx.fill(CGRect(x: rect.minX, y: rect.minY, width: barWidth, height: rect.height))
-
-        let contentRect = CGRect(x: rect.minX + barWidth + 18, y: rect.minY, width: rect.width - barWidth - 18, height: rect.height)
-        let dSide = min(sizes.diamondSide, contentRect.width * 0.46)
-        let textRect = CGRect(
-            x: contentRect.minX + dSide + 20,
-            y: contentRect.minY,
-            width: contentRect.width - dSide - 20,
-            height: contentRect.height
-        )
-
-        // Meta line: team pill, half/inning, plain-English result, and the pitcher —
-        // e.g. [ATL]  TOP 1 · DOUBLE · VS. PADGHAM
-        let metaFont = UIFont(name: AppFont.ibmPlexBold, size: sizes.metaSize) ?? .systemFont(ofSize: sizes.metaSize, weight: .bold)
-        let metaLayout = highlightsMetaLayout(for: event, scorecard: scorecard, metaFont: metaFont, accent: accent, maxWidth: textRect.width)
-        let metaHeight = metaLayout.height
-
-        let pillOrigin = CGPoint(x: textRect.minX + metaLayout.pillRect.minX, y: textRect.minY + (metaHeight - metaLayout.pillRect.height) / 2)
-        let pillRect = CGRect(origin: pillOrigin, size: metaLayout.pillRect.size)
-        let pillPath = UIBezierPath(roundedRect: pillRect, cornerRadius: pillRect.height / 2)
-        accent.setFill()
-        pillPath.fill()
-        let pillFont = UIFont(name: AppFont.ibmPlexBold, size: metaFont.pointSize * 0.82) ?? metaFont
-        let pillTextAttrs: [NSAttributedString.Key: Any] = [.font: pillFont, .foregroundColor: config.paperColor, .kern: 0.5]
-        let pillTextSize = (metaLayout.pillText as NSString).size(withAttributes: pillTextAttrs)
-        (metaLayout.pillText as NSString).draw(
-            at: CGPoint(x: pillRect.midX - pillTextSize.width / 2, y: pillRect.midY - pillTextSize.height / 2),
-            withAttributes: pillTextAttrs
-        )
-
-        let metaAttrs: [NSAttributedString.Key: Any] = [.font: metaFont, .foregroundColor: accent, .kern: 1.0]
-        (highlightsMetaText(for: event) as NSString).draw(
-            with: CGRect(x: textRect.minX + metaLayout.textRect.minX, y: textRect.minY + (metaHeight - metaLayout.textRect.height) / 2, width: metaLayout.textRect.width, height: metaLayout.textRect.height + 4),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: metaAttrs,
-            context: nil
-        )
-
-        // Batter name — last name only (see batterDisplayName), the card's hero text. Shrunk to
-        // fit textRect.width via the same function the height estimate used, so a long name
-        // (e.g. "Yastrzemski") at a large scale can never run off the edge of the card.
-        let displayName = batterDisplayName(for: event, scorecard: scorecard)
-        let nameFont = highlightsFittedNameFont(for: displayName, baseSize: sizes.nameSize, maxWidth: textRect.width)
-        let nameY = textRect.minY + metaHeight + 2
-        let nameAttrs: [NSAttributedString.Key: Any] = [.font: nameFont, .foregroundColor: config.pencilColor]
-        (displayName as NSString).draw(at: CGPoint(x: textRect.minX, y: nameY), withAttributes: nameAttrs)
-        let nameHeight = ceil(nameFont.lineHeight)
-
-        // Description — sized identically to every other row on the card, guaranteed to fit by
-        // drawHighlightsGrid's height search (never truncated, never needs its own shrink pass).
-        let descFont = UIFont(name: AppFont.patrickHand, size: sizes.descSize) ?? .systemFont(ofSize: sizes.descSize)
-        let descTop = nameY + nameHeight + 4
-        (event.description as NSString).draw(
-            with: CGRect(x: textRect.minX, y: descTop, width: textRect.width, height: max(0, textRect.maxY - descTop)),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: [.font: descFont, .foregroundColor: config.pencilColor.withAlphaComponent(0.85)],
-            context: nil
-        )
-
-        // The real diamond — same base boxes (1B/2B/3B, filled if reached) and progress path
-        // lines as the main scorecard grid, not a stripped-down badge. An earlier pass here
-        // simplified this down to an outline + a small result code on the theory that base/out
-        // detail would be illegible at badge size, but that traded away the one visual that's
-        // actually specific to baseball scorekeeping — which is the whole visual identity of the
-        // app — for a generic colored diamond. Sized notably bigger than a supporting-glyph
-        // treatment would be (see HighlightsRowSizes) so the base paths are worth including.
-        if dSide > 20 {
-            let diamondRect = CGRect(x: contentRect.minX, y: contentRect.midY - dSide / 2, width: dSide, height: dSide)
-            if event.result.isHomeRun {
-                drawHomeRunSparkle(around: diamondRect, color: accent, ctx: ctx)
-            }
-            let resultFontSize = min(72, max(20, dSide * 0.4))
-            drawAtBatCell(in: diamondRect, event: event, accentColor: accent, resultFontSize: resultFontSize, ctx: ctx)
-        }
-    }
 
     /// A soft color halo behind the diamond, home runs only — the one outcome almost everyone
     /// recognizes as a big moment regardless of baseball literacy, so it's worth a little extra
@@ -648,6 +325,194 @@ final class ScorecardImageGenerator {
             circle.fill()
         }
         ctx.restoreGState()
+    }
+
+    // MARK: - Home Run Grid (9:16 portrait, full lineups condensed, home runs emphasized)
+
+    private enum HomeRunGrid {
+        static let pageWidth: CGFloat = 720
+        static let pageHeight: CGFloat = 1280
+        static let horizontalPadding: CGFloat = 28
+        // Instagram draws its own chrome on top of every story — profile photo, username, and
+        // timestamp at the top; reply field and like/comment/share icons at the bottom. Content
+        // placed under either doesn't get cropped, it gets visually covered by the app's own UI.
+        // These match Instagram's real safe area (roughly the top/bottom ~14%/~18% of a canonical
+        // 1080x1920 story), scaled to this card's 720x1280, not just a stylistic margin.
+        static let topSafeInset: CGFloat = 180
+        static let bottomSafeInset: CGFloat = 230
+        static let headerHeight: CGFloat = 140
+        static let attributionHeight: CGFloat = 20
+        static let nameWidth: CGFloat = 76
+        static let teamLabelHeight: CGFloat = 24
+        static let blockGap: CGFloat = 16
+        static let maxCellWidth: CGFloat = 56
+    }
+
+    func generateHomeRunGrid(scorecard: ScorecardData, linescore: Linescore?, userInterfaceStyle: UIUserInterfaceStyle = .unspecified) async -> UIImage {
+        let pdfData = await generateHomeRunGridPDF(scorecard: scorecard, linescore: linescore, userInterfaceStyle: userInterfaceStyle)
+        guard let provider = CGDataProvider(data: pdfData as CFData),
+              let pdf = CGPDFDocument(provider),
+              let page = pdf.page(at: 1) else {
+            return UIImage()
+        }
+        let pageRect = page.getBoxRect(.mediaBox)
+        let scale: CGFloat = 4
+        let size = CGSize(width: pageRect.width * scale, height: pageRect.height * scale)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
+        return renderer.image { context in
+            withTraitStyle(userInterfaceStyle) {
+                let ctx = context.cgContext
+                self.config.paperColor.setFill()
+                ctx.fill(CGRect(origin: .zero, size: size))
+                ctx.translateBy(x: 0, y: size.height)
+                ctx.scaleBy(x: scale, y: -scale)
+                ctx.drawPDFPage(page)
+            }
+        }
+    }
+
+    func generateHomeRunGridPDF(scorecard: ScorecardData, linescore: Linescore?, userInterfaceStyle: UIUserInterfaceStyle = .unspecified) async -> Data {
+        let pageRect = CGRect(x: 0, y: 0, width: HomeRunGrid.pageWidth, height: HomeRunGrid.pageHeight)
+        let renderer = UIGraphicsPDFRenderer(bounds: pageRect)
+        return renderer.pdfData { context in
+            withTraitStyle(userInterfaceStyle) {
+                context.beginPage()
+                let ctx = context.cgContext
+                self.config.paperColor.setFill()
+                ctx.fill(pageRect)
+                self.drawHomeRunGridCard(in: pageRect, scorecard: scorecard, linescore: linescore, ctx: ctx)
+            }
+        }
+    }
+
+    private func drawHomeRunGridCard(in pageRect: CGRect, scorecard: ScorecardData, linescore: Linescore?, ctx: CGContext) {
+        let contentRect = CGRect(
+            x: pageRect.minX + HomeRunGrid.horizontalPadding,
+            y: pageRect.minY + HomeRunGrid.topSafeInset,
+            width: pageRect.width - 2 * HomeRunGrid.horizontalPadding,
+            height: pageRect.height - HomeRunGrid.topSafeInset - HomeRunGrid.bottomSafeInset
+        )
+
+        let headerRect = CGRect(x: contentRect.minX, y: contentRect.minY, width: contentRect.width, height: HomeRunGrid.headerHeight)
+        drawHighlightsHeader(in: headerRect, scorecard: scorecard, linescore: linescore, ctx: ctx)
+
+        // The grid itself stays inside the Instagram-safe content area (contentRect), but the
+        // BASED wordmark is a small watermark, not primary content — it's pinned near the card's
+        // true bottom edge instead of the top of the safe-zone buffer, so it doesn't float with a
+        // large dead gap beneath it above the reply-bar zone.
+        let bodyY = headerRect.maxY + 12
+        let bodyRect = CGRect(x: contentRect.minX, y: bodyY, width: contentRect.width, height: contentRect.maxY - bodyY)
+        drawHomeRunGridBody(in: bodyRect, scorecard: scorecard, ctx: ctx)
+
+        let attrFont = UIFont(name: AppFont.ibmPlexBold, size: 14) ?? .systemFont(ofSize: 14, weight: .bold)
+        let attrAttrs: [NSAttributedString.Key: Any] = [
+            .font: attrFont,
+            .foregroundColor: config.pencilColor.withAlphaComponent(0.45),
+            .kern: 4.0
+        ]
+        let attrText = "BASED"
+        let aSize = (attrText as NSString).size(withAttributes: attrAttrs)
+        let attributionY = pageRect.maxY - HomeRunGrid.horizontalPadding - HomeRunGrid.attributionHeight
+        NSAttributedString(string: attrText, attributes: attrAttrs).draw(at: CGPoint(
+            x: pageRect.midX - aSize.width / 2,
+            y: attributionY + (HomeRunGrid.attributionHeight - aSize.height) / 2
+        ))
+    }
+
+    /// Both full lineups, one row per batting-order slot, side by side — the away team's plate
+    /// appearances on the left, the home team's on the right — so an entire game fits in one
+    /// non-scrolling view instead of stacking two 9-row grids vertically. Reuses the exact
+    /// compact-mode column grouping the live scorecard already computes (plate-appearance slots,
+    /// not fixed innings) so a batter who missed an inning doesn't leave a gap column.
+    private func drawHomeRunGridBody(in rect: CGRect, scorecard: ScorecardData, ctx: CGContext) {
+        let awayLineup = scorecard.lineups.away
+        let homeLineup = scorecard.lineups.home
+        guard !awayLineup.isEmpty || !homeLineup.isEmpty else { return }
+
+        let awayBySlot = layoutEngine.compactPlateAppearancesBySlot(data: scorecard, lineup: awayLineup, isHomeTeam: false)
+        let homeBySlot = layoutEngine.compactPlateAppearancesBySlot(data: scorecard, lineup: homeLineup, isHomeTeam: true)
+        let awayCols = max(1, awayBySlot.values.map(\.count).max() ?? 1)
+        let homeCols = max(1, homeBySlot.values.map(\.count).max() ?? 1)
+        let maxCols = max(awayCols, homeCols)
+
+        let rowCount = max(awayLineup.count, homeLineup.count)
+        guard rowCount > 0, maxCols > 0 else { return }
+
+        let half = (rect.width - HomeRunGrid.blockGap) / 2
+        let cellWidth = min(HomeRunGrid.maxCellWidth, (half - HomeRunGrid.nameWidth) / CGFloat(maxCols))
+        let gridHeight = rect.height - HomeRunGrid.teamLabelHeight
+        let rowHeight = gridHeight / CGFloat(rowCount)
+
+        let awayAccent = scorecard.teamAccentColor(isHomeTeam: false)
+        let homeAccent = scorecard.teamAccentColor(isHomeTeam: true)
+        let awayName = scorecard.teams.away.name ?? "Away"
+        let homeName = scorecard.teams.home.name ?? "Home"
+
+        // cellWidth is capped at maxCellWidth, so a block's actual content is often narrower than
+        // its "half" allotment (e.g. capped at 4 columns leaves slack unused). Sizing each block to
+        // its real content width and centering the pair — rather than splitting the full width in
+        // half regardless — keeps the grid visually centered instead of drifting left with a
+        // lopsided gap on the right.
+        let contentWidthPerBlock = HomeRunGrid.nameWidth + cellWidth * CGFloat(maxCols)
+        let totalContentWidth = contentWidthPerBlock * 2 + HomeRunGrid.blockGap
+        let hOffset = max(0, (rect.width - totalContentWidth) / 2)
+
+        let awayBlockRect = CGRect(x: rect.minX + hOffset, y: rect.minY, width: contentWidthPerBlock, height: rect.height)
+        let homeBlockRect = CGRect(x: awayBlockRect.maxX + HomeRunGrid.blockGap, y: rect.minY, width: contentWidthPerBlock, height: rect.height)
+
+        drawTeamLabel(teamAbbreviation(for: awayName), color: awayAccent, in: CGRect(x: awayBlockRect.minX, y: awayBlockRect.minY, width: awayBlockRect.width, height: HomeRunGrid.teamLabelHeight), ctx: ctx)
+        drawTeamLabel(teamAbbreviation(for: homeName), color: homeAccent, in: CGRect(x: homeBlockRect.minX, y: homeBlockRect.minY, width: homeBlockRect.width, height: HomeRunGrid.teamLabelHeight), ctx: ctx)
+
+        let awayGridRect = CGRect(x: awayBlockRect.minX, y: awayBlockRect.minY + HomeRunGrid.teamLabelHeight, width: awayBlockRect.width, height: gridHeight)
+        let homeGridRect = CGRect(x: homeBlockRect.minX, y: homeBlockRect.minY + HomeRunGrid.teamLabelHeight, width: homeBlockRect.width, height: gridHeight)
+
+        drawTeamGridBlock(in: awayGridRect, lineup: awayLineup, bySlot: awayBySlot, accent: awayAccent, rowHeight: rowHeight, cellWidth: cellWidth, ctx: ctx)
+        drawTeamGridBlock(in: homeGridRect, lineup: homeLineup, bySlot: homeBySlot, accent: homeAccent, rowHeight: rowHeight, cellWidth: cellWidth, ctx: ctx)
+
+        ctx.setStrokeColor(config.gridColor.cgColor)
+        ctx.setLineWidth(1)
+        ctx.move(to: CGPoint(x: rect.midX, y: rect.minY))
+        ctx.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+        ctx.strokePath()
+    }
+
+    private func drawTeamLabel(_ text: String, color: UIColor, in rect: CGRect, ctx: CGContext) {
+        let font = UIFont(name: AppFont.ibmPlexBold, size: 14) ?? .systemFont(ofSize: 14, weight: .bold)
+        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color, .kern: 1.0]
+        NSAttributedString(string: text, attributes: attrs).draw(at: CGPoint(x: rect.minX, y: rect.minY))
+    }
+
+    private func drawTeamGridBlock(in rect: CGRect, lineup: [ScorecardBatter], bySlot: [Int: [Int: AtBatEvent]], accent: UIColor, rowHeight: CGFloat, cellWidth: CGFloat, ctx: CGContext) {
+        let nameFont = UIFont(name: AppFont.ibmPlexBold, size: 14) ?? .systemFont(ofSize: 14, weight: .bold)
+        let nameAttrs: [NSAttributedString.Key: Any] = [.font: nameFont, .foregroundColor: config.pencilColor]
+
+        for (i, batter) in lineup.enumerated() {
+            let rowY = rect.minY + CGFloat(i) * rowHeight
+            let nameRect = CGRect(x: rect.minX, y: rowY, width: HomeRunGrid.nameWidth, height: rowHeight)
+            let nameStr = batter.abbreviation
+            let nameSize = (nameStr as NSString).size(withAttributes: nameAttrs)
+            (nameStr as NSString).draw(at: CGPoint(x: nameRect.minX, y: nameRect.midY - nameSize.height / 2), withAttributes: nameAttrs)
+
+            // bySlot is keyed by batting-order slot, not by player — when a substitution happens
+            // mid-game, two lineup entries can share a slot, and the raw bucket holds both
+            // players' plate appearances merged into one PA sequence. Filtering to this row's own
+            // batterId (mirroring ScorecardViewDataSource.compactPAsByColumn, the live grid's
+            // equivalent) is what keeps a sub's row from also rendering the starter's at-bats.
+            guard let slot = batter.battingOrderSlot else { continue }
+            let events = (bySlot[slot] ?? [:]).filter { $0.value.batterId == batter.id }
+            guard !events.isEmpty else { continue }
+            let paCount = (events.keys.max() ?? -1) + 1
+            for pa in 0..<paCount {
+                guard let event = events[pa] else { continue }
+                let cellRect = CGRect(x: nameRect.maxX + CGFloat(pa) * cellWidth, y: rowY, width: cellWidth, height: rowHeight)
+                if event.result.isHomeRun {
+                    drawHomeRunSparkle(around: squareDiamondRect(in: cellRect), color: accent, ctx: ctx)
+                }
+                drawAtBatCell(in: cellRect, event: event, accentColor: accent, showCounts: false, ctx: ctx)
+            }
+        }
     }
 
     private func actualColumnWidth(layout: ColumnLayout) -> CGFloat {
@@ -947,7 +812,7 @@ final class ScorecardImageGenerator {
     }
     
     private func teamAbbreviation(for teamName: String) -> String {
-        let map = [
+        let map: [String: String] = [
             "Arizona Diamondbacks": "ARI", "Atlanta Braves": "ATL", "Baltimore Orioles": "BAL", "Boston Red Sox": "BOS",
             "Chicago Cubs": "CHC", "Chicago White Sox": "CWS", "Cincinnati Reds": "CIN", "Cleveland Guardians": "CLE",
             "Colorado Rockies": "COL", "Detroit Tigers": "DET", "Houston Astros": "HOU", "Kansas City Royals": "KC",
@@ -1361,7 +1226,7 @@ final class ScorecardImageGenerator {
         drawBaseBox(at: home, occupied: false, base: 0, diamondColor: config.pencilColor, baseSize: baseSize, baseStrokeWidth: baseStrokeWidth, ctx: ctx)
     }
 
-    private func drawAtBatCell(in rect: CGRect, event: AtBatEvent, accentColor: UIColor, resultFontSize: CGFloat? = nil, ctx: CGContext) {
+    private func drawAtBatCell(in rect: CGRect, event: AtBatEvent, accentColor: UIColor, resultFontSize: CGFloat? = nil, showCounts: Bool = true, ctx: CGContext) {
         if event.result.isLive {
             ctx.saveGState()
             ctx.setAlpha(0.3)
@@ -1384,7 +1249,7 @@ final class ScorecardImageGenerator {
         drawDiamondShape(in: dRect, home: home, first: first, second: second, third: third, shouldUseAccent: shouldUseAccent, diamondColor: diamondColor, ctx: ctx)
         drawProgressPath(in: dRect, event: event, home: home, first: first, second: second, third: third, diamondColor: diamondColor, progressLineWidth: progressLineWidth, ctx: ctx)
         drawBaseBoxes(event: event, home: home, first: first, second: second, third: third, diamondColor: diamondColor, baseSize: baseSize, baseStrokeWidth: baseStrokeWidth, ctx: ctx)
-        drawResultAndCounts(in: rect, dRect: dRect, event: event, diamondColor: diamondColor, baseFontSize: resultFontSize, ctx: ctx)
+        drawResultAndCounts(in: rect, dRect: dRect, event: event, diamondColor: diamondColor, baseFontSize: resultFontSize, showCounts: showCounts, ctx: ctx)
     }
 
     private func squareDiamondRect(in rect: CGRect) -> CGRect {
@@ -1516,7 +1381,7 @@ final class ScorecardImageGenerator {
         bPath.stroke()
     }
 
-    private func drawResultAndCounts(in rect: CGRect, dRect: CGRect, event: AtBatEvent, diamondColor: UIColor, baseFontSize: CGFloat? = nil, ctx: CGContext) {
+    private func drawResultAndCounts(in rect: CGRect, dRect: CGRect, event: AtBatEvent, diamondColor: UIColor, baseFontSize: CGFloat? = nil, showCounts: Bool = true, ctx: CGContext) {
         let res = event.result.displayText
         var font = baseFontSize.map { config.resultFont.withSize($0) } ?? config.resultFont
         let maxWidth = rect.width * 0.8
@@ -1576,20 +1441,22 @@ final class ScorecardImageGenerator {
         // for the ~40pt diamonds in the main scorecard grid this function was written for, but
         // reads as nearly invisible on the highlights card's much larger diamonds (up to ~280pt).
         // The 12pt floor keeps the main scorecard's small cells exactly as they were.
-        let cornerFontSize = max(12, min(dRect.width, dRect.height) * 0.09)
-        let cornerFont = UIFont(name: AppFont.patrickHand, size: cornerFontSize) ?? .systemFont(ofSize: cornerFontSize, weight: .medium)
-        let cInset = max(2, cornerFontSize * 0.18)
-        let cAttrs: [NSAttributedString.Key: Any] = [.font: cornerFont, .foregroundColor: diamondColor.withAlphaComponent(0.7)]
-        if event.balls > 0 { NSAttributedString(string: "\(event.balls)B", attributes: cAttrs).draw(at: CGPoint(x: rect.minX + cInset, y: rect.minY + cInset)) }
-        if event.strikes > 0 {
-            let sText = "\(event.strikes)S"
-            let sSize = (sText as NSString).size(withAttributes: cAttrs)
-            NSAttributedString(string: sText, attributes: cAttrs).draw(at: CGPoint(x: rect.maxX - sSize.width - cInset, y: rect.minY + cInset))
-        }
-        if event.outs > 0 {
-            let oText = "\(event.outs)"
-            let oSize = (oText as NSString).size(withAttributes: cAttrs)
-            NSAttributedString(string: oText, attributes: cAttrs).draw(at: CGPoint(x: rect.maxX - oSize.width - cInset, y: rect.maxY - oSize.height - cInset))
+        if showCounts {
+            let cornerFontSize = max(12, min(dRect.width, dRect.height) * 0.09)
+            let cornerFont = UIFont(name: AppFont.patrickHand, size: cornerFontSize) ?? .systemFont(ofSize: cornerFontSize, weight: .medium)
+            let cInset = max(2, cornerFontSize * 0.18)
+            let cAttrs: [NSAttributedString.Key: Any] = [.font: cornerFont, .foregroundColor: diamondColor.withAlphaComponent(0.7)]
+            if event.balls > 0 { NSAttributedString(string: "\(event.balls)B", attributes: cAttrs).draw(at: CGPoint(x: rect.minX + cInset, y: rect.minY + cInset)) }
+            if event.strikes > 0 {
+                let sText = "\(event.strikes)S"
+                let sSize = (sText as NSString).size(withAttributes: cAttrs)
+                NSAttributedString(string: sText, attributes: cAttrs).draw(at: CGPoint(x: rect.maxX - sSize.width - cInset, y: rect.minY + cInset))
+            }
+            if event.outs > 0 {
+                let oText = "\(event.outs)"
+                let oSize = (oText as NSString).size(withAttributes: cAttrs)
+                NSAttributedString(string: oText, attributes: cAttrs).draw(at: CGPoint(x: rect.maxX - oSize.width - cInset, y: rect.maxY - oSize.height - cInset))
+            }
         }
         if let annotations = event.bases.annotations {
             drawAnnotations(annotations, in: rect, diamondRect: dRect, color: diamondColor)
