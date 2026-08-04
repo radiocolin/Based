@@ -376,7 +376,7 @@ final class ScorecardImageGenerator {
         let descSize: CGFloat
 
         init(scale: CGFloat) {
-            diamondSide = 78 * scale
+            diamondSide = 108 * scale
             // Capped independently of `scale`, unlike the other sizes: this is a compact label
             // ("TOP 1 · DOUBLE · VS. PADGHAM"), not hero text, and letting it grow all the way to
             // a 1-play card's ~2.6x scale made it wide enough to wrap — which silently clipped
@@ -467,7 +467,7 @@ final class ScorecardImageGenerator {
     private func highlightsNaturalRowHeight(for event: AtBatEvent, cardWidth: CGFloat, scorecard: ScorecardData, sizes: HighlightsRowSizes) -> CGFloat {
         let barWidth: CGFloat = 5
         let contentWidth = cardWidth - barWidth - 18
-        let dSide = min(sizes.diamondSide, contentWidth * 0.4)
+        let dSide = min(sizes.diamondSide, contentWidth * 0.46)
         let textWidth = contentWidth - dSide - 20
 
         let metaFont = UIFont(name: AppFont.ibmPlexBold, size: sizes.metaSize) ?? .systemFont(ofSize: sizes.metaSize, weight: .bold)
@@ -550,7 +550,7 @@ final class ScorecardImageGenerator {
         ctx.fill(CGRect(x: rect.minX, y: rect.minY, width: barWidth, height: rect.height))
 
         let contentRect = CGRect(x: rect.minX + barWidth + 18, y: rect.minY, width: rect.width - barWidth - 18, height: rect.height)
-        let dSide = min(sizes.diamondSide, contentRect.width * 0.4)
+        let dSide = min(sizes.diamondSide, contentRect.width * 0.46)
         let textRect = CGRect(
             x: contentRect.minX + dSide + 20,
             y: contentRect.minY,
@@ -606,38 +606,17 @@ final class ScorecardImageGenerator {
             context: nil
         )
 
-        // Diamond badge, vertically centered against the row.
+        // The real diamond — same base boxes (1B/2B/3B, filled if reached) and progress path
+        // lines as the main scorecard grid, not a stripped-down badge. An earlier pass here
+        // simplified this down to an outline + a small result code on the theory that base/out
+        // detail would be illegible at badge size, but that traded away the one visual that's
+        // actually specific to baseball scorekeeping — which is the whole visual identity of the
+        // app — for a generic colored diamond. Sized notably bigger than a supporting-glyph
+        // treatment would be (see HighlightsRowSizes) so the base paths are worth including.
         if dSide > 20 {
             let diamondRect = CGRect(x: contentRect.minX, y: contentRect.midY - dSide / 2, width: dSide, height: dSide)
-            let home = CGPoint(x: diamondRect.midX, y: diamondRect.maxY)
-            let first = CGPoint(x: diamondRect.maxX, y: diamondRect.midY)
-            let second = CGPoint(x: diamondRect.midX, y: diamondRect.minY)
-            let third = CGPoint(x: diamondRect.minX, y: diamondRect.midY)
-            let diamondPath = UIBezierPath()
-            diamondPath.move(to: home); diamondPath.addLine(to: first); diamondPath.addLine(to: second); diamondPath.addLine(to: third); diamondPath.close()
-
-            let scored = event.bases.home || event.result.isHomeRun
-            (scored ? accent.withAlphaComponent(0.18) : config.pencilColor.withAlphaComponent(0.06)).setFill()
-            diamondPath.fill()
-            accent.setStroke()
-            diamondPath.lineWidth = 2
-            diamondPath.stroke()
-
-            let codeFont = UIFont(name: AppFont.permanentMarker, size: dSide * 0.22) ?? .systemFont(ofSize: dSide * 0.22, weight: .bold)
-            let codeAttrs: [NSAttributedString.Key: Any] = [.font: codeFont, .foregroundColor: accent]
-            let codeText = event.result.displayText
-            let codeBounds = (codeText as NSString).boundingRect(
-                with: CGSize(width: dSide * 0.9, height: dSide * 0.9),
-                options: [.usesLineFragmentOrigin, .usesFontLeading],
-                attributes: codeAttrs,
-                context: nil
-            )
-            (codeText as NSString).draw(
-                with: CGRect(x: diamondRect.midX - codeBounds.width / 2, y: diamondRect.midY - codeBounds.height / 2, width: codeBounds.width, height: codeBounds.height),
-                options: [.usesLineFragmentOrigin, .usesFontLeading],
-                attributes: codeAttrs,
-                context: nil
-            )
+            let resultFontSize = min(72, max(20, dSide * 0.4))
+            drawAtBatCell(in: diamondRect, event: event, accentColor: accent, resultFontSize: resultFontSize, ctx: ctx)
         }
     }
 
@@ -1352,7 +1331,7 @@ final class ScorecardImageGenerator {
         drawBaseBox(at: home, occupied: false, base: 0, diamondColor: config.pencilColor, baseSize: baseSize, baseStrokeWidth: baseStrokeWidth, ctx: ctx)
     }
 
-    private func drawAtBatCell(in rect: CGRect, event: AtBatEvent, accentColor: UIColor, ctx: CGContext) {
+    private func drawAtBatCell(in rect: CGRect, event: AtBatEvent, accentColor: UIColor, resultFontSize: CGFloat? = nil, ctx: CGContext) {
         if event.result.isLive {
             ctx.saveGState()
             ctx.setAlpha(0.3)
@@ -1375,7 +1354,7 @@ final class ScorecardImageGenerator {
         drawDiamondShape(in: dRect, home: home, first: first, second: second, third: third, shouldUseAccent: shouldUseAccent, diamondColor: diamondColor, ctx: ctx)
         drawProgressPath(in: dRect, event: event, home: home, first: first, second: second, third: third, diamondColor: diamondColor, progressLineWidth: progressLineWidth, ctx: ctx)
         drawBaseBoxes(event: event, home: home, first: first, second: second, third: third, diamondColor: diamondColor, baseSize: baseSize, baseStrokeWidth: baseStrokeWidth, ctx: ctx)
-        drawResultAndCounts(in: rect, dRect: dRect, event: event, diamondColor: diamondColor, ctx: ctx)
+        drawResultAndCounts(in: rect, dRect: dRect, event: event, diamondColor: diamondColor, baseFontSize: resultFontSize, ctx: ctx)
     }
 
     private func squareDiamondRect(in rect: CGRect) -> CGRect {
@@ -1507,9 +1486,9 @@ final class ScorecardImageGenerator {
         bPath.stroke()
     }
 
-    private func drawResultAndCounts(in rect: CGRect, dRect: CGRect, event: AtBatEvent, diamondColor: UIColor, ctx: CGContext) {
+    private func drawResultAndCounts(in rect: CGRect, dRect: CGRect, event: AtBatEvent, diamondColor: UIColor, baseFontSize: CGFloat? = nil, ctx: CGContext) {
         let res = event.result.displayText
-        var font = config.resultFont
+        var font = baseFontSize.map { config.resultFont.withSize($0) } ?? config.resultFont
         let maxWidth = rect.width * 0.8
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineHeightMultiple = 0.75
