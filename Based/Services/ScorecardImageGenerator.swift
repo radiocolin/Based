@@ -254,30 +254,30 @@ final class ScorecardImageGenerator {
         homeColor.setFill()
         ctx.fill(CGRect(x: rect.minX + halfWidth, y: rect.minY, width: halfWidth, height: barHeight))
 
-        let teamFont = UIFont(name: AppFont.permanentMarker, size: 36) ?? .systemFont(ofSize: 36, weight: .bold)
         let atFont = UIFont(name: AppFont.patrickHand, size: 18) ?? .systemFont(ofSize: 18)
         let dateFont = UIFont(name: AppFont.patrickHand, size: 20) ?? .systemFont(ofSize: 20)
 
-        let awayLine = NSMutableAttributedString(
-            string: awayName.uppercased(),
-            attributes: [.font: teamFont, .foregroundColor: awayColor]
-        )
-        if hasScore {
-            awayLine.append(NSAttributedString(
-                string: "  \(awayRuns)",
-                attributes: [.font: teamFont, .foregroundColor: awayColor]
-            ))
+        // Team name font shrinks to fit — same overflow class as the batter name (see
+        // highlightsFittedNameFont): a fixed 36pt is normally plenty, but a long team name
+        // combined with a 3-digit score has no other safety net against running off both edges
+        // of the card (it's center-aligned, so overflow isn't even confined to one side).
+        func teamLine(_ name: String, runs: Int, color: UIColor) -> (NSAttributedString, UIFont) {
+            var size: CGFloat = 36
+            var font = UIFont(name: AppFont.permanentMarker, size: size) ?? .systemFont(ofSize: size, weight: .bold)
+            let text = hasScore ? "\(name.uppercased())  \(runs)" : name.uppercased()
+            while size > 20 {
+                font = UIFont(name: AppFont.permanentMarker, size: size) ?? .systemFont(ofSize: size, weight: .bold)
+                if (text as NSString).size(withAttributes: [.font: font]).width <= rect.width { break }
+                size -= 1
+            }
+            let line = NSMutableAttributedString(string: name.uppercased(), attributes: [.font: font, .foregroundColor: color])
+            if hasScore {
+                line.append(NSAttributedString(string: "  \(runs)", attributes: [.font: font, .foregroundColor: color]))
+            }
+            return (line, font)
         }
-        let homeLine = NSMutableAttributedString(
-            string: homeName.uppercased(),
-            attributes: [.font: teamFont, .foregroundColor: homeColor]
-        )
-        if hasScore {
-            homeLine.append(NSAttributedString(
-                string: "  \(homeRuns)",
-                attributes: [.font: teamFont, .foregroundColor: homeColor]
-            ))
-        }
+        let (awayLine, _) = teamLine(awayName, runs: awayRuns, color: awayColor)
+        let (homeLine, _) = teamLine(homeName, runs: homeRuns, color: homeColor)
 
         let awaySize = awayLine.size()
         let homeSize = homeLine.size()
@@ -339,7 +339,7 @@ final class ScorecardImageGenerator {
 
         func naturalHeights(at scale: CGFloat) -> [CGFloat] {
             let sizes = HighlightsRowSizes(scale: scale)
-            return capped.map { highlightsNaturalRowHeight(for: $0, cardWidth: rect.width, sizes: sizes) }
+            return capped.map { highlightsNaturalRowHeight(for: $0, cardWidth: rect.width, scorecard: scorecard, sizes: sizes) }
         }
 
         let targetRows = rect.height - CGFloat(count - 1) * minGap
@@ -398,33 +398,84 @@ final class ScorecardImageGenerator {
         return parts.joined(separator: "  \u{00B7}  ")
     }
 
+    private struct HighlightsMetaLayout {
+        let pillRect: CGRect
+        let pillText: String
+        let textRect: CGRect
+        var height: CGFloat { max(pillRect.height, textRect.height) }
+    }
+
+    /// Lays out the meta line — team pill + "TOP 1 · DOUBLE · VS. PADGHAM" — relative to a local
+    /// (0,0) origin. Both highlightsNaturalRowHeight and drawHighlightsPlayRow call this *same*
+    /// function rather than each computing their own positions; the earlier bug where the meta
+    /// line's height estimate quietly disagreed with what was actually drawn (missing `.kern` in
+    /// one of the two call sites) came from having two independent copies of this math that could
+    /// drift. One function, called twice, can't drift from itself.
+    ///
+    /// The pill exists because color is the *only* signal distinguishing home/away elsewhere on
+    /// the card, and division rivals sharing a primary color (e.g. Nationals/Braves, both red)
+    /// make that signal genuinely ambiguous — plus color alone never works for colorblind readers.
+    /// The team code makes "who did this" legible independent of hue.
+    private func highlightsMetaLayout(for event: AtBatEvent, scorecard: ScorecardData, metaFont: UIFont, accent: UIColor, maxWidth: CGFloat) -> HighlightsMetaLayout {
+        let teamName = event.isTop ? scorecard.teams.away.name : scorecard.teams.home.name
+        let pillText = teamAbbreviation(for: teamName ?? "")
+        let pillFont = UIFont(name: AppFont.ibmPlexBold, size: metaFont.pointSize * 0.82) ?? metaFont
+        let pillAttrs: [NSAttributedString.Key: Any] = [.font: pillFont, .kern: 0.5]
+        let pillTextSize = (pillText as NSString).size(withAttributes: pillAttrs)
+        let pillPaddingH = max(4, pillFont.pointSize * 0.5)
+        let pillHeight = ceil(pillTextSize.height + pillFont.pointSize * 0.36)
+        let pillWidth = ceil(pillTextSize.width + pillPaddingH * 2)
+        let pillRect = CGRect(x: 0, y: 0, width: pillWidth, height: pillHeight)
+
+        let gap: CGFloat = 8
+        let metaText = highlightsMetaText(for: event)
+        let metaAttrs: [NSAttributedString.Key: Any] = [.font: metaFont, .foregroundColor: accent, .kern: 1.0]
+        let textMaxWidth = max(20, maxWidth - pillWidth - gap)
+        let bounds = (metaText as NSString).boundingRect(
+            with: CGSize(width: textMaxWidth, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: metaAttrs,
+            context: nil
+        )
+        let textRect = CGRect(x: pillWidth + gap, y: 0, width: textMaxWidth, height: ceil(bounds.height))
+
+        return HighlightsMetaLayout(pillRect: pillRect, pillText: pillText, textRect: textRect)
+    }
+
+    /// Shrinks the batter-name font (preserving family/weight) until `name` fits on one line
+    /// within `maxWidth`, down to a floor. The name is drawn with a plain single-line `.draw(at:)`
+    /// (no wrapping — a wrapped hero name would look like a mistake), which means unlike the meta
+    /// line and description, nothing constrains its width automatically. A row's card-wide
+    /// `sizes.nameSize` is tuned against short/medium names; an 11-letter name like "Yastrzemski"
+    /// at a large scale (few plays selected) can exceed the text column's width and run off the
+    /// edge of the card entirely if not explicitly fitted. Called identically by the height
+    /// estimate and the draw call so they can't disagree about the resulting size.
+    private func highlightsFittedNameFont(for name: String, baseSize: CGFloat, maxWidth: CGFloat, minSize: CGFloat = 16) -> UIFont {
+        var size = baseSize
+        while size > minSize {
+            let font = UIFont(name: AppFont.permanentMarker, size: size) ?? .systemFont(ofSize: size, weight: .bold)
+            if (name as NSString).size(withAttributes: [.font: font]).width <= maxWidth { return font }
+            size -= 1
+        }
+        return UIFont(name: AppFont.permanentMarker, size: minSize) ?? .systemFont(ofSize: minSize, weight: .bold)
+    }
+
     /// How tall a row needs to be at these sizes to fit its meta line, batter name, and full
     /// description without truncation. Mirrors drawHighlightsPlayRow's own layout math exactly —
     /// both derive positions from the same `sizes` struct — so the estimate here always matches
-    /// what actually gets drawn. The meta line's height is measured the same wrapping-aware way
-    /// as the description, not assumed to be one line — metaSize is capped low enough that it
-    /// practically never wraps, but "practically never" isn't "never," and an unmeasured second
-    /// line is exactly how the batter name and this meta line each got silently clipped before.
-    private func highlightsNaturalRowHeight(for event: AtBatEvent, cardWidth: CGFloat, sizes: HighlightsRowSizes) -> CGFloat {
+    /// what actually gets drawn.
+    private func highlightsNaturalRowHeight(for event: AtBatEvent, cardWidth: CGFloat, scorecard: ScorecardData, sizes: HighlightsRowSizes) -> CGFloat {
         let barWidth: CGFloat = 5
         let contentWidth = cardWidth - barWidth - 18
         let dSide = min(sizes.diamondSide, contentWidth * 0.4)
         let textWidth = contentWidth - dSide - 20
 
         let metaFont = UIFont(name: AppFont.ibmPlexBold, size: sizes.metaSize) ?? .systemFont(ofSize: sizes.metaSize, weight: .bold)
-        let nameFont = UIFont(name: AppFont.permanentMarker, size: sizes.nameSize) ?? .systemFont(ofSize: sizes.nameSize, weight: .bold)
         let descFont = UIFont(name: AppFont.patrickHand, size: sizes.descSize) ?? .systemFont(ofSize: sizes.descSize)
 
-        // .kern must match the draw call's attributes exactly — boundingRect's wrap point shifts
-        // with kerning (extra letter-spacing compounds across a ~35-character line), and using a
-        // kern-less measurement here previously under-counted the meta line by a full line
-        // whenever it wrapped, stealing that line's height from the description below it.
-        let metaBounds = (highlightsMetaText(for: event) as NSString).boundingRect(
-            with: CGSize(width: textWidth, height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: [.font: metaFont, .kern: 1.0],
-            context: nil
-        )
+        let metaLayout = highlightsMetaLayout(for: event, scorecard: scorecard, metaFont: metaFont, accent: .clear, maxWidth: textWidth)
+        let displayName = batterDisplayName(for: event, scorecard: scorecard)
+        let nameFont = highlightsFittedNameFont(for: displayName, baseSize: sizes.nameSize, maxWidth: textWidth)
         let nameHeight = ceil(nameFont.lineHeight)
         let descBounds = (event.description as NSString).boundingRect(
             with: CGSize(width: textWidth, height: .greatestFiniteMagnitude),
@@ -433,7 +484,7 @@ final class ScorecardImageGenerator {
             context: nil
         )
 
-        let textNeeded = ceil(metaBounds.height) + 2 + nameHeight + 4 + ceil(descBounds.height)
+        let textNeeded = metaLayout.height + 2 + nameHeight + 4 + ceil(descBounds.height)
         return max(textNeeded, dSide)
     }
 
@@ -507,27 +558,38 @@ final class ScorecardImageGenerator {
             height: contentRect.height
         )
 
-        // Meta line: half/inning, plain-English result, and the pitcher — e.g. "TOP 1 · DOUBLE · VS. PADGHAM"
+        // Meta line: team pill, half/inning, plain-English result, and the pitcher —
+        // e.g. [ATL]  TOP 1 · DOUBLE · VS. PADGHAM
         let metaFont = UIFont(name: AppFont.ibmPlexBold, size: sizes.metaSize) ?? .systemFont(ofSize: sizes.metaSize, weight: .bold)
-        let metaText = highlightsMetaText(for: event)
-        let metaAttrs: [NSAttributedString.Key: Any] = [.font: metaFont, .foregroundColor: accent, .kern: 1.0]
-        let metaBounds = (metaText as NSString).boundingRect(
-            with: CGSize(width: textRect.width, height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: metaAttrs,
-            context: nil
+        let metaLayout = highlightsMetaLayout(for: event, scorecard: scorecard, metaFont: metaFont, accent: accent, maxWidth: textRect.width)
+        let metaHeight = metaLayout.height
+
+        let pillOrigin = CGPoint(x: textRect.minX + metaLayout.pillRect.minX, y: textRect.minY + (metaHeight - metaLayout.pillRect.height) / 2)
+        let pillRect = CGRect(origin: pillOrigin, size: metaLayout.pillRect.size)
+        let pillPath = UIBezierPath(roundedRect: pillRect, cornerRadius: pillRect.height / 2)
+        accent.setFill()
+        pillPath.fill()
+        let pillFont = UIFont(name: AppFont.ibmPlexBold, size: metaFont.pointSize * 0.82) ?? metaFont
+        let pillTextAttrs: [NSAttributedString.Key: Any] = [.font: pillFont, .foregroundColor: config.paperColor, .kern: 0.5]
+        let pillTextSize = (metaLayout.pillText as NSString).size(withAttributes: pillTextAttrs)
+        (metaLayout.pillText as NSString).draw(
+            at: CGPoint(x: pillRect.midX - pillTextSize.width / 2, y: pillRect.midY - pillTextSize.height / 2),
+            withAttributes: pillTextAttrs
         )
-        let metaHeight = ceil(metaBounds.height)
-        (metaText as NSString).draw(
-            with: CGRect(x: textRect.minX, y: textRect.minY, width: textRect.width, height: metaHeight + 4),
+
+        let metaAttrs: [NSAttributedString.Key: Any] = [.font: metaFont, .foregroundColor: accent, .kern: 1.0]
+        (highlightsMetaText(for: event) as NSString).draw(
+            with: CGRect(x: textRect.minX + metaLayout.textRect.minX, y: textRect.minY + (metaHeight - metaLayout.textRect.height) / 2, width: metaLayout.textRect.width, height: metaLayout.textRect.height + 4),
             options: [.usesLineFragmentOrigin, .usesFontLeading],
             attributes: metaAttrs,
             context: nil
         )
 
-        // Batter name — last name only (see batterDisplayName), the card's hero text.
-        let nameFont = UIFont(name: AppFont.permanentMarker, size: sizes.nameSize) ?? .systemFont(ofSize: sizes.nameSize, weight: .bold)
+        // Batter name — last name only (see batterDisplayName), the card's hero text. Shrunk to
+        // fit textRect.width via the same function the height estimate used, so a long name
+        // (e.g. "Yastrzemski") at a large scale can never run off the edge of the card.
         let displayName = batterDisplayName(for: event, scorecard: scorecard)
+        let nameFont = highlightsFittedNameFont(for: displayName, baseSize: sizes.nameSize, maxWidth: textRect.width)
         let nameY = textRect.minY + metaHeight + 2
         let nameAttrs: [NSAttributedString.Key: Any] = [.font: nameFont, .foregroundColor: config.pencilColor]
         (displayName as NSString).draw(at: CGPoint(x: textRect.minX, y: nameY), withAttributes: nameAttrs)
