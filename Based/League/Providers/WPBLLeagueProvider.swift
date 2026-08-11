@@ -11,7 +11,46 @@ final class WPBLLeagueProvider: LeagueProvider {
     /// (presto_data.tba is false on them too), just genuinely empty. Filter those out everywhere
     /// rather than showing an unusable blank game card.
     private func wellFormedGames() async throws -> [WPBLGame] {
-        try await client.fetchGames().filter { !$0.homeTeamId.isEmpty && !$0.awayTeamId.isEmpty }
+        let games = try await client.fetchGames().filter { !$0.homeTeamId.isEmpty && !$0.awayTeamId.isEmpty }
+        return Self.dedupedByMatchupAndDay(games)
+    }
+
+    /// WPBL issues a brand-new, unrelated game_id the moment a scheduled game actually starts —
+    /// the original "Not Started" placeholder is never updated or removed, so /v1/games ends up
+    /// with two entries for the same real-world matchup (same two teams, same calendar day,
+    /// scheduled_start off by up to about an hour) once the game begins. Collapse those pairs
+    /// here, keeping whichever entry has the more advanced status, so callers never see both a
+    /// scheduled and a live/final card for one game.
+    private static func dedupedByMatchupAndDay(_ games: [WPBLGame]) -> [WPBLGame] {
+        func statusRank(_ game: WPBLGame) -> Int {
+            let lower = game.status.lowercased()
+            if lower.hasPrefix("final") { return 2 }
+            if lower == "not started" { return 0 }
+            return 1
+        }
+        var bestByKey: [String: WPBLGame] = [:]
+        var keyOrder: [String] = []
+        for game in games {
+            let key: String
+            if let start = parseISODate(game.scheduledStart) {
+                let day = Calendar.current.startOfDay(for: start)
+                let teams = [game.homeTeamId, game.awayTeamId].sorted().joined(separator: "|")
+                key = "\(teams)@\(day.timeIntervalSinceReferenceDate)"
+            } else {
+                // No parseable date to group by — treat as its own key rather than risk
+                // merging unrelated games.
+                key = "unkeyed:\(game.gameId)"
+            }
+            if let existing = bestByKey[key] {
+                if statusRank(game) > statusRank(existing) {
+                    bestByKey[key] = game
+                }
+            } else {
+                bestByKey[key] = game
+                keyOrder.append(key)
+            }
+        }
+        return keyOrder.compactMap { bestByKey[$0] }
     }
 
     func fetchSchedule(date: Date) async throws -> [LeagueGame] {

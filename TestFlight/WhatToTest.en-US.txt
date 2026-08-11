@@ -1,5 +1,15 @@
-Initial support for the WPBL (Women's Pro Baseball League) — switch leagues from the dropdown on Games, Teams, and Standings (defaults to MLB), and favorite WPBL teams alongside your MLB favorites in Settings. WPBL scorecards infer base-running from the league's play-by-play data, so please flag anything that looks off, especially base paths and pitch sequences.
+New in this build:
 
-New Highlights export: from a game's scorecard, pick up to 6 plays and generate a 9:16 share card (image or PDF) built around those at-bats.
+WPBL fixes: extra-innings games now render the automatic runner placed on base to start the inning as its own "Z" entry, the same way MLB's does, instead of an unexplained "UNK". Games that go from scheduled to live no longer show up twice on the Games tab.
+
+Home Run Grid polish: each player is now labeled with their position, and the card's typography and date now match the rest of the app more closely.
+
+-----
+
+New in version 1.5:
+
+Initial support for the WPBL (Women's Pro Baseball League) — switch leagues from the dropdown on Games, Teams, and standings, and favorite WPBL teams alongside your MLB favorites in Settings. WPBL scorecards infer base-running from the league's play-by-play data, so please flag anything that looks off, especially base paths and pitch sequences.
+
+New Home Run Grid export: from a game's scorecard, generate a condensed 9:16 share card with both full lineups side by side and home runs lit up.
 
 Miscellaneous fixes: WPBL team colors, scorecard base-path rendering, and Teams/Standings navigation.

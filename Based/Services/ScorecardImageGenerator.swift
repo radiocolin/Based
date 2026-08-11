@@ -170,14 +170,30 @@ final class ScorecardImageGenerator {
         let homeRuns = linescore?.teams?.home?.runs ?? 0
         let hasScore = linescore?.innings != nil && !(linescore?.innings?.isEmpty ?? true)
 
+        // A dateline sitting above the matchup, not a caption trailing under it — the same
+        // kerned-caps treatment as the "BASED" wordmark at the card's bottom edge, so the date
+        // reads as a deliberate masthead (like a ticket stub's date stamp) bookending the card
+        // with the attribution, rather than a stray line of a third, unrelated font squeezed
+        // into whatever room was left under the score.
+        var contentTop = rect.minY
+        if let date = highlightsDateString(scorecard: scorecard) {
+            let dateFont = UIFont(name: AppFont.ibmPlexBold, size: 12) ?? .systemFont(ofSize: 12, weight: .bold)
+            let dateAttrs: [NSAttributedString.Key: Any] = [
+                .font: dateFont,
+                .foregroundColor: config.pencilColor.withAlphaComponent(0.55),
+                .kern: 1.5
+            ]
+            NSAttributedString(string: date.uppercased(), attributes: dateAttrs)
+                .draw(at: CGPoint(x: rect.minX, y: contentTop))
+            contentTop += ceil(dateFont.lineHeight) + 8
+        }
+
         let barHeight: CGFloat = 4
         let halfWidth = rect.width / 2
         awayColor.setFill()
-        ctx.fill(CGRect(x: rect.minX, y: rect.minY, width: halfWidth, height: barHeight))
+        ctx.fill(CGRect(x: rect.minX, y: contentTop, width: halfWidth, height: barHeight))
         homeColor.setFill()
-        ctx.fill(CGRect(x: rect.minX + halfWidth, y: rect.minY, width: halfWidth, height: barHeight))
-
-        let dateFont = UIFont(name: AppFont.patrickHand, size: 20) ?? .systemFont(ofSize: 20)
+        ctx.fill(CGRect(x: rect.minX + halfWidth, y: contentTop, width: halfWidth, height: barHeight))
 
         // A justified two-row table — team name left-aligned, score right-aligned to the same
         // column on both rows — instead of the score just trailing the name inline. Inline
@@ -202,7 +218,7 @@ final class ScorecardImageGenerator {
 
         let rowHeight = ceil(teamFont.lineHeight)
         let rowGap: CGFloat = 6
-        let awayY = rect.minY + barHeight + 10
+        let awayY = contentTop + barHeight + 10
         let homeY = awayY + rowHeight + rowGap
 
         func drawRow(name: String, runs: Int, color: UIColor, y: CGFloat) {
@@ -216,17 +232,6 @@ final class ScorecardImageGenerator {
         }
         drawRow(name: awayName, runs: awayRuns, color: awayColor, y: awayY)
         drawRow(name: homeName, runs: homeRuns, color: homeColor, y: homeY)
-
-        if let date = highlightsDateString(scorecard: scorecard) {
-            let dateAttrs: [NSAttributedString.Key: Any] = [
-                .font: dateFont,
-                .foregroundColor: config.pencilColor.withAlphaComponent(0.7)
-            ]
-            let dSize = (date as NSString).size(withAttributes: dateAttrs)
-            let dateY = homeY + rowHeight + 2
-            NSAttributedString(string: date, attributes: dateAttrs)
-                .draw(at: CGPoint(x: rect.midX - dSize.width / 2, y: dateY))
-        }
     }
 
     private func highlightsDateString(scorecard: ScorecardData) -> String? {
@@ -484,16 +489,51 @@ final class ScorecardImageGenerator {
         NSAttributedString(string: text, attributes: attrs).draw(at: CGPoint(x: rect.minX, y: rect.minY))
     }
 
+    /// Name in Permanent Marker over position (+ jersey) in muted Patrick Hand is the app's own
+    /// pairing for a batter row — the live scorecard grid (ScorecardViewDataSource.
+    /// configureNameCell) and every other export mode (drawScorecardLineup, via config.nameFont/
+    /// config.posFont) both draw it this way. The grid's name column here is much narrower (76pt)
+    /// than either of those, so unlike them this needs a fitted size rather than one fixed size —
+    /// same idea as drawHighlightsHeader's fittedTeamFont, just applied to a batter's last name.
+    private func fittedHomeRunGridNameFont(_ text: String, maxWidth: CGFloat) -> UIFont {
+        var size: CGFloat = 15
+        let floor: CGFloat = 9
+        while size > floor {
+            let font = UIFont(name: AppFont.permanentMarker, size: size) ?? .systemFont(ofSize: size, weight: .bold)
+            if (text as NSString).size(withAttributes: [.font: font]).width <= maxWidth { return font }
+            size -= 0.5
+        }
+        return UIFont(name: AppFont.permanentMarker, size: floor) ?? .systemFont(ofSize: floor, weight: .bold)
+    }
+
     private func drawTeamGridBlock(in rect: CGRect, lineup: [ScorecardBatter], bySlot: [Int: [Int: AtBatEvent]], accent: UIColor, rowHeight: CGFloat, cellWidth: CGFloat, ctx: CGContext) {
-        let nameFont = UIFont(name: AppFont.ibmPlexBold, size: 14) ?? .systemFont(ofSize: 14, weight: .bold)
-        let nameAttrs: [NSAttributedString.Key: Any] = [.font: nameFont, .foregroundColor: config.pencilColor]
+        let nameMaxWidth = HomeRunGrid.nameWidth - 6
+        let posFont = UIFont(name: AppFont.patrickHand, size: 11) ?? .systemFont(ofSize: 11)
+        let posAttrs: [NSAttributedString.Key: Any] = [.font: posFont, .foregroundColor: config.pencilColor.withAlphaComponent(0.6)]
 
         for (i, batter) in lineup.enumerated() {
             let rowY = rect.minY + CGFloat(i) * rowHeight
             let nameRect = CGRect(x: rect.minX, y: rowY, width: HomeRunGrid.nameWidth, height: rowHeight)
+
+            let nameFont = fittedHomeRunGridNameFont(batter.abbreviation, maxWidth: nameMaxWidth)
+            let nameAttrs: [NSAttributedString.Key: Any] = [.font: nameFont, .foregroundColor: config.pencilColor]
             let nameStr = batter.abbreviation
             let nameSize = (nameStr as NSString).size(withAttributes: nameAttrs)
-            (nameStr as NSString).draw(at: CGPoint(x: nameRect.minX, y: nameRect.midY - nameSize.height / 2), withAttributes: nameAttrs)
+
+            var posText = batter.position
+            if let jersey = batter.jerseyNumber, !jersey.isEmpty { posText += " #\(jersey)" }
+            let posSize = posText.isEmpty ? .zero : (posText as NSString).size(withAttributes: posAttrs)
+
+            // Name and (when present) position are stacked and centered together as one block,
+            // rather than each centered independently, so the pair reads as a single row of
+            // content instead of drifting apart when rowHeight is taller than the two lines need.
+            let lineGap: CGFloat = 2
+            let blockHeight = nameSize.height + (posText.isEmpty ? 0 : lineGap + posSize.height)
+            let blockTop = nameRect.midY - blockHeight / 2
+            (nameStr as NSString).draw(at: CGPoint(x: nameRect.minX, y: blockTop), withAttributes: nameAttrs)
+            if !posText.isEmpty {
+                (posText as NSString).draw(at: CGPoint(x: nameRect.minX, y: blockTop + nameSize.height + lineGap), withAttributes: posAttrs)
+            }
 
             // bySlot is keyed by batting-order slot, not by player — when a substitution happens
             // mid-game, two lineup entries can share a slot, and the raw bucket holds both

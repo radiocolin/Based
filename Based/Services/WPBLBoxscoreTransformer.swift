@@ -156,6 +156,21 @@ struct WPBLBoxscoreTransformer {
             let isPitchingChange = lastPitcherName != nil && play.pitcherName != lastPitcherName
             let previousPitcherName = isPitchingChange ? lastPitcherName : nil
 
+            if let placed = parsePlacedRunner(from: play) {
+                events.append(placedRunnerEvent(
+                    for: play,
+                    runnerName: placed.name,
+                    startingBase: placed.base,
+                    index: index,
+                    in: plays,
+                    nameToId: nameToId,
+                    isPitchingChange: isPitchingChange,
+                    previousPitcherName: previousPitcherName
+                ))
+                lastPitcherName = play.pitcherName
+                continue
+            }
+
             // Runner tracing always scans the full, unfiltered play sequence (including
             // substitution/pickoff/wild-pitch notices below) since those carry real
             // intermediate base-occupancy snapshots — only the *rendered* row is filtered.
@@ -199,8 +214,93 @@ struct WPBLBoxscoreTransformer {
     /// result when the narrative's subject is literally them — verified empirically against two
     /// completed games rather than assumed from event_type (which conflates "reached on an
     /// error" with pure substitution notices under the single value "unknown").
+    ///
+    /// One more notice happens to pass that same-subject check: the international-tiebreaker
+    /// "runner placed on second" line WPBL emits to start extra innings, e.g. "Elodie Ciamarro
+    /// London Studer placed on second (0-0)." — its narrative is tagged with the *next* batter's
+    /// name (Elodie Ciamarro) followed by the placed runner's name (London Studer), so it also
+    /// starts with `batterName` and would otherwise fall through scorecardResult's switch to the
+    /// truncated-eventType fallback ("UNK"). It isn't a plate appearance for either named player —
+    /// `parsePlacedRunner`/`placedRunnerEvent` below turn it into its own runner-only "Z" cell for
+    /// the placed runner instead (the same way MLB's automatic extra-inning runner is rendered),
+    /// so in the normal case this play is handled by `continue` before it ever reaches this check.
+    /// This guard stays as a fallback so a "placed on <base>" notice that fails to parse (e.g. an
+    /// unexpected name format) still doesn't get misread as `batterName`'s own plate appearance.
     private static func isRenderableAtBat(_ play: WPBLPlay) -> Bool {
-        !play.batterName.isEmpty && play.narrative.hasPrefix(play.batterName)
+        guard !play.batterName.isEmpty && play.narrative.hasPrefix(play.batterName) else { return false }
+        return !narrativeIndicatesRunnerPlacement(play.narrative)
+    }
+
+    private static func narrativeIndicatesRunnerPlacement(_ narrative: String) -> Bool {
+        let lower = narrative.lowercased()
+        return lower.contains("placed on second") || lower.contains("placed on first") || lower.contains("placed on third")
+    }
+
+    /// Parses "<next batter name><placed runner name> placed on <base> (...)." into the placed
+    /// runner's own name and starting base. `batterName` is only ever the *next* batter up, not
+    /// the runner the notice is about, so it has to be stripped off the front first.
+    private static func parsePlacedRunner(from play: WPBLPlay) -> (name: String, base: Int)? {
+        guard play.narrative.hasPrefix(play.batterName) else { return nil }
+        let afterBatter = play.narrative.dropFirst(play.batterName.count)
+        guard let markerRange = afterBatter.range(of: " placed on ") else { return nil }
+        let runnerName = afterBatter[afterBatter.startIndex..<markerRange.lowerBound]
+            .trimmingCharacters(in: .whitespaces)
+        guard !runnerName.isEmpty else { return nil }
+        let rest = afterBatter[markerRange.upperBound...]
+        if rest.hasPrefix("first") { return (runnerName, 1) }
+        if rest.hasPrefix("second") { return (runnerName, 2) }
+        if rest.hasPrefix("third") { return (runnerName, 3) }
+        return nil
+    }
+
+    /// Builds the placed runner's own runner-only ("Z") cell, tracing her fate through the rest
+    /// of the half-inning the same way a real baserunner's journey is traced — mirroring MLB's
+    /// automatic extra-inning runner handling in ScorecardDataTransformer.
+    private static func placedRunnerEvent(
+        for play: WPBLPlay,
+        runnerName: String,
+        startingBase: Int,
+        index: Int,
+        in plays: [WPBLPlay],
+        nameToId: [String: String],
+        isPitchingChange: Bool,
+        previousPitcherName: String?
+    ) -> AtBatEvent {
+        var state = RunnerBaseState()
+        switch startingBase {
+        case 1: state.reachFirst = true
+        case 2: state.reachSecond = true
+        case 3: state.reachThird = true
+        default: break
+        }
+        traceRunnerJourney(startingAt: index, in: plays, runnerName: runnerName, state: &state)
+
+        let baseLabel = startingBase == 2 ? "2nd" : startingBase == 3 ? "3rd" : "1st"
+        let description = state.reachHome
+            ? "\(runnerName) started the inning on \(baseLabel) base and scored."
+            : "\(runnerName) started the inning on \(baseLabel) base."
+
+        return AtBatEvent(
+            atBatIndex: play.sequence,
+            batterId: nameToId[runnerName] ?? runnerName,
+            batterName: runnerName,
+            pinchRunnerName: nil,
+            pitcherId: nameToId[play.pitcherName] ?? play.pitcherName,
+            pitcherName: play.pitcherName,
+            previousPitcherName: previousPitcherName,
+            inning: play.inning,
+            isTop: play.half == "top",
+            result: .runnerOnly,
+            description: description,
+            balls: 0,
+            strikes: 0,
+            outs: play.outs,
+            rbi: 0,
+            isRunnerOnly: true,
+            isPitchingChange: isPitchingChange,
+            bases: state.toBasesReached(includeLines: true),
+            pitches: nil
+        )
     }
 
     /// Traces one runner (originally this play's batter) forward through the rest of the
