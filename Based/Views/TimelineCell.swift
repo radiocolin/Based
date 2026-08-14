@@ -166,7 +166,9 @@ class TimelineCell: UITableViewCell {
         self.accentColor = accentColor ?? AppColors.pencil
         let presentation = AtBatPresentation(event: event, teamAccentColor: self.accentColor)
 
-        pitchTrackView.configure(with: event.pitches ?? [])
+        let pitches = event.pitches ?? []
+        pitchTrackView.isHidden = !pitches.hasLocationData
+        pitchTrackView.configure(with: pitches)
         diamondView.configure(
             with: event.bases,
             style: presentation.diamondStyle,

@@ -53,6 +53,15 @@ struct PitchEvent: Codable, Sendable, Equatable {
     }
 }
 
+extension Array where Element == PitchEvent {
+    /// Some sources (e.g. WPBL) never populate pitch coordinates, so there's nothing
+    /// meaningful to plot in a strike-zone view. Views embedding PitchTrackView should
+    /// check this before showing it, since PitchTrackView itself always draws a box.
+    var hasLocationData: Bool {
+        contains { $0.x != nil && $0.z != nil }
+    }
+}
+
 /// An annotation to draw on the diamond (e.g. "E6", "SB", "CS")
 struct BaseAnnotation: Codable, Sendable, Equatable {
     enum Kind: String, Codable, Sendable {

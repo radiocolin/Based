@@ -24,6 +24,7 @@ class CurrentStateView: UIView {
     // Graphics
     private let linesLayer = CAShapeLayer()
     private let topSeparatorLayer = CAShapeLayer()
+    private var pitchTrackWidthConstraint: NSLayoutConstraint?
     
     var tapAction: (() -> Void)?
     var longPressAction: (() -> Void)?
@@ -136,7 +137,9 @@ class CurrentStateView: UIView {
         inningContainer.addSubview(inningLabel)
         
         // --- Constraints ---
-        
+
+        pitchTrackWidthConstraint = pitchTrackView.widthAnchor.constraint(equalToConstant: 82)
+
         NSLayoutConstraint.activate([
             contentContainer.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
             contentContainer.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
@@ -157,7 +160,7 @@ class CurrentStateView: UIView {
             pitchTrackView.leadingAnchor.constraint(equalTo: diamondView.trailingAnchor, constant: 8),
             pitchTrackView.topAnchor.constraint(equalTo: contentContainer.topAnchor, constant: 4),
             pitchTrackView.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor, constant: -4),
-            pitchTrackView.widthAnchor.constraint(equalToConstant: 82),
+            pitchTrackWidthConstraint!,
 
             // Col 3: Stats (Right - improved layout)
             // Inning header with shading
@@ -217,9 +220,11 @@ class CurrentStateView: UIView {
         let div1X = diamondView.frame.maxX + 7
         path.append(UIBezierPath.pencilLine(from: CGPoint(x: div1X, y: 0), to: CGPoint(x: div1X, y: b.height)))
 
-        let div2X = pitchTrackView.frame.maxX + 4
-        path.append(UIBezierPath.pencilLine(from: CGPoint(x: div2X, y: 0), to: CGPoint(x: div2X, y: b.height)))
-        
+        if !pitchTrackView.isHidden {
+            let div2X = pitchTrackView.frame.maxX + 4
+            path.append(UIBezierPath.pencilLine(from: CGPoint(x: div2X, y: 0), to: CGPoint(x: div2X, y: b.height)))
+        }
+
         linesLayer.path = path.cgPath
         linesLayer.strokeColor = pencilColor.cgColor
         linesLayer.lineWidth = 1.2
@@ -365,14 +370,18 @@ class CurrentStateView: UIView {
         )
         diamondView.configure(with: bases, style: .liveStatus, isRun: false)
         
+        let effectivePitches: [PitchEvent]
         if isBreak || !hasActiveAtBat {
-            pitchTrackView.configure(with: [])
+            effectivePitches = []
         } else if let providedPitches = pitches, !providedPitches.isEmpty {
-            pitchTrackView.configure(with: providedPitches)
-        } else if let linescorePitches = linescore.currentPitches {
-            pitchTrackView.configure(with: linescorePitches)
+            effectivePitches = providedPitches
         } else {
-            pitchTrackView.configure(with: [])
+            effectivePitches = linescore.currentPitches ?? []
         }
+
+        let showPitchTrack = effectivePitches.hasLocationData
+        pitchTrackView.isHidden = !showPitchTrack
+        pitchTrackWidthConstraint?.constant = showPitchTrack ? 82 : 0
+        pitchTrackView.configure(with: effectivePitches)
     }
 }

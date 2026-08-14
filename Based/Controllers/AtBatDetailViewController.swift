@@ -426,11 +426,8 @@ class AtBatDetailViewController: UIViewController, UITableViewDataSource, UITabl
         ]
     }
 
-    /// WPBL's pitch data never includes location (x/z) — the strike-zone box has nothing
-    /// meaningful to plot in that case, so it's removed from layout entirely rather than shown
-    /// empty (PitchTrackView itself already skips drawing dots with no x/z; this hides the box).
     private var hasPitchLocationData: Bool {
-        event.pitches?.contains { $0.x != nil && $0.z != nil } ?? false
+        event.pitches?.hasLocationData ?? false
     }
 
     private func updatePitchTrackVisibility() {
