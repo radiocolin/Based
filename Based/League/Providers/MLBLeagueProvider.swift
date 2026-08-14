@@ -210,14 +210,11 @@ final class MLBLeagueProvider: LeagueProvider {
         alLeaders.sort(by: pctSorter)
         nlLeaders.sort(by: pctSorter)
 
-        let wcSorter: (TeamRecord, TeamRecord) -> Bool = {
-            let gb1 = Double($0.wildCardGamesBack ?? "999") ?? 999
-            let gb2 = Double($1.wildCardGamesBack ?? "999") ?? 999
-            if gb1 != gb2 { return gb1 < gb2 }
-            return (Double($0.leagueRecord.pct ?? "0") ?? 0) > (Double($1.leagueRecord.pct ?? "0") ?? 0)
-        }
-        alWildcard.sort(by: wcSorter)
-        nlWildcard.sort(by: wcSorter)
+        // wildCardGamesBack is a display string from the API ("-" for the WC leader), not a
+        // reliable sort key — parsing it as a number sent leaders to the bottom of the list.
+        // Win percentage is always numeric and is what games-back is derived from anyway.
+        alWildcard.sort(by: pctSorter)
+        nlWildcard.sort(by: pctSorter)
 
         func makeRows(leaders: [TeamRecord], wildcard: [TeamRecord]) -> [StandingsRow] {
             var rows: [StandingsRow] = [.subHeader("Division Leaders")]

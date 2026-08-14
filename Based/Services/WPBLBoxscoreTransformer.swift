@@ -26,6 +26,8 @@ struct WPBLBoxscoreTransformer {
         let homeTeam = boxscore.teams.first { $0.side == "home" }
         let allPlays = boxscore.plays ?? []
         let nameToId = buildNameToIdMap(teams: boxscore.teams)
+        let substitutions = dedupeCanceledSubstitutions(parseSubstitutions(from: allPlays))
+        let positionChanges = parsePositionChanges(from: allPlays)
 
         let maxInning = max(
             allPlays.map(\.inning).max() ?? 0,
@@ -72,7 +74,10 @@ struct WPBLBoxscoreTransformer {
                 home: Team(id: nil, name: homeTeam?.name, link: nil),
                 away: Team(id: nil, name: awayTeam?.name, link: nil)
             ),
-            lineups: Lineups(home: buildLineup(team: homeTeam), away: buildLineup(team: awayTeam)),
+            lineups: Lineups(
+                home: buildLineup(team: homeTeam, substitutions: substitutions, positionChanges: positionChanges),
+                away: buildLineup(team: awayTeam, substitutions: substitutions, positionChanges: positionChanges)
+            ),
             pitchers: ScorecardPitchers(home: buildPitchers(team: homeTeam), away: buildPitchers(team: awayTeam)),
             innings: innings,
             scheduledInnings: 7,
@@ -100,29 +105,122 @@ struct WPBLBoxscoreTransformer {
         return map
     }
 
-    private static func buildLineup(team: WPBLBoxscoreTeam?) -> [ScorecardBatter] {
+    /// Batting-order spot WPBL assigns the pitcher alongside the 9 fielding/DH spots — she never
+    /// actually bats under WPBL's DH rule, so relief pitchers (who do get their own `team.players`
+    /// entry with a "10" spot once they take the mound, purely as bookkeeping for buildPitchers)
+    /// must never turn into extra rows here; only the starting pitcher's own row is kept, exactly
+    /// as before this function started tracking real substitutions.
+    private static let pitcherLineupSlot = 10
+
+    private static func buildLineup(
+        team: WPBLBoxscoreTeam?,
+        substitutions: [WPBLSubstitution],
+        positionChanges: [WPBLPositionChange]
+    ) -> [ScorecardBatter] {
         guard let team else { return [] }
         let playersByName = Dictionary(uniqueKeysWithValues: (team.players ?? []).map { ($0.name, $0) })
+        // team.players always lists the full roster (spot "0"/no stats for anyone who never
+        // entered), so this doubles as "does this name belong to this team" for routing
+        // substitution notices to the right side without relying on the play's team_id (which
+        // is tagged with whichever team is *batting* at that moment, not the team the
+        // substitution notice is actually about).
+        let knownNames = Set(playersByName.keys).union((team.starters ?? []).map(\.name))
 
-        return (team.starters ?? []).map { starter in
-            let player = playersByName[starter.name]
-            let components = starter.name.components(separatedBy: " ")
-            var abbreviation = components.last ?? starter.name
+        func abbreviation(for name: String) -> String {
+            let components = name.components(separatedBy: " ")
+            var abbreviation = components.last ?? name
             let suffixes = ["Jr", "Sr", "II", "III", "IV", "Jr.", "Sr."]
             if suffixes.contains(abbreviation) && components.count >= 2 {
                 abbreviation = "\(components[components.count - 2]) \(abbreviation)"
             }
-            return ScorecardBatter(
-                id: player?.id ?? starter.name,
-                fullName: starter.name,
-                abbreviation: abbreviation,
-                position: starter.position,
-                jerseyNumber: starter.uniform,
-                battingOrderSlot: Int(starter.spot),
-                inningEntered: nil,
-                inningExited: nil
+            return abbreviation
+        }
+
+        func makeBatter(name: String, position: String, slot: Int, entryInning: Int?, exitInning: Int?) -> ScorecardBatter {
+            ScorecardBatter(
+                id: playersByName[name]?.id ?? name,
+                fullName: name,
+                abbreviation: abbreviation(for: name),
+                position: position,
+                jerseyNumber: playersByName[name]?.uniform,
+                battingOrderSlot: slot,
+                inningEntered: entryInning,
+                inningExited: exitInning
             )
         }
+
+        typealias Row = (batter: ScorecardBatter, slot: Int, entryInning: Int, exitInning: Int?, originalIndex: Int)
+        var rows: [Row] = []
+        var slotForName: [String: Int] = [:]
+
+        for (index, starter) in (team.starters ?? []).enumerated() {
+            let slot = Int(starter.spot) ?? index
+            slotForName[starter.name] = slot
+            rows.append((makeBatter(name: starter.name, position: starter.position, slot: slot, entryInning: nil, exitInning: nil), slot, 0, nil, index))
+        }
+
+        var nextIndex = rows.count
+        for sub in substitutions where knownNames.contains(sub.outgoingName) {
+            guard let slot = slotForName[sub.outgoingName], slot != pitcherLineupSlot else { continue }
+            // The replaced player must have a currently-open row to hand the slot off from.
+            // WPBL's play log occasionally restates a substitution for someone who has already
+            // left the game (observed in a real completed game — a second "X for Y" notice for a
+            // Y already substituted out earlier); without a real open row, the notice doesn't
+            // correspond to an actual lineup change, so it's skipped rather than fabricating a
+            // second, overlapping row for the incoming player.
+            guard let outgoingIndex = rows.lastIndex(where: { $0.batter.fullName == sub.outgoingName && $0.exitInning == nil }) else { continue }
+            let old = rows[outgoingIndex].batter
+            rows[outgoingIndex].batter = makeBatter(name: old.fullName, position: old.position, slot: old.battingOrderSlot ?? slot, entryInning: old.inningEntered, exitInning: sub.inning)
+            rows[outgoingIndex].exitInning = sub.inning
+
+            slotForName[sub.incomingName] = slot
+            rows.append((makeBatter(name: sub.incomingName, position: sub.position, slot: slot, entryInning: sub.inning, exitInning: nil), slot, sub.inning, nil, nextIndex))
+            nextIndex += 1
+        }
+
+        // Bare "X to <pos>." notices (no "for Y") are a player already in the lineup — a
+        // starter or an already-substituted-in player — changing position rather than a new
+        // entrant. They only relabel an existing row's position; they never create a row or
+        // touch entry/exit innings.
+        for change in positionChanges where knownNames.contains(change.name) {
+            guard let slot = slotForName[change.name], slot != pitcherLineupSlot else { continue }
+            if let idx = rows.lastIndex(where: { $0.batter.fullName == change.name && $0.exitInning == nil }) {
+                let old = rows[idx].batter
+                rows[idx].batter = makeBatter(name: old.fullName, position: change.position, slot: old.battingOrderSlot ?? slot, entryInning: old.inningEntered, exitInning: old.inningExited)
+            }
+        }
+
+        // A player can legitimately leave and later re-enter this same team's lineup (e.g. a
+        // lifted DH returning later as a fielder) — but the shared ScorecardData model (mirroring
+        // MLB's own buildLineup, which also assumes one row per unique batter id) has
+        // calculatePlayerStats and the scorecard grid both keying strictly by batter id; two rows
+        // for the same id would double-count her stats in the totals row. Multiple stints are
+        // therefore collapsed into a single row spanning her first entry to her last exit,
+        // anchored at the slot she first appeared in — `rows` is already in chronological order
+        // (starters, then substitutions in narrative order), so simply overwriting on each repeat
+        // keeps the most recent position/exit while the first occurrence's slot/entry sticks.
+        var mergedByName: [String: Row] = [:]
+        var order: [String] = []
+        for row in rows {
+            if let existing = mergedByName[row.batter.fullName] {
+                mergedByName[row.batter.fullName] = (
+                    makeBatter(name: row.batter.fullName, position: row.batter.position, slot: existing.slot, entryInning: existing.batter.inningEntered, exitInning: row.exitInning),
+                    existing.slot, existing.entryInning, row.exitInning, existing.originalIndex
+                )
+            } else {
+                mergedByName[row.batter.fullName] = row
+                order.append(row.batter.fullName)
+            }
+        }
+
+        return order
+            .compactMap { mergedByName[$0] }
+            .sorted { lhs, rhs in
+                if lhs.slot != rhs.slot { return lhs.slot < rhs.slot }
+                if lhs.entryInning != rhs.entryInning { return lhs.entryInning < rhs.entryInning }
+                return lhs.originalIndex < rhs.originalIndex
+            }
+            .map(\.batter)
     }
 
     private static func buildPitchers(team: WPBLBoxscoreTeam?) -> [ScorecardPitcher] {
@@ -141,6 +239,106 @@ struct WPBLBoxscoreTransformer {
                 stats: "\(ip) IP, \(h) H, \(er) ER, \(bb) BB, \(so) K",
                 ip: ip, h: h, r: r, er: er, bb: bb, k: so
             )
+        }
+    }
+
+    // MARK: - Substitutions
+
+    /// A lineup change that moves a real batting-order spot from one player to another —
+    /// pinch hit, pinch run, or a defensive/pitching swap. Not every WPBL team plays with a DH:
+    /// some games assign the pitcher her own real 1-9 batting spot (she bats), others give the
+    /// pitcher a separate non-batting spot "10" alongside a DH occupying a real spot. Rather than
+    /// guess which convention a given game uses from the position label alone, every "<Name> to
+    /// <pos> for <Name>." notice (pitching changes included) is parsed here, and buildLineup
+    /// decides whether it affects the batting order by checking the *replaced* player's actual
+    /// assigned slot — skipping only spot "10", the non-batting bookkeeping slot.
+    private struct WPBLSubstitution {
+        let incomingName: String
+        let outgoingName: String
+        let inning: Int
+        let position: String
+    }
+
+    private struct WPBLPositionChange {
+        let name: String
+        let position: String
+    }
+
+    private static let pinchHitPattern = /^(.+) pinch hit for (.+)\.$/
+    private static let pinchRanPattern = /^(.+) pinch ran for (.+)\.$/
+    private static let positionForPattern = /^(.+) to ([a-z0-9]+) for (.+)\.$/
+    private static let positionOnlyPattern = /^(.+) to ([a-z0-9]+)\.$/
+
+    // The lowercase position abbreviations WPBL's narrative uses, verified against real
+    // completed games. "p" is included deliberately — see WPBLSubstitution's doc comment.
+    private static let battingPositions: Set<String> = ["1b", "2b", "3b", "ss", "lf", "cf", "rf", "c", "dh", "p"]
+
+    private static func parsePinchHit(_ narrative: String) -> (incoming: String, outgoing: String)? {
+        guard let match = narrative.wholeMatch(of: pinchHitPattern) else { return nil }
+        return (String(match.1), String(match.2))
+    }
+
+    private static func parsePinchRun(_ narrative: String) -> (incoming: String, outgoing: String)? {
+        guard let match = narrative.wholeMatch(of: pinchRanPattern) else { return nil }
+        return (String(match.1), String(match.2))
+    }
+
+    private static func parsePositionSwap(_ narrative: String) -> (incoming: String, position: String, outgoing: String)? {
+        guard let match = narrative.wholeMatch(of: positionForPattern), battingPositions.contains(String(match.2)) else { return nil }
+        return (String(match.1), String(match.2), String(match.3))
+    }
+
+    private static func parsePositionOnly(_ narrative: String) -> (name: String, position: String)? {
+        guard let match = narrative.wholeMatch(of: positionOnlyPattern), battingPositions.contains(String(match.2)) else { return nil }
+        return (String(match.1), String(match.2))
+    }
+
+    private static func parseSubstitutions(from plays: [WPBLPlay]) -> [WPBLSubstitution] {
+        plays.compactMap { play in
+            if let hit = parsePinchHit(play.narrative) {
+                return WPBLSubstitution(incomingName: hit.incoming, outgoingName: hit.outgoing, inning: play.inning, position: "ph")
+            }
+            if let ran = parsePinchRun(play.narrative) {
+                return WPBLSubstitution(incomingName: ran.incoming, outgoingName: ran.outgoing, inning: play.inning, position: "pr")
+            }
+            if let swap = parsePositionSwap(play.narrative) {
+                return WPBLSubstitution(incomingName: swap.incoming, outgoingName: swap.outgoing, inning: play.inning, position: swap.position)
+            }
+            return nil
+        }
+    }
+
+    /// WPBL's play log occasionally carries a substitution notice that gets corrected/walked back
+    /// moments later — observed in a real completed game as three consecutive notices in the same
+    /// inning: "A pinch hit for B.", immediately followed by "B pinch hit for A." (the exact
+    /// reverse), then "A pinch hit for C." (the real, final change). Neither half of an adjacent
+    /// exact-reversal pair reflects what actually happened, so both are dropped; the entry-order
+    /// insight this relies on — that a corrected notice is walked back by its very next neighbor,
+    /// not by a distant later one — comes from that same observed case, not from a general API
+    /// guarantee, so this deliberately only cancels *adjacent* reversals.
+    private static func dedupeCanceledSubstitutions(_ subs: [WPBLSubstitution]) -> [WPBLSubstitution] {
+        var result: [WPBLSubstitution] = []
+        var i = 0
+        while i < subs.count {
+            if i + 1 < subs.count,
+               subs[i].incomingName == subs[i + 1].outgoingName,
+               subs[i].outgoingName == subs[i + 1].incomingName {
+                i += 2
+                continue
+            }
+            result.append(subs[i])
+            i += 1
+        }
+        return result
+    }
+
+    private static func parsePositionChanges(from plays: [WPBLPlay]) -> [WPBLPositionChange] {
+        plays.compactMap { play in
+            guard parsePinchHit(play.narrative) == nil,
+                  parsePinchRun(play.narrative) == nil,
+                  parsePositionSwap(play.narrative) == nil,
+                  let change = parsePositionOnly(play.narrative) else { return nil }
+            return WPBLPositionChange(name: change.name, position: change.position)
         }
     }
 
@@ -185,14 +383,14 @@ struct WPBLBoxscoreTransformer {
                     atBatIndex: play.sequence,
                     batterId: batterId,
                     batterName: play.batterName,
-                    pinchRunnerName: nil,
+                    pinchRunnerName: state.pinchRunnerName,
                     pitcherId: pitcherId,
                     pitcherName: play.pitcherName,
                     previousPitcherName: previousPitcherName,
                     inning: play.inning,
                     isTop: play.half == "top",
                     result: scorecardResult(for: play),
-                    description: play.narrative,
+                    description: enrichedDescription(baseDescription: play.narrative, pinchRunnerName: state.pinchRunnerName),
                     balls: play.balls,
                     strikes: play.strikes,
                     outs: play.outs,
@@ -276,15 +474,16 @@ struct WPBLBoxscoreTransformer {
         traceRunnerJourney(startingAt: index, in: plays, runnerName: runnerName, state: &state)
 
         let baseLabel = startingBase == 2 ? "2nd" : startingBase == 3 ? "3rd" : "1st"
-        let description = state.reachHome
+        let baseDescription = state.reachHome
             ? "\(runnerName) started the inning on \(baseLabel) base and scored."
             : "\(runnerName) started the inning on \(baseLabel) base."
+        let description = enrichedDescription(baseDescription: baseDescription, pinchRunnerName: state.pinchRunnerName)
 
         return AtBatEvent(
             atBatIndex: play.sequence,
             batterId: nameToId[runnerName] ?? runnerName,
             batterName: runnerName,
-            pinchRunnerName: nil,
+            pinchRunnerName: state.pinchRunnerName,
             pitcherId: nameToId[play.pitcherName] ?? play.pitcherName,
             pitcherName: play.pitcherName,
             previousPitcherName: previousPitcherName,
@@ -309,6 +508,7 @@ struct WPBLBoxscoreTransformer {
     private static func traceRunnerJourney(startingAt index: Int, in plays: [WPBLPlay], runnerName: String, state: inout RunnerBaseState) {
         guard !state.isResolved else { return }
         var k = index
+        var trackedName = runnerName
         while k < plays.count {
             let current = plays[k]
             guard k + 1 < plays.count else {
@@ -323,18 +523,32 @@ struct WPBLBoxscoreTransformer {
                 // diff below would misread as this runner having vanished/been put out.
                 return
             }
+
+            // A pinch runner replaces this exact runner mid-inning — the substitution notice's
+            // own base snapshot still shows the outgoing name, but every later snapshot (the
+            // "next" one included) already reports the incoming name occupying the same base.
+            // Without switching the tracked name here, the diff below sees the old name vanish
+            // and misreads it as a pickoff/tag-out rather than a substitution.
+            if let pinchRun = parsePinchRun(current.narrative), pinchRun.outgoing == trackedName {
+                if state.pinchRunnerName == nil { state.pinchRunnerName = pinchRun.incoming }
+                if let base = state.currentBase, base < 4 {
+                    state.annotations.append(BaseAnnotation(kind: .pinchRunner, base: base, label: "PR"))
+                }
+                trackedName = pinchRun.incoming
+            }
+
             let nextBases = (first: next.firstBase, second: next.secondBase, third: next.thirdBase)
 
-            if nextBases.third == runnerName {
+            if nextBases.third == trackedName {
                 state.advanceRunner(to: "3b")
-            } else if nextBases.second == runnerName {
+            } else if nextBases.second == trackedName {
                 state.advanceRunner(to: "2b")
-            } else if nextBases.first == runnerName {
+            } else if nextBases.first == trackedName {
                 state.advanceRunner(to: "1b")
-            } else if scoredNames(in: current.narrative).contains(runnerName) {
+            } else if scoredNames(in: current.narrative).contains(trackedName) {
                 state.advanceRunner(to: "score")
                 return
-            } else if let explicitBase = explicitOutBase(for: runnerName, in: current.narrative) {
+            } else if let explicitBase = explicitOutBase(for: trackedName, in: current.narrative) {
                 state.recordOut(at: explicitBase)
                 return
             } else {
@@ -346,6 +560,12 @@ struct WPBLBoxscoreTransformer {
             k += 1
         }
         // Ran out of plays without resolving — runner left on base; state stays at last known position.
+    }
+
+    private static func enrichedDescription(baseDescription: String, pinchRunnerName: String?) -> String {
+        guard let pinchRunnerName, !pinchRunnerName.isEmpty else { return baseDescription }
+        let note = "Pinch runner: \(pinchRunnerName)."
+        return baseDescription.isEmpty ? note : "\(baseDescription) \(note)"
     }
 
     /// WPBL's narrative explicitly names the retired runner and the base they were thrown out at
@@ -433,9 +653,23 @@ struct WPBLBoxscoreTransformer {
         case "forceout", "force_out": return .forceOut(sequence: fieldingPosition(from: play.narrative) ?? "")
         case "pickoff": return .pickoff
         case "out":
+            // WPBL tags plenty of routine batted-ball outs with the generic event_type "out"
+            // rather than "groundout"/"flyout"/etc. — the narrative text is the only place the
+            // batted-ball type and fielding credits show up, so disambiguate from it the same
+            // way ScorecardDataTransformer does for MLB's equivalent "field_out" catch-all.
             let lower = play.narrative.lowercased()
             if lower.contains("triple play") { return .triplePlay }
             if lower.contains("double play") { return .doublePlay(sequence: fieldingPosition(from: play.narrative) ?? "") }
+            if lower.contains("force") { return .forceOut(sequence: fieldingPosition(from: play.narrative) ?? "") }
+            if lower.contains("fly") { return .flyout(position: fieldingPosition(from: play.narrative) ?? "") }
+            if lower.contains("line") { return .lineout(position: fieldingPosition(from: play.narrative) ?? "") }
+            if lower.contains("pop") { return .popout(position: fieldingPosition(from: play.narrative) ?? "") }
+            if lower.contains("foul") { return .flyout(position: fieldingPosition(from: play.narrative) ?? "") }
+            if lower.contains("ground") { return .groundout(sequence: fieldingPosition(from: play.narrative) ?? "") }
+            // No batted-ball keyword at all (e.g. "out at first 1b to p") — the fielding
+            // sequence parsed from the narrative is still the useful signal, so render it the
+            // same way a groundout's fielder sequence would be.
+            if let sequence = fieldingPosition(from: play.narrative) { return .groundout(sequence: sequence) }
             return .other(text: "OUT")
         default: return .other(text: String(play.eventType.prefix(3)).uppercased())
         }
