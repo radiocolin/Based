@@ -459,7 +459,15 @@ class ScorecardViewDataSource: NSObject, UICollectionViewDataSource, UICollectio
         cell.showPitchingChange(isPitchingChange)
 
         let firstCompactColumn = firstCompactColumn(for: batter, data: data, lineup: lineup)
-        let isInactive = event == nil && firstCompactColumn.map { paIndex < $0 } == true
+        let isInactiveByEvents = firstCompactColumn.map { paIndex < $0 } == true
+
+        let inningEntered = batter.inningEntered ?? 1
+        let exitInning = batter.inningExited ?? 99
+        let compactColumn = paIndex < compactColumns.count ? compactColumns[paIndex] : nil
+        let isBeforeEntryByInning = compactColumn.map { $0.inningEnd < inningEntered } ?? false
+        let isAfterExitByInning = compactColumn.map { $0.inningStart > exitInning } ?? false
+
+        let isInactive = event == nil && (isInactiveByEvents || isBeforeEntryByInning || isAfterExitByInning)
 
         if isInactive {
             cell.backgroundColor = AppColors.inactive

@@ -6,6 +6,8 @@ WPBL scorecard fix: plays that previously showed as a plain "OUT" (WPBL tags ple
 
 WPBL substitutions: pinch hitters, pinch runners, and defensive/pitching changes are now tracked in the lineup and scorecard grid — substitutes previously never appeared in the lineup at all, which also meant their at-bats were silently missing from team totals. Please flag anything that looks off around mid-game lineup changes, especially double-switches or a player re-entering later in the game.
 
+Scorecard fix: on the compact grid, a substitute who entered the game but never got an at-bat used to show diamonds for their entire row instead of the grayed-out cells before their entry. Those cells are now correctly grayed out.
+
 -----
 
 New in version 1.5, previous build:
