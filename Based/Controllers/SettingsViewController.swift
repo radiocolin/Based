@@ -380,7 +380,7 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
         footerCell.selectionStyle = .none
         footerCell.isAccessibilityElement = true
         footerCell.accessibilityTraits = .staticText
-        footerCell.accessibilityLabel = "Made with LOVE in Philadelphia by Colin Weir. Statistical data is sourced via public API and is the proprietary property of MLB Advanced Media, L.P. This application is an independent project and is not officially affiliated with Major League Baseball."
+        footerCell.accessibilityLabel = "Made with LOVE in Philadelphia by Colin Weir. Statistical data is sourced via public API and is the proprietary property of MLB Advanced Media, L.P. and the Women's Pro Baseball League. This application is an independent project and is not officially affiliated with Major League Baseball or the Women's Pro Baseball League."
 
         let stack = UIStackView()
         stack.axis = .vertical
@@ -439,9 +439,9 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
 
         stack.addArrangedSubview(signatureContainer)
 
-        // MLB Attribution (left-aligned)
+        // League attribution (left-aligned)
         let mlbLabel = UILabel()
-        mlbLabel.text = "Statistical data is sourced via public API and is the proprietary property of MLB Advanced Media, L.P. All Major League Baseball trademarks, service marks, team names, and logos are the property of MLB Advanced Media, L.P. and its respective member clubs.\n\nThis application is an independent project and is not officially affiliated with, endorsed by, or sponsored by Major League Baseball or any of its affiliates."
+        mlbLabel.text = "Statistical data is sourced via public API and is the proprietary property of MLB Advanced Media, L.P. and the Women's Pro Baseball League, and their respective data providers, team names, and logos. This application is an independent project and is not officially affiliated with, endorsed by, or sponsored by Major League Baseball, the Women's Pro Baseball League, or any of their affiliates."
         mlbLabel.font = AppFont.ibmPlexCondensed(11, textStyle: .caption2, compatibleWith: traitCollection)
         mlbLabel.textColor = color.withAlphaComponent(0.4)
         mlbLabel.textAlignment = .left
