@@ -632,7 +632,11 @@ struct ScorecardDataTransformer {
             state.outAtFirst = false
         }
 
-        let playDescription = enrichedDescription(baseDescription: play.result?.description ?? "", pinchRunnerName: state.pinchRunnerName)
+        let result = scorecardNotation(for: play, batterId: batterId)
+        let playDescription = appendingNote(
+            noteForUnmappedResult(result),
+            to: enrichedDescription(baseDescription: play.result?.description ?? "", pinchRunnerName: state.pinchRunnerName)
+        )
 
         return AtBatEvent(
             atBatIndex: play.about?.atBatIndex,
@@ -644,7 +648,7 @@ struct ScorecardDataTransformer {
             previousPitcherName: previousPitcherName,
             inning: inning,
             isTop: isTop,
-            result: scorecardNotation(for: play, batterId: batterId),
+            result: result,
             description: playDescription,
             balls: play.count?.balls ?? 0,
             strikes: play.count?.strikes ?? 0,
@@ -663,7 +667,7 @@ struct ScorecardDataTransformer {
         return baseDescription.isEmpty ? note : "\(baseDescription) \(note)"
     }
 
-    private static func scorecardNotation(for play: Play, batterId: Int? = nil) -> ScorecardResult {
+    static func scorecardNotation(for play: Play, batterId: Int? = nil) -> ScorecardResult {
         if play.about?.isComplete == false { return .live }
         let eventType = play.result?.eventType ?? ""
         let event = play.result?.event ?? ""
@@ -722,7 +726,7 @@ struct ScorecardDataTransformer {
             if normalizedEvent.contains("flyout") || normalizedEvent.contains("foul fly") { return .flyout(position: "") }
             if normalizedEvent.contains("lineout") || normalizedEvent.contains("line drive") { return .lineout(position: "") }
             if normalizedEvent.contains("pop out") || normalizedEvent.contains("popup") { return .popout(position: "") }
-            return .other(text: String(event.prefix(3)).uppercased())
+            return unmappedResult(event: event, eventType: eventType)
         case "pickoff_error_1b", "pickoff_error_2b", "pickoff_error_3b": return .fieldError
         case "pickoff_1b", "pickoff_2b", "pickoff_3b": return .pickoff
         default:
@@ -745,8 +749,36 @@ struct ScorecardDataTransformer {
             if normalizedEvent.contains("line drive") { return .lineout(position: "") }
             if normalizedEvent.contains("foul fly") { return .flyout(position: "") }
             if normalizedEvent.contains("error") { return .fieldError }
-            return event.isEmpty ? .empty : .other(text: String(event.prefix(3)).uppercased())
+            return unmappedResult(event: event, eventType: eventType)
         }
+    }
+
+    /// A truncated slice of an unrecognized `event` string (e.g. "Run" from "Runner Out") can
+    /// coincidentally spell a real scorecard abbreviation and read as correct notation instead of
+    /// a gap in this switch — that's exactly how "Runner Out" produced a misleading "RUN" cell.
+    /// A plain dash can't be mistaken for real notation, and the raw strings still land in the log
+    /// so an unmapped `event`/`eventType` pair gets noticed during development instead of shipping
+    /// silently as plausible-looking wrong data.
+    static let unmappedResultText = "—"
+
+    private static func unmappedResult(event: String, eventType: String) -> ScorecardResult {
+        guard !event.isEmpty else { return .empty }
+        logger.warning("Unmapped scorecard result — eventType: \(eventType, privacy: .public), event: \(event, privacy: .public)")
+        return .other(text: unmappedResultText)
+    }
+
+    /// A plain "—" in the box doesn't explain itself the way "K" or "1B" do, so a play that hits
+    /// the fallback above also gets a plain-language note appended to its description — written
+    /// for the person reading the app, not for whoever's debugging it (no mention of event types,
+    /// APIs, or which league's feed this came from).
+    private static func noteForUnmappedResult(_ result: ScorecardResult) -> String? {
+        guard result == .other(text: unmappedResultText) else { return nil }
+        return "We couldn't match this play to one of our scorecard symbols, so the box just shows “\(unmappedResultText)”."
+    }
+
+    private static func appendingNote(_ note: String?, to description: String) -> String {
+        guard let note, !note.isEmpty else { return description }
+        return description.isEmpty ? note : "\(description) \(note)"
     }
 
     static func isStatusOnlyPlay(_ play: Play) -> Bool {
@@ -761,7 +793,13 @@ struct ScorecardDataTransformer {
         guard type == "atBat", !isStatusOnlyPlay(play) else { return false }
         if isComplete {
             let eventType = play.result?.eventType ?? ""
-            if eventType.contains("caught_stealing") || eventType.contains("pickoff") {
+            // "other_out" covers plays like a challenged/overturned tag play or rundown that
+            // retires a runner already on base mid-at-bat (e.g. a caught stealing that ends the
+            // half-inning) — MLB's feed still tags `matchup.batter` with whoever was up at the
+            // time even though they never got a result, the same way it does for caught_stealing/
+            // pickoff. Without this check that batter's still-in-progress PA renders as its own
+            // scorecard cell with a misleading result (e.g. "RUN", from truncating "Runner Out").
+            if eventType.contains("caught_stealing") || eventType.contains("pickoff") || eventType == "other_out" {
                 let batterId = play.matchup?.batter?.id
                 let batterWasOut = play.runners?.contains(where: { $0.details?.runner?.id == batterId && $0.movement?.isOut == true }) ?? false
                 if !batterWasOut { return false }

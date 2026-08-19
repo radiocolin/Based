@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 /// WPBL's equivalent of ScorecardDataTransformer — a WPBLBoxscore -> ScorecardData compiler,
 /// producing the exact same output type the MLB path does so the scorecard UI needs no
@@ -20,6 +21,7 @@ import Foundation
 /// block reports the current batter/pitcher but there's no equivalent of MLB's "current
 /// incomplete play" object to build a full AtBatEvent from.
 struct WPBLBoxscoreTransformer {
+    private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Based", category: "WPBLBoxscoreTransformer")
 
     static func transformToScorecardData(_ boxscore: WPBLBoxscore) -> ScorecardData {
         let awayTeam = boxscore.teams.first { $0.side == "away" }
@@ -379,6 +381,7 @@ struct WPBLBoxscoreTransformer {
             }
 
             if isRenderableAtBat(play) {
+                let result = scorecardResult(for: play)
                 events.append(AtBatEvent(
                     atBatIndex: play.sequence,
                     batterId: batterId,
@@ -389,8 +392,11 @@ struct WPBLBoxscoreTransformer {
                     previousPitcherName: previousPitcherName,
                     inning: play.inning,
                     isTop: play.half == "top",
-                    result: scorecardResult(for: play),
-                    description: enrichedDescription(baseDescription: play.narrative, pinchRunnerName: state.pinchRunnerName),
+                    result: result,
+                    description: appendingNote(
+                        noteForUnmappedResult(result),
+                        to: enrichedDescription(baseDescription: play.narrative, pinchRunnerName: state.pinchRunnerName)
+                    ),
                     balls: play.balls,
                     strikes: play.strikes,
                     outs: play.outs,
@@ -575,7 +581,7 @@ struct WPBLBoxscoreTransformer {
     /// a retired runner simply vanishes from every later snapshot either way — so this is read
     /// from the narrative text instead. Verified against both fixture games: every "<name> out at
     /// <base>" occurrence names the base the runner was actually retired at, not their prior one.
-    private static func explicitOutBase(for runnerName: String, in narrative: String) -> String? {
+    static func explicitOutBase(for runnerName: String, in narrative: String) -> String? {
         guard let range = narrative.range(of: "\(runnerName) out at ") else { return nil }
         let rest = narrative[range.upperBound...]
         if rest.hasPrefix("first") { return "1b" }
@@ -591,7 +597,7 @@ struct WPBLBoxscoreTransformer {
         Set(narrative.matches(of: scoredPattern).map { String($0.1) })
     }
 
-    private static func narrativeIndicatesReachedOnError(_ narrative: String) -> Bool {
+    static func narrativeIndicatesReachedOnError(_ narrative: String) -> Bool {
         let lower = narrative.lowercased()
         // A fielder's-choice play can *also* mention "on an error" (e.g. the batter advanced an
         // extra base on a throwing error) without the batter's own reach being the error — FC
@@ -623,7 +629,7 @@ struct WPBLBoxscoreTransformer {
         }
     }
 
-    private static func scorecardResult(for play: WPBLPlay) -> ScorecardResult {
+    static func scorecardResult(for play: WPBLPlay) -> ScorecardResult {
         if narrativeIndicatesReachedOnError(play.narrative) { return .fieldError }
         switch play.eventType {
         case "single": return .single
@@ -671,8 +677,36 @@ struct WPBLBoxscoreTransformer {
             // same way a groundout's fielder sequence would be.
             if let sequence = fieldingPosition(from: play.narrative) { return .groundout(sequence: sequence) }
             return .other(text: "OUT")
-        default: return .other(text: String(play.eventType.prefix(3)).uppercased())
+        default: return unmappedResult(eventType: play.eventType)
         }
+    }
+
+    /// A truncated slice of an unrecognized `event_type` (e.g. "Run" from a hypothetical "Runner
+    /// Out"-style value) can coincidentally spell a real scorecard abbreviation and read as
+    /// correct notation instead of a gap in this switch — see the equivalent helper in
+    /// ScorecardDataTransformer, added after that exact collision shipped for MLB's "other_out".
+    /// A plain dash can't be mistaken for real notation, and the raw eventType still lands in the
+    /// log so an unmapped value gets noticed during development instead of shipping silently as
+    /// plausible-looking wrong data.
+    static let unmappedResultText = "—"
+
+    private static func unmappedResult(eventType: String) -> ScorecardResult {
+        guard !eventType.isEmpty else { return .empty }
+        logger.warning("Unmapped WPBL scorecard result — event_type: \(eventType, privacy: .public)")
+        return .other(text: unmappedResultText)
+    }
+
+    /// A plain "—" in the box doesn't explain itself the way "K" or "1B" do, so a play that hits
+    /// the fallback above also gets a plain-language note appended to its description — written
+    /// for the person reading the app, not for whoever's debugging it.
+    private static func noteForUnmappedResult(_ result: ScorecardResult) -> String? {
+        guard result == .other(text: unmappedResultText) else { return nil }
+        return "We couldn't match this play to one of our scorecard symbols, so the box just shows “\(unmappedResultText)”."
+    }
+
+    private static func appendingNote(_ note: String?, to description: String) -> String {
+        guard let note, !note.isEmpty else { return description }
+        return description.isEmpty ? note : "\(description) \(note)"
     }
 
     // Keyed by the exact single-word tokens WPBL's narrative text actually uses (verified against

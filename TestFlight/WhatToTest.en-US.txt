@@ -8,6 +8,10 @@ WPBL substitutions: pinch hitters, pinch runners, and defensive/pitching changes
 
 Scorecard fix: on the compact grid, a substitute who entered the game but never got an at-bat used to show diamonds for their entire row instead of the grayed-out cells before their entry. Those cells are now correctly grayed out.
 
+MLB scorecard fix: a runner thrown out on the bases while the next batter was still finishing their turn (e.g. an overturned replay review, or a caught stealing that ends the half-inning) could get attached to that batter's own at-bat — including a misleading "RUN" symbol and a description about the wrong players. These plays no longer show up under the wrong batter.
+
+Scorecard fallback: any play type the app doesn't have a specific symbol for now shows a plain dash in the box instead of odd truncated text, with a short note added to the play's description explaining why.
+
 -----
 
 New in version 1.5, previous build:
