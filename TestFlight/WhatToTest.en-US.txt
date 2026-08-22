@@ -1,5 +1,11 @@
 New in this build:
 
+Scorecard fix: on the compact grid, extra-innings' automatic runner (the "Z" entry, placed on base to start the inning) used to spawn its own stray column — usually because that runner is the same batter who made the last out of the previous half-inning — permanently misaligning that batter's later at-bats from the rest of the lineup. It's now folded into that batter's previous at-bat cell as a small "Z" marker on second base instead.
+
+-----
+
+New in version 1.5.1, previous build:
+
 Standings fix: Wild Card standings now sort by win percentage. Teams leading (or tied for) a Wild Card spot were sorting to the bottom of the list, below teams with far worse records, because of how their games-back value was being parsed.
 
 WPBL scorecard fix: plays that previously showed as a plain "OUT" (WPBL tags plenty of routine batted-ball outs this way instead of a specific groundout/flyout/etc.) now show the actual fielding notation, e.g. "6-3" or "1-3", like the rest of the scorecard.

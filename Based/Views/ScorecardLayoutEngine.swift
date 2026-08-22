@@ -89,6 +89,7 @@ class ScorecardLayoutEngine {
         })
 
         for (event, inning) in allEvents {
+            if event.isRunnerOnly { continue }
             let batterId = event.batterId
             guard
                 let batterIdx = batterIndexByID[batterId],
@@ -136,6 +137,22 @@ class ScorecardLayoutEngine {
             for event in events {
                 let batterId = event.batterId
                 guard let slot = slotByBatterID[batterId] else { continue }
+
+                if event.isRunnerOnly {
+                    // The extra-innings placed runner isn't a real plate appearance — usually
+                    // it's the same batter who made the last out of the previous half-inning.
+                    // Giving it its own trip slot would create a column only that batter
+                    // occupies, permanently shifting their later at-bats out of alignment with
+                    // the rest of the lineup. Fold it into their most recent real at-bat instead,
+                    // as an annotation marking them on base to start the next half-inning.
+                    let lastPA = (paIndexBySlot[slot] ?? 0) - 1
+                    if lastPA >= 0, let previous = eventsBySlot[slot]?[lastPA] {
+                        let annotation = BaseAnnotation(kind: .placedRunner, base: 2, label: "Z")
+                        eventsBySlot[slot]?[lastPA] = previous.addingAnnotation(annotation)
+                    }
+                    continue
+                }
+
                 let paIndex = paIndexBySlot[slot] ?? 0
                 eventsBySlot[slot, default: [:]][paIndex] = event
                 paIndexBySlot[slot] = paIndex + 1

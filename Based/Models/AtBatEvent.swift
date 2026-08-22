@@ -69,10 +69,53 @@ struct BaseAnnotation: Codable, Sendable, Equatable {
         case pinchRunner    // "PR" — indicates a pinch runner took over on base
         case stolenBase     // "SB" — next to the base stolen to
         case caughtStealing // "CS" — next to the out-line between bases
+        case placedRunner   // "Z" — batter is the automatic extra-innings runner starting the next half-inning on base
     }
     let kind: Kind
     let base: Int       // 1=1B, 2=2B, 3=3B, 4=home
     let label: String   // e.g. "E6", "SB", "CS"
+}
+
+extension AtBatEvent {
+    /// Returns a copy with `annotation` appended to `bases.annotations`.
+    func addingAnnotation(_ annotation: BaseAnnotation) -> AtBatEvent {
+        let newBases = BasesReached(
+            first: bases.first,
+            second: bases.second,
+            third: bases.third,
+            home: bases.home,
+            lineToFirst: bases.lineToFirst,
+            lineToSecond: bases.lineToSecond,
+            lineToThird: bases.lineToThird,
+            lineToHome: bases.lineToHome,
+            outAtFirst: bases.outAtFirst,
+            outAtSecond: bases.outAtSecond,
+            outAtThird: bases.outAtThird,
+            outAtHome: bases.outAtHome,
+            annotations: (bases.annotations ?? []) + [annotation]
+        )
+        return AtBatEvent(
+            atBatIndex: atBatIndex,
+            batterId: batterId,
+            batterName: batterName,
+            pinchRunnerName: pinchRunnerName,
+            pitcherId: pitcherId,
+            pitcherName: pitcherName,
+            previousPitcherName: previousPitcherName,
+            inning: inning,
+            isTop: isTop,
+            result: result,
+            description: description,
+            balls: balls,
+            strikes: strikes,
+            outs: outs,
+            rbi: rbi,
+            isRunnerOnly: isRunnerOnly,
+            isPitchingChange: isPitchingChange,
+            bases: newBases,
+            pitches: pitches
+        )
+    }
 }
 
 struct BasesReached: Codable, Sendable, Equatable {
