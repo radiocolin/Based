@@ -24,6 +24,100 @@ final class ScorecardDataTransformerTests: XCTestCase {
         XCTAssertFalse(scorecard.timeline.contains(where: { $0.description.contains("Brewers challenged") }))
     }
 
+    // MARK: - Fixture-based regression: CHC @ STL, 2019-06-01 (gamePk 566596, pre-2022 NL, no DH)
+
+    /// The Cardinals ran nine different players through the #9 batting slot over the course of the
+    /// game — starter, pinch hitter, reliever, pinch hitter, reliever, reliever, pinch hitter,
+    /// reliever, and finally another reliever still holding the slot when the game ends. Four of
+    /// the relievers (Gant, Brebbia, Miller, Gallegos) are pulled again before the slot ever comes
+    /// back up to bat — those get no scorecard row at all, live or historical, since another
+    /// player has provably since taken their spot. The final reliever (Carlos Martinez) also never
+    /// bats, but he's still "in" the slot: he should stay while the game's completion is unknown,
+    /// and drop once we know the game is over.
+    func testHistoricalNonDHChainOmitsZeroPAPitchers() throws {
+        let playByPlay = try loadFixture("mlb_566596_playByPlay", as: PlayByPlayResponse.self)
+        let boxscore = try loadFixture("mlb_566596_boxscore", as: BoxscoreResponse.self)
+
+        let liveScorecard = ScorecardDataTransformer.transformToScorecardData(playByPlay: playByPlay, boxscore: boxscore)
+        let liveSlotNine = liveScorecard.lineups.home.filter { $0.battingOrderSlot == 9 }
+        XCTAssertEqual(
+            liveSlotNine.map(\.fullName),
+            ["Jack Flaherty", "Jedd Gyorko", "José A. Martínez", "Yairo Muñoz", "Carlos Martinez"]
+        )
+        for name in ["John Gant", "John Brebbia", "Andrew Miller", "Giovanny Gallegos"] {
+            XCTAssertFalse(liveScorecard.lineups.home.contains { $0.fullName == name })
+        }
+
+        let finalLinescore = Linescore(
+            currentInning: nil, currentInningOrdinal: nil, inningState: "Final", inningHalf: nil, isTopInning: nil,
+            scheduledInnings: nil, innings: nil, teams: nil, offense: nil, defense: nil,
+            balls: nil, strikes: nil, outs: nil, currentPitchCount: nil, currentPitches: nil, venue: nil, weather: nil
+        )
+        let finalScorecard = ScorecardDataTransformer.transformToScorecardData(playByPlay: playByPlay, boxscore: boxscore, linescore: finalLinescore)
+        let finalSlotNine = finalScorecard.lineups.home.filter { $0.battingOrderSlot == 9 }
+        XCTAssertEqual(
+            finalSlotNine.map(\.fullName),
+            ["Jack Flaherty", "Jedd Gyorko", "José A. Martínez", "Yairo Muñoz"]
+        )
+    }
+
+    // MARK: - Fixture-based regression: STL @ PHI, 2010-05-03 (gamePk 264189, pre-2022 NL, no DH)
+
+    /// The Cardinals ran three relief pitchers straight through batting slot 6 with no pinch
+    /// hitter between any of them and none of the three ever getting a plate appearance — the
+    /// last one (Franklin) is still "in" that slot when the game ends. All three should be
+    /// omitted from the lineup once the game is known to be over; the original occupant, who did
+    /// bat, should remain.
+    func testDisplacedZeroPARelieverIsOmittedFromLineup() throws {
+        let playByPlay = try loadFixture("mlb_264189_playByPlay", as: PlayByPlayResponse.self)
+        let boxscore = try loadFixture("mlb_264189_boxscore", as: BoxscoreResponse.self)
+        let finalLinescore = Linescore(
+            currentInning: nil, currentInningOrdinal: nil, inningState: "Final", inningHalf: nil, isTopInning: nil,
+            scheduledInnings: nil, innings: nil, teams: nil, offense: nil, defense: nil,
+            balls: nil, strikes: nil, outs: nil, currentPitchCount: nil, currentPitches: nil, venue: nil, weather: nil
+        )
+
+        let scorecard = ScorecardDataTransformer.transformToScorecardData(playByPlay: playByPlay, boxscore: boxscore, linescore: finalLinescore)
+
+        let awayLineup = scorecard.lineups.away
+        XCTAssertTrue(awayLineup.contains { $0.fullName == "Colby Rasmus" })
+        XCTAssertFalse(awayLineup.contains { $0.fullName == "Kyle McClellan" })
+        XCTAssertFalse(awayLineup.contains { $0.fullName == "Trever Miller" })
+        XCTAssertFalse(awayLineup.contains { $0.fullName == "Ryan Franklin" })
+    }
+
+    /// Same chain of three relievers as above, but without a "Final" linescore — i.e. as if the
+    /// game were still live. The still-current occupant of the slot (Franklin) hasn't necessarily
+    /// finished his turn yet, so he must not disappear from the grid before we know the game's over.
+    func testZeroPACurrentOccupantIsKeptWhileGameIsLive() throws {
+        let playByPlay = try loadFixture("mlb_264189_playByPlay", as: PlayByPlayResponse.self)
+        let boxscore = try loadFixture("mlb_264189_boxscore", as: BoxscoreResponse.self)
+
+        let scorecard = ScorecardDataTransformer.transformToScorecardData(playByPlay: playByPlay, boxscore: boxscore)
+
+        let awayLineup = scorecard.lineups.away
+        XCTAssertFalse(awayLineup.contains { $0.fullName == "Kyle McClellan" })
+        XCTAssertFalse(awayLineup.contains { $0.fullName == "Trever Miller" })
+        XCTAssertTrue(awayLineup.contains { $0.fullName == "Ryan Franklin" })
+    }
+
+    // MARK: - Regression: universal-DH-era fixture unaffected by the zero-PA filter
+
+    func testMlb823749LineupUnaffectedByZeroPAFilter() throws {
+        let playByPlay = try loadFixture("mlb_823749_playByPlay", as: PlayByPlayResponse.self)
+        let boxscore = try loadFixture("mlb_823749_boxscore", as: BoxscoreResponse.self)
+
+        let scorecard = ScorecardDataTransformer.transformToScorecardData(playByPlay: playByPlay, boxscore: boxscore)
+
+        for batter in scorecard.lineups.home + scorecard.lineups.away {
+            XCTAssertTrue(
+                scorecard.timeline.contains { $0.batterId == batter.id } ||
+                scorecard.innings.contains { $0.home.contains { $0.batterId == batter.id } || $0.away.contains { $0.batterId == batter.id } },
+                "\(batter.fullName) has a lineup row but no recorded plate appearance"
+            )
+        }
+    }
+
     // MARK: - shouldIncludePlayInScorecard: unit-level mirror of the same bug
 
     func testOtherOutNotInvolvingTheBatterIsExcluded() {

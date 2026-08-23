@@ -8,8 +8,10 @@ struct ScorecardDataTransformer {
         let allPlays = playByPlay.allPlays ?? []
         let maxInning = max(allPlays.compactMap { $0.about?.inning }.max() ?? 9, 9)
 
+        let isGameComplete = linescore.map { livePhase(for: $0, gameData: nil) == .final } ?? false
+
         let (playerNameMap, playerNumberMap) = buildPlayerMaps(boxscore: boxscore)
-        let lineups = buildLineups(boxscore: boxscore, allPlays: allPlays)
+        let lineups = buildLineups(boxscore: boxscore, allPlays: allPlays, isGameComplete: isGameComplete)
         let pitchers = buildPitchers(boxscore: boxscore)
         let umpires = buildUmpires(boxscore: boxscore)
         let scorecardInnings = buildInnings(
@@ -98,17 +100,17 @@ struct ScorecardDataTransformer {
         return (playerNameMap, playerNumberMap)
     }
 
-    private static func buildLineups(boxscore: BoxscoreResponse, allPlays: [Play]) -> Lineups {
-        let homeLineup = buildLineup(team: boxscore.teams?.home, allPlays: allPlays)
-        let awayLineup = buildLineup(team: boxscore.teams?.away, allPlays: allPlays)
+    private static func buildLineups(boxscore: BoxscoreResponse, allPlays: [Play], isGameComplete: Bool) -> Lineups {
+        let homeLineup = buildLineup(team: boxscore.teams?.home, allPlays: allPlays, isGameComplete: isGameComplete)
+        let awayLineup = buildLineup(team: boxscore.teams?.away, allPlays: allPlays, isGameComplete: isGameComplete)
 
         return Lineups(home: homeLineup, away: awayLineup)
     }
 
-    private static func buildLineup(team: BoxscoreTeam?, allPlays: [Play]) -> [ScorecardBatter] {
+    private static func buildLineup(team: BoxscoreTeam?, allPlays: [Play], isGameComplete: Bool) -> [ScorecardBatter] {
         guard let team else { return [] }
 
-        typealias LineupEntry = (batter: ScorecardBatter, battingSlot: Int, entryInning: Int, exitInning: Int, originalIndex: Int)
+        typealias LineupEntry = (id: Int, batter: ScorecardBatter, battingSlot: Int, entryInning: Int, exitInning: Int, originalIndex: Int)
         let batterIds = uniquePreservingOrder(team.batters ?? [])
 
         let entries: [LineupEntry] = batterIds
@@ -121,7 +123,16 @@ struct ScorecardDataTransformer {
                 let entryInning = batter.inningEntered ?? 0
                 let exitInning = batter.inningExited ?? Int.max
                 let originalIndex = batterIds.firstIndex(of: id) ?? Int.max
-                return (batter, battingSlot, entryInning, exitInning, originalIndex)
+                return (id, batter, battingSlot, entryInning, exitInning, originalIndex)
+            }
+            // A player who was assigned a batting-order slot but was displaced (a later occupant
+            // is on record) or the game has ended without him ever facing a pitch never actually
+            // batted, even though the box score formally slotted him in — very common for a relief
+            // pitcher who's pulled again before his turn comes up. Those get no scorecard row.
+            .filter { entry in
+                let wasDisplaced = entry.batter.inningExited != nil
+                guard wasDisplaced || isGameComplete else { return true }
+                return hasPlateAppearance(playerId: entry.id, allPlays: allPlays)
             }
         return entries
             .sorted { lhs, rhs in
@@ -131,6 +142,12 @@ struct ScorecardDataTransformer {
                 return lhs.originalIndex < rhs.originalIndex
             }
             .map(\.batter)
+    }
+
+    private static func hasPlateAppearance(playerId: Int, allPlays: [Play]) -> Bool {
+        allPlays.contains {
+            $0.matchup?.batter?.id == playerId && shouldIncludePlayInScorecard($0, includeLive: true)
+        }
     }
 
     private static func buildPitchers(boxscore: BoxscoreResponse) -> ScorecardPitchers {
