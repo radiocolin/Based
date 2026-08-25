@@ -1,6 +1,10 @@
 New in this build:
 
-Scorecard fix: on the compact grid, extra-innings' automatic runner (the "Z" entry, placed on base to start the inning) used to spawn its own stray column — usually because that runner is the same batter who made the last out of the previous half-inning — permanently misaligning that batter's later at-bats from the rest of the lineup. It's now folded into that batter's previous at-bat cell as a small "Z" marker on second base instead.
+Scorecard fix: on the compact grid, extra-innings' automatic runner (the "Z" entry, placed on base to start the inning) used to spawn its own stray column — usually because that runner is the same batter who made the last out of the previous half-inning — permanently misaligning that batter's later at-bats from the rest of the lineup. It's now folded into that batter's previous at-bat cell as a small "Z" marker on second base instead. That play's description now also notes which inning the runner started, so tapping the cell explains the marker instead of just showing it.
+
+Lineup fix: older, pre-2022 non-DH games routinely cycle several relief pitchers through a single batting-order slot without any of them ever actually batting. Each one used to get its own scorecard row; a batter with zero plate appearances is now omitted from the lineup instead.
+
+Scorecard fix: a hyphenated last name (e.g. Encarnacion-Strand) used to force the whole player name column wider to fit it on one line. Names now wrap at the hyphen instead.
 
 -----
 

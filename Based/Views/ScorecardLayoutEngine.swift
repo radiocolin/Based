@@ -42,16 +42,29 @@ class ScorecardLayoutEngine {
         
         var maxWidth: CGFloat = 40 // minimum
         for batter in lineup {
-            let nameSize = (batter.abbreviation as NSString).size(withAttributes: [.font: nameFont])
+            let nameLineWidth = Self.nameDisplayLines(batter.abbreviation)
+                .map { ($0 as NSString).size(withAttributes: [.font: nameFont]).width }
+                .max() ?? 0
             var posText = batter.position
             if let num = batter.jerseyNumber { posText += " #\(num)" }
             if let entry = batter.inningEntered { posText += " (\(entry))" }
             let posSize = (posText as NSString).size(withAttributes: [.font: posFont])
-            maxWidth = max(maxWidth, max(nameSize.width, posSize.width))
+            maxWidth = max(maxWidth, max(nameLineWidth, posSize.width))
         }
-        
+
         // Add padding (6pt each side in cell + 4pt extra breathing room)
         return ceil(maxWidth + 20)
+    }
+
+    /// Splits a hyphenated last name into wrappable segments, e.g. "Encarnacion-Strand" ->
+    /// ["Encarnacion-", "Strand"], so the name column doesn't have to widen to fit a
+    /// hyphenated surname on one line. Names without a hyphen are returned unchanged.
+    static func nameDisplayLines(_ name: String) -> [String] {
+        let parts = name.split(separator: "-", omittingEmptySubsequences: false)
+        guard parts.count > 1 else { return [name] }
+        return parts.enumerated().map { index, part in
+            index < parts.count - 1 ? "\(part)-" : String(part)
+        }
     }
     
     func computeCompactColumnLayout(data: ScorecardData?, isHomeTeam: Bool) -> CompactColumnLayout {
@@ -148,7 +161,8 @@ class ScorecardLayoutEngine {
                     let lastPA = (paIndexBySlot[slot] ?? 0) - 1
                     if lastPA >= 0, let previous = eventsBySlot[slot]?[lastPA] {
                         let annotation = BaseAnnotation(kind: .placedRunner, base: 2, label: "Z")
-                        eventsBySlot[slot]?[lastPA] = previous.addingAnnotation(annotation)
+                        let note = "Started the \(AccessibilitySupport.ordinal(event.inning)) as the automatic runner on second base."
+                        eventsBySlot[slot]?[lastPA] = previous.addingAnnotation(annotation).addingNote(note)
                     }
                     continue
                 }

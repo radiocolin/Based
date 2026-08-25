@@ -228,12 +228,14 @@ class ScorecardViewDataSource: NSObject, UICollectionViewDataSource, UICollectio
         let nameAttrs: [NSAttributedString.Key: Any] = [.font: UIFont(name: AppFont.permanentMarker, size: 16) ?? .systemFont(ofSize: 16), .foregroundColor: AppColors.pencil]
         let posAttrs: [NSAttributedString.Key: Any] = [.font: UIFont(name: AppFont.patrickHand, size: 14) ?? .systemFont(ofSize: 14), .foregroundColor: AppColors.pencil.withAlphaComponent(0.5)]
 
-        let text = NSMutableAttributedString(string: "\(batter.abbreviation)\n", attributes: nameAttrs)
+        let nameLines = ScorecardLayoutEngine.nameDisplayLines(batter.abbreviation)
+        let text = NSMutableAttributedString(string: "\(nameLines.joined(separator: "\n"))\n", attributes: nameAttrs)
         var posText = batter.position
         if let num = batter.jerseyNumber { posText += " #\(num)" }
         if let entryInning = batter.inningEntered { posText += " (\(entryInning))" }
         text.append(NSAttributedString(string: posText, attributes: posAttrs))
 
+        cell.label.numberOfLines = nameLines.count + 1
         cell.label.attributedText = text
         cell.label.textAlignment = .left
         cell.backgroundColor = rowBackgroundColor

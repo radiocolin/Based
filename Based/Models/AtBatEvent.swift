@@ -77,6 +77,32 @@ struct BaseAnnotation: Codable, Sendable, Equatable {
 }
 
 extension AtBatEvent {
+    /// Returns a copy with `note` appended as its own sentence on `description`.
+    func addingNote(_ note: String) -> AtBatEvent {
+        let newDescription = description.isEmpty ? note : "\(description) \(note)"
+        return AtBatEvent(
+            atBatIndex: atBatIndex,
+            batterId: batterId,
+            batterName: batterName,
+            pinchRunnerName: pinchRunnerName,
+            pitcherId: pitcherId,
+            pitcherName: pitcherName,
+            previousPitcherName: previousPitcherName,
+            inning: inning,
+            isTop: isTop,
+            result: result,
+            description: newDescription,
+            balls: balls,
+            strikes: strikes,
+            outs: outs,
+            rbi: rbi,
+            isRunnerOnly: isRunnerOnly,
+            isPitchingChange: isPitchingChange,
+            bases: bases,
+            pitches: pitches
+        )
+    }
+
     /// Returns a copy with `annotation` appended to `bases.annotations`.
     func addingAnnotation(_ annotation: BaseAnnotation) -> AtBatEvent {
         let newBases = BasesReached(
